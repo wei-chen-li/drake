@@ -12,7 +12,8 @@ namespace drake {
 namespace systems {
 namespace estimators {
 
-/// Computes the optimal observer gain, L, for the linear system defined by
+/// Computes the optimal observer gain, L, for the continuous-time linear system
+/// defined by
 ///   @f[ \dot{x} = Ax + Bu + w, @f]
 ///   @f[ y = Cx + Du + v. @f]
 /// The resulting observer is of the form
@@ -37,6 +38,38 @@ namespace estimators {
 /// @pydrake_mkdoc_identifier{ACWV}
 ///
 Eigen::MatrixXd SteadyStateKalmanFilter(
+    const Eigen::Ref<const Eigen::MatrixXd>& A,
+    const Eigen::Ref<const Eigen::MatrixXd>& C,
+    const Eigen::Ref<const Eigen::MatrixXd>& W,
+    const Eigen::Ref<const Eigen::MatrixXd>& V);
+
+/// Computes the optimal observer gain, L, for the discrete-time linear system
+/// defined by
+///   @f[ x[n+1] = Ax[n] + Bu[n] + w, @f]
+///   @f[ y[n] = Cx[n] + Du[n] + v. @f]
+/// The resulting observer is of the form
+///   @f[ \hat{x}[n|n] = \hat{x}[n|n-1] + L(y - C\hat{x}[n|n-1] - Du[n]), @f]
+///   @f[ \hat{x}[n+1|n] = Ax[n|n] + Bu[n]. @f]
+/// The process noise, w, and the measurement noise, v, are assumed to be iid
+/// mean-zero Gaussian.
+///
+/// This is a simplified form of the full Kalman filter obtained by assuming
+/// that the state-covariance matrix has already converged to its steady-state
+/// solution.
+///
+/// @param A The state-space dynamics matrix of size num_states x num_states.
+/// @param C The state-space output matrix of size num_outputs x num_states.
+/// @param W The process noise covariance matrix, E[ww'], of size num_states x
+/// num_states.
+/// @param V The measurement noise covariance matrix, E[vv'], of size num_.
+/// @returns The steady-state observer gain matrix of size num_states x
+/// num_outputs.
+///
+/// @throws std::exception if W is not positive semi-definite or if V is not
+/// positive definite.
+/// @ingroup estimator_systems
+///
+Eigen::MatrixXd DiscreteTimeSteadyStateKalmanFilter(
     const Eigen::Ref<const Eigen::MatrixXd>& A,
     const Eigen::Ref<const Eigen::MatrixXd>& C,
     const Eigen::Ref<const Eigen::MatrixXd>& W,
@@ -85,8 +118,7 @@ std::unique_ptr<LuenbergerObserver<double>> SteadyStateKalmanFilter(
 /// @pydrake_mkdoc_identifier{system}
 std::unique_ptr<LuenbergerObserver<double>> SteadyStateKalmanFilter(
     std::shared_ptr<const System<double>> system,
-    const Context<double>& context,
-    const Eigen::Ref<const Eigen::MatrixXd>& W,
+    const Context<double>& context, const Eigen::Ref<const Eigen::MatrixXd>& W,
     const Eigen::Ref<const Eigen::MatrixXd>& V);
 
 DRAKE_DEPRECATED(
