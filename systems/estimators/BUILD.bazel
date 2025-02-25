@@ -12,8 +12,18 @@ drake_cc_package_library(
     name = "estimators",
     visibility = ["//visibility:public"],
     deps = [
+        ":extended_kalman_filter",
         ":kalman_filter",
         ":luenberger_observer",
+        ":state_observer",
+    ],
+)
+
+drake_cc_library(
+    name = "extended_kalman_filter",
+    srcs = ["extended_kalman_filter.cc"],
+    hdrs = ["extended_kalman_filter.h"],
+    deps = [
         ":state_observer",
     ],
 )
