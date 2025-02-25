@@ -1,0 +1,42 @@
+load("//tools/lint:lint.bzl", "add_lint_tests")
+load(
+    "//tools/skylark:drake_cc.bzl",
+    "drake_cc_googletest",
+    "drake_cc_library",
+    "drake_cc_package_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+drake_cc_package_library(
+    name = "test_utilities",
+    testonly = 1,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":stochastic_linear_system",
+    ],
+)
+
+drake_cc_library(
+    name = "stochastic_linear_system",
+    testonly = 1,
+    srcs = [],
+    hdrs = ["stochastic_linear_system.h"],
+    deps = [
+        "//common:default_scalars",
+        "//systems/framework",
+        "//systems/primitives:linear_system",
+    ],
+)
+
+# === test/ ===
+
+drake_cc_googletest(
+    name = "stochastic_linear_system_test",
+    deps = [
+        ":stochastic_linear_system",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+add_lint_tests(enable_clang_format_lint = False)
