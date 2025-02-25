@@ -1,6 +1,8 @@
 #include "drake/bindings/pydrake/common/default_scalars_pybind.h"
 #include "drake/bindings/pydrake/documentation_pybind.h"
 #include "drake/bindings/pydrake/pydrake_pybind.h"
+#include "drake/systems/estimators/extended_kalman_filter.h"
+#include "drake/systems/estimators/gaussian_state_observer.h"
 #include "drake/systems/estimators/kalman_filter.h"
 #include "drake/systems/estimators/luenberger_observer.h"
 
@@ -93,6 +95,96 @@ PYBIND11_MODULE(estimators, m) {
         py::arg("system"), py::arg("context"), py::arg("W"), py::arg("V"),
         // Keep alive, reference: `result` keeps `system` alive.
         py::keep_alive<0, 1>(), doc.SteadyStateKalmanFilter.doc_system);
+  }
+
+  {
+    using Class = GaussianStateObserver<double>;
+    constexpr auto& cls_doc = doc.GaussianStateObserver;
+    py::class_<Class, LeafSystem<double>> cls(
+        m, "GaussianStateObserver", cls_doc.doc);
+    cls  // BR
+        .def("get_observed_system_input_input_port",
+            &Class::get_observed_system_input_input_port,
+            py_rvp::reference_internal,
+            cls_doc.get_observed_system_input_input_port.doc)
+        .def("get_observed_system_output_input_port",
+            &Class::get_observed_system_output_input_port,
+            py_rvp::reference_internal,
+            cls_doc.get_observed_system_output_input_port.doc)
+        .def("get_estimated_state_output_port",
+            &Class::get_estimated_state_output_port, py_rvp::reference_internal,
+            cls_doc.get_estimated_state_output_port.doc)
+        .def("SetStateEstimateAndCovariance",
+            &Class::SetStateEstimateAndCovariance, py::arg("context"),
+            py::arg("state_estimate"), py::arg("state_covariance"),
+            cls_doc.SetStateEstimateAndCovariance.doc)
+        .def("GetStateEstimate", &Class::GetStateEstimate, py::arg("context"),
+            cls_doc.GetStateEstimate.doc)
+        .def("GetStateCovariance", &Class::GetStateCovariance,
+            py::arg("context"), cls_doc.GetStateCovariance.doc);
+  }
+
+  {
+    using Class = ExtendedKalmanFilterOptions;
+    constexpr auto& cls_doc = doc.ExtendedKalmanFilterOptions;
+    py::class_<ExtendedKalmanFilterOptions> cls(
+        m, "ExtendedKalmanFilterOptions", cls_doc.doc);
+    cls  // BR
+        .def(py::init<>(), cls_doc.ctor.doc)
+        .def_readwrite("initial_state_estimate", &Class::initial_state_estimate,
+            cls_doc.initial_state_estimate.doc)
+        .def_readwrite("initial_state_covariance",
+            &Class::initial_state_covariance,
+            cls_doc.initial_state_covariance.doc)
+        .def_readwrite("actuation_input_port_index",
+            &Class::actuation_input_port_index,
+            cls_doc.actuation_input_port_index.doc)
+        .def_readwrite("measurement_output_port_index",
+            &Class::measurement_output_port_index,
+            cls_doc.measurement_output_port_index.doc)
+        .def_readwrite("process_noise_input_port_index",
+            &Class::process_noise_input_port_index,
+            cls_doc.process_noise_input_port_index.doc)
+        .def_readwrite("measurement_noise_input_port_index",
+            &Class::measurement_noise_input_port_index,
+            cls_doc.measurement_noise_input_port_index.doc)
+        .def_readwrite("use_square_root_method", &Class::use_square_root_method,
+            cls_doc.use_square_root_method.doc)
+        .def_readwrite("discrete_measurement_time_period",
+            &Class::discrete_measurement_time_period,
+            cls_doc.discrete_measurement_time_period.doc)
+        .def_readwrite("discrete_measurement_time_offset",
+            &Class::discrete_measurement_time_offset,
+            cls_doc.discrete_measurement_time_offset.doc);
+
+    m.def(
+        "ExtendedKalmanFilter",
+        [](const System<AutoDiffXd>& observed_system,
+            const Context<AutoDiffXd>& observed_system_context,
+            const Eigen::Ref<const Eigen::MatrixXd>& W,
+            const Eigen::Ref<const Eigen::MatrixXd>& V,
+            const ExtendedKalmanFilterOptions& options) {
+          return ExtendedKalmanFilter(
+              // The lifetime of `observed_system` is managed by the keep_alive
+              // below, not the C++ shared_ptr.
+              make_unowned_shared_ptr_from_raw(&observed_system),
+              observed_system_context, W, V, options);
+        },
+        py::arg("observed_system"), py::arg("observed_system_context"),
+        py::arg("W"), py::arg("V"),
+        py::arg("options") = ExtendedKalmanFilterOptions(),
+        // Keep alive, reference: `result` keeps `observed_system` alive.
+        py::keep_alive<0, 1>(), doc.ExtendedKalmanFilter.doc_System_AutoDiffXd);
+
+    m.def("ExtendedKalmanFilter",
+        py::overload_cast<const System<double>&, const Context<double>&,
+            const Eigen::Ref<const Eigen::MatrixXd>&,
+            const Eigen::Ref<const Eigen::MatrixXd>&,
+            const ExtendedKalmanFilterOptions&>(&ExtendedKalmanFilter),
+        py::arg("observed_system"), py::arg("observed_system_context"),
+        py::arg("W"), py::arg("V"),
+        py::arg("options") = ExtendedKalmanFilterOptions(),
+        doc.ExtendedKalmanFilter.doc_System_double);
   }
 }
 
