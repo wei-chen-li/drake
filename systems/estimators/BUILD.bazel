@@ -14,6 +14,7 @@ drake_cc_package_library(
     deps = [
         ":kalman_filter",
         ":luenberger_observer",
+        ":state_observer",
     ],
 )
 
@@ -34,6 +35,15 @@ drake_cc_library(
     name = "luenberger_observer",
     srcs = ["luenberger_observer.cc"],
     hdrs = ["luenberger_observer.h"],
+    deps = [
+        ":state_observer",
+    ],
+)
+
+drake_cc_library(
+    name = "state_observer",
+    srcs = ["state_observer.cc"],
+    hdrs = ["state_observer.h"],
     deps = [
         "//common:default_scalars",
         "//systems/framework",

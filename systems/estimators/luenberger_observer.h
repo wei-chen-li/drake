@@ -5,9 +5,7 @@
 
 #include <Eigen/Dense>
 
-#include "drake/common/default_scalars.h"
-#include "drake/common/drake_copyable.h"
-#include "drake/systems/framework/leaf_system.h"
+#include "drake/systems/estimators/state_observer.h"
 
 namespace drake {
 namespace systems {
@@ -41,7 +39,7 @@ namespace estimators {
 /// @ingroup estimator_systems
 /// @tparam_default_scalar
 template <typename T>
-class LuenbergerObserver final : public LeafSystem<T> {
+class LuenbergerObserver final : public StateObserver<T> {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(LuenbergerObserver);
 
@@ -73,17 +71,17 @@ class LuenbergerObserver final : public LeafSystem<T> {
 
   // Returns the input port that expects the input passed to the observed
   // system.
-  const InputPort<T>& get_observed_system_input_input_port() const {
+  const InputPort<T>& get_observed_system_input_input_port() const override {
     return this->get_input_port(1);
   }
 
   // Returns the input port that expects the outputs of the observed system.
-  const InputPort<T>& get_observed_system_output_input_port() const {
+  const InputPort<T>& get_observed_system_output_input_port() const override {
     return this->get_input_port(0);
   }
 
   // Returns the output port that provides the estimated state.
-  const OutputPort<T>& get_estimated_state_output_port() const {
+  const OutputPort<T>& get_estimated_state_output_port() const override {
     return this->get_output_port(0);
   }
 
