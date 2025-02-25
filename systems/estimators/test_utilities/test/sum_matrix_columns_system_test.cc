@@ -22,7 +22,7 @@ TYPED_TEST(SumMatrixColumnsSystemTest, Output) {
   SumMatrixColumnsSystem<T> system(3, 4);
   auto context = system.CreateDefaultContext();
 
-  Eigen::MatrixX<T> mat(3, 4);
+  Eigen::MatrixXd mat(3, 4);
   // clang-format off
   mat << 1,  2,  3,  4,
          5,  6,  7,  8,

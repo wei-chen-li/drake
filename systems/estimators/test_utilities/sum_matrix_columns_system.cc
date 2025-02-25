@@ -11,14 +11,14 @@ SumMatrixColumnsSystem<T>::SumMatrixColumnsSystem(int rows, int cols)
       cols_(cols) {
   DRAKE_THROW_UNLESS(rows > 0);
   DRAKE_THROW_UNLESS(cols > 0);
-  Eigen::MatrixX<T> model_value = Eigen::MatrixX<T>::Zero(rows, cols);
+  Eigen::MatrixXd model_value = Eigen::MatrixXd::Zero(rows, cols);
   this->DeclareAbstractInputPort(kUseDefaultName, Value(model_value));
   this->DeclareVectorOutputPort(
       kUseDefaultName, rows,
       [this](const Context<T>& context, BasicVector<T>* out) {
         out->set_value(
             Eigen::VectorX<T>(this->get_input_port()
-                                  .template Eval<Eigen::MatrixX<T>>(context)
+                                  .template Eval<Eigen::MatrixXd>(context)
                                   .rowwise()
                                   .sum()));
       });
