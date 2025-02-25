@@ -5,6 +5,16 @@ import unittest
 import numpy as np
 
 from pydrake.examples import PendulumPlant
+from pydrake.systems.estimators import (
+    DiscreteTimeSteadyStateKalmanFilter,
+    ExtendedKalmanFilter,
+    ExtendedKalmanFilterOptions,
+    LuenbergerObserver,
+    SteadyStateKalmanFilter,
+)
+from pydrake.systems.framework import (
+    InputPortSelection, OutputPortSelection
+)
 from pydrake.systems.primitives import LinearSystem
 
 
@@ -48,3 +58,41 @@ class TestEstimators(unittest.TestCase):
         filter = mut.SteadyStateKalmanFilter(
             system=plant, context=context, W=W, V=V)
         self.assertIsInstance(filter, mut.LuenbergerObserver)
+        self.assertIsInstance(filter, LuenbergerObserver)
+
+    def test_extended_kalman_filter(self):
+        options = ExtendedKalmanFilterOptions()
+        self.assertIsNone(options.initial_state_estimate)
+        self.assertIsNone(options.initial_state_covariance)
+        self.assertEqual(options.actuation_input_port_index,
+                         InputPortSelection.kUseFirstInputIfItExists)
+        self.assertEqual(options.measurement_output_port_index,
+                         OutputPortSelection.kUseFirstOutputIfItExists)
+        self.assertIsNone(options.process_noise_input_port_index)
+        self.assertIsNone(options.measurement_noise_input_port_index)
+        self.assertEqual(options.use_square_root_method, False)
+        self.assertIsNone(options.discrete_measurement_time_period)
+        self.assertEqual(options.discrete_measurement_time_offset, 0.0)
+
+        A = np.array([[0, 1], [0, 0]])
+        B = np.array([[0], [1]])
+        C = np.array([[1, 0]])
+        D = np.array([[0]])
+        sys = LinearSystem(A, B, C, D)
+        W = np.eye(2)
+        V = np.eye(1)
+        ekf = ExtendedKalmanFilter(
+            observed_system=sys,
+            observed_system_context=sys.CreateDefaultContext(),
+            W=W, V=V, options=options)
+
+        self.assertTrue(ekf.get_observed_system_input_input_port().size(), 1)
+        self.assertTrue(ekf.get_observed_system_output_input_port().size(), 1)
+        self.assertTrue(ekf.get_estimated_state_output_port().size(), 2)
+
+        context = ekf.CreateDefaultContext()
+        xhat = np.array([1, 2])
+        Phat = np.eye(2)
+        ekf.SetStateEstimateAndCovariance(context, xhat, Phat)
+        np.testing.assert_array_equal(ekf.GetStateEstimate(context), xhat)
+        np.testing.assert_array_equal(ekf.GetStateCovariance(context), Phat)
