@@ -12,8 +12,33 @@ drake_cc_package_library(
     name = "estimators",
     visibility = ["//visibility:public"],
     deps = [
+        ":extended_kalman_filter",
+        ":gaussian_state_observer",
         ":kalman_filter",
         ":luenberger_observer",
+    ],
+)
+
+drake_cc_library(
+    name = "extended_kalman_filter",
+    srcs = ["extended_kalman_filter.cc"],
+    hdrs = ["extended_kalman_filter.h"],
+    deps = [
+        ":gaussian_state_observer",
+        "//common:autodiff",
+        "//math:autodiff",
+        "//math:gradient",
+        "//math:matrix_util",
+    ],
+)
+
+drake_cc_library(
+    name = "gaussian_state_observer",
+    srcs = ["gaussian_state_observer.cc"],
+    hdrs = ["gaussian_state_observer.h"],
+    deps = [
+        "//common:default_scalars",
+        "//systems/framework",
     ],
 )
 
@@ -41,6 +66,20 @@ drake_cc_library(
 )
 
 # === test/ ===
+
+drake_cc_googletest(
+    name = "extended_kalman_filter_test",
+    deps = [
+        ":extended_kalman_filter",
+        ":kalman_filter",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//systems/analysis:simulator",
+        "//systems/estimators/test_utilities",
+        "//systems/framework:diagram_builder",
+        "//systems/primitives:constant_vector_source",
+        "//systems/primitives:linear_system",
+    ],
+)
 
 drake_cc_googletest(
     name = "kalman_filter_test",
