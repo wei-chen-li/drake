@@ -1,7 +1,7 @@
 import pydrake.systems.estimators as mut
 
 import unittest
-
+import copy
 import numpy as np
 
 from pydrake.examples import PendulumPlant
@@ -26,6 +26,10 @@ class TestEstimators(unittest.TestCase):
         self.assertEqual(port.size(), 2)
         np.testing.assert_array_equal(L, observer.observer_gain())
         np.testing.assert_array_equal(L, observer.L())
+
+        observer.Clone()
+        copy.copy(observer)
+        copy.deepcopy(observer)
 
     def test_steady_state_kalman_filter(self):
         A = np.array([[0., 1.], [-10., -0.1]])
