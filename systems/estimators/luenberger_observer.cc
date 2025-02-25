@@ -9,14 +9,20 @@ namespace systems {
 namespace estimators {
 
 template <typename T>
+template <typename U>
 LuenbergerObserver<T>::LuenbergerObserver(
     std::shared_ptr<const System<T>> observed_system,
-    const Context<T>& observed_system_context,
+    const Parameters<U>& observed_system_parameters,
     const Eigen::Ref<const Eigen::MatrixXd>& observer_gain)
-    : observed_system_(std::move(observed_system)),
+    : StateObserver<T>(SystemTypeTag<LuenbergerObserver>{}),
+      observed_system_(std::move(observed_system)),
       observer_gain_(observer_gain) {
   DRAKE_THROW_UNLESS(observed_system_ != nullptr);
-  observed_system_->ValidateContext(observed_system_context);
+  std::unique_ptr<Context<T>> observed_system_context =
+      observed_system_->CreateDefaultContext();
+  observed_system_context->get_mutable_parameters().SetFrom(
+      observed_system_parameters);
+  observed_system_->ValidateContext(*observed_system_context);
 
   // Note: Could potentially extend this to MIMO systems.
   const InputPort<T>* const observed_system_input =
@@ -27,23 +33,23 @@ LuenbergerObserver<T>::LuenbergerObserver(
       observed_system_->get_output_port();
   DRAKE_DEMAND(observed_system_output.get_data_type() == kVectorValued);
 
-  DRAKE_DEMAND(observed_system_context.has_only_continuous_state() ||
-               observed_system_context.has_only_discrete_state());
+  DRAKE_DEMAND(observed_system_context->has_only_continuous_state() ||
+               observed_system_context->has_only_discrete_state());
   const bool is_continuous =
-      observed_system_context.has_only_continuous_state();
+      observed_system_context->has_only_continuous_state();
 
   // Observer state is the (estimated) state of the observed system,
   // but the best we can do for now is to allocate a similarly-sized
   // BasicVector (see #6998).
   if (is_continuous) {
-    const auto& xc = observed_system_context.get_continuous_state();
+    const auto& xc = observed_system_context->get_continuous_state();
     const int num_q = xc.get_generalized_position().size();
     const int num_v = xc.get_generalized_velocity().size();
     const int num_z = xc.get_misc_continuous_state().size();
     this->DeclareContinuousState(num_q, num_v, num_z);
   } else {
     const int num_z =
-        observed_system_context.get_discrete_state_vector().size();
+        observed_system_context->get_discrete_state_vector().size();
     this->DeclareDiscreteState(num_z);
 
     DRAKE_THROW_UNLESS(
@@ -61,8 +67,8 @@ LuenbergerObserver<T>::LuenbergerObserver(
   // is only guaranteed to be a VectorBase, not a BasicVector.
   const int num_states =
       is_continuous
-          ? observed_system_context.num_continuous_states()
-          : observed_system_context.get_discrete_state_vector().size();
+          ? observed_system_context->num_continuous_states()
+          : observed_system_context->get_discrete_state_vector().size();
   this->DeclareVectorOutputPort("estimated_state", num_states,
                                 &LuenbergerObserver::CalcEstimatedState,
                                 {this->all_state_ticket()});
@@ -92,9 +98,18 @@ LuenbergerObserver<T>::LuenbergerObserver(
   // modify it without runtime reallocation or a (non-thread-safe) mutable
   // member.
   observed_system_context_cache_entry_ = &this->DeclareCacheEntry(
-      "observed system context", observed_system_context,
+      "observed system context", *observed_system_context,
       &LuenbergerObserver::UpdateObservedSystemContext, input_port_tickets);
 }
+
+template <typename T>
+LuenbergerObserver<T>::LuenbergerObserver(
+    std::shared_ptr<const System<T>> observed_system,
+    const Context<T>& observed_system_context,
+    const Eigen::Ref<const Eigen::MatrixXd>& observer_gain)
+    : LuenbergerObserver(std::move(observed_system),
+                         observed_system_context.get_parameters(),
+                         observer_gain) {}
 
 template <typename T>
 LuenbergerObserver<T>::LuenbergerObserver(
@@ -103,7 +118,16 @@ LuenbergerObserver<T>::LuenbergerObserver(
     : LuenbergerObserver(std::shared_ptr<const System<T>>(
                              /* managed object = */ std::shared_ptr<void>{},
                              /* stored pointer = */ &observed_system),
-                         observed_system_context, observer_gain) {}
+                         observed_system_context.get_parameters(),
+                         observer_gain) {}
+
+template <typename T>
+template <typename U>
+LuenbergerObserver<T>::LuenbergerObserver(const LuenbergerObserver<U>& other)
+    : LuenbergerObserver(
+          other.observed_system_->template ToScalarType<T>(),
+          other.observed_system_->CreateDefaultContext()->get_parameters(),
+          other.observer_gain_) {}
 
 template <typename T>
 void LuenbergerObserver<T>::CalcEstimatedState(const Context<T>& context,
