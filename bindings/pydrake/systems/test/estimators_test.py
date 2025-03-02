@@ -11,6 +11,8 @@ from pydrake.systems.estimators import (
     ExtendedKalmanFilterOptions,
     LuenbergerObserver,
     SteadyStateKalmanFilter,
+    UnscentedKalmanFilter,
+    UnscentedKalmanFilterOptions,
 )
 from pydrake.systems.framework import (
     InputPortSelection, OutputPortSelection
@@ -74,11 +76,9 @@ class TestEstimators(unittest.TestCase):
         self.assertIsNone(options.discrete_measurement_time_period)
         self.assertEqual(options.discrete_measurement_time_offset, 0.0)
 
-        A = np.array([[0, 1], [0, 0]])
-        B = np.array([[0], [1]])
-        C = np.array([[1, 0]])
-        D = np.array([[0]])
-        sys = LinearSystem(A, B, C, D)
+        sys = LinearSystem(
+            np.array([[0, 1], [0, 0]]), np.array([[0], [1]]),
+            np.array([[1, 0]]), np.array([[0]]))
         W = np.eye(2)
         V = np.eye(1)
         ekf = ExtendedKalmanFilter(
@@ -96,3 +96,42 @@ class TestEstimators(unittest.TestCase):
         ekf.SetStateEstimateAndCovariance(context, xhat, Phat)
         np.testing.assert_array_equal(ekf.GetStateEstimate(context), xhat)
         np.testing.assert_array_equal(ekf.GetStateCovariance(context), Phat)
+
+    def test_unscented_kalman_filter(self):
+        options = UnscentedKalmanFilterOptions()
+        self.assertIsNone(options.initial_state_estimate)
+        self.assertIsNone(options.initial_state_covariance)
+        self.assertEqual(options.actuation_input_port_index,
+                         InputPortSelection.kUseFirstInputIfItExists)
+        self.assertEqual(options.measurement_output_port_index,
+                         OutputPortSelection.kUseFirstOutputIfItExists)
+        self.assertIsNone(options.process_noise_input_port_index)
+        self.assertIsNone(options.measurement_noise_input_port_index)
+        options.unscented_transform_parameters = \
+            UnscentedKalmanFilterOptions.UnscentedTransformParameters(
+                alpha=1, beta=2, kappa=lambda n: 3-n)
+        self.assertEqual(options.unscented_transform_parameters.kappa(2), 1)
+        self.assertEqual(options.use_square_root_method, False)
+        self.assertIsNone(options.discrete_measurement_time_period)
+        self.assertEqual(options.discrete_measurement_time_offset, 0.0)
+
+        sys = LinearSystem(
+            np.array([[0, 1], [0, 0]]), np.array([[0], [1]]),
+            np.array([[1, 0]]), np.array([[0]]))
+        W = np.eye(2)
+        V = np.eye(1)
+        ukf = UnscentedKalmanFilter(
+            observed_system=sys,
+            observed_system_context=sys.CreateDefaultContext(),
+            W=W, V=V, options=options)
+
+        self.assertTrue(ukf.get_observed_system_input_input_port().size(), 1)
+        self.assertTrue(ukf.get_observed_system_output_input_port().size(), 1)
+        self.assertTrue(ukf.get_estimated_state_output_port().size(), 2)
+
+        context = ukf.CreateDefaultContext()
+        xhat = np.array([1, 2])
+        Phat = np.eye(2)
+        ukf.SetStateEstimateAndCovariance(context, xhat, Phat)
+        np.testing.assert_array_equal(ukf.GetStateEstimate(context), xhat)
+        np.testing.assert_array_equal(ukf.GetStateCovariance(context), Phat)
