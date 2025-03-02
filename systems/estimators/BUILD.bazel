@@ -16,6 +16,7 @@ drake_cc_package_library(
         ":gaussian_state_observer",
         ":kalman_filter",
         ":luenberger_observer",
+        ":unscented_kalman_filter",
     ],
 )
 
@@ -77,6 +78,17 @@ drake_cc_library(
     ],
 )
 
+drake_cc_library(
+    name = "unscented_kalman_filter",
+    srcs = ["unscented_kalman_filter.cc"],
+    hdrs = ["unscented_kalman_filter.h"],
+    deps = [
+        ":gaussian_state_observer",
+        ":nonlinear_kalman_filter_internal",
+        "//math:matrix_util",
+    ],
+)
+
 # === test/ ===
 
 drake_cc_googletest(
@@ -123,6 +135,14 @@ drake_cc_library(
         "//systems/framework:diagram_builder",
         "//systems/primitives:constant_vector_source",
         "//systems/primitives:linear_system",
+    ],
+)
+
+drake_cc_googletest(
+    name = "unscented_kalman_filter_test",
+    deps = [
+        ":nonlinear_kalman_filter_test",
+        ":unscented_kalman_filter",
     ],
 )
 
