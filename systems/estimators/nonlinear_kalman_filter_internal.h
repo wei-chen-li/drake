@@ -107,6 +107,34 @@ UnscentedTransform(
 }
 
 /**
+ * Check uif the unscented transform parameters are ok.
+ */
+template <typename ParamsType>
+void CheckUnscentedTransformParams(const ParamsType& params, int num_states,
+                                   int w_size, int v_size) {
+  const int n_values[] = {num_states, num_states + w_size, num_states + v_size,
+                          num_states + w_size + v_size};
+  for (int n : n_values) {
+    const double alpha = params.alpha;
+    const double beta = params.beta;
+    const double kappa = (std::get_if<0>(&params.kappa))
+                             ? std::get<0>(params.kappa)
+                             : std::get<1>(params.kappa)(n);
+    const double lambda = alpha * alpha * (n + kappa) - n;
+    if (n + kappa <= 0) {
+      throw std::logic_error(
+          "For the unscented transform parameters, n+κ must be greater than "
+          "zero.");
+    }
+    if (lambda / (n + lambda) + (1 - alpha * alpha + beta) <= 0) {
+      throw std::logic_error(
+          "For the unscented transform parameters, λ/(n+λ) + (1-α²+β) must "
+          "be greater than zero.");
+    }
+  }
+}
+
+/**
  * Calculates the joint mean and covariance given multiple independently
  * distributed Gaussians specified by their mean and covariance.
  */

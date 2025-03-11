@@ -25,9 +25,15 @@ class DiscreteTimeUKFTest : public DiscreteTimeNonlinearKalmanFilterTest<
 TEST_F(DiscreteTimeUKFTest, Contruction) {
   this->TestConstruction(false);
 }
+TEST_F(DiscreteTimeUKFTest, ContructionSqrt) {
+  this->TestConstruction(true);
+}
 TEST_F(DiscreteTimeUKFTest, ErrorDynamics) {
   this->TestErrorDynamics(false);
 }
+// TEST_F(DiscreteTimeUKFTest, ErrorDynamicsSqrt) {
+//   this->TestErrorDynamics(true);
+// }
 TEST_F(DiscreteTimeUKFTest, SteadyState) {
   this->TestSteadyState(false);
 }
