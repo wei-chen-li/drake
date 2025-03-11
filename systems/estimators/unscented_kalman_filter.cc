@@ -115,6 +115,10 @@ class UnscentedKalmanFilterBase : public GaussianStateObserver<double> {
           "options.initial_state_covariance is required when "
           "options.use_square_root_method is set to 'true'.");
     }
+
+    // Check the unscented transform parameters.
+    internal::CheckUnscentedTransformParams(unscented_transform_params_,
+                                            num_states_, w_size, v_size);
   }
 
   ~UnscentedKalmanFilterBase() override = default;
@@ -408,8 +412,13 @@ class UnscentedKalmanFilterDD final : public UnscentedKalmanFilterBase {
     DRAKE_THROW_UNLESS(math::IsPositiveDefinite(
         state_covariance, std::numeric_limits<double>::epsilon(),
         kSymmetryTolerance));
-    context->SetDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
-        state_estimate, state_covariance));
+    if (!use_sqrt_method_) {
+      context->SetDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
+          state_estimate, state_covariance));
+    } else {
+      context->SetDiscreteState(internal::ConcatenateVectorAndLowerTriMatrix(
+          state_estimate, state_covariance.llt().matrixL()));
+    }
   }
 
   // Implements GaussianStateObserver interface.
@@ -423,10 +432,17 @@ class UnscentedKalmanFilterDD final : public UnscentedKalmanFilterBase {
   Eigen::MatrixXd GetStateCovariance(
       const Context<double>& context) const override {
     this->ValidateContext(context);
-    Eigen::MatrixXd state_covariance(num_states_, num_states_);
-    internal::ExtractSquareMatrix(context.get_discrete_state_vector().value(),
-                                  state_covariance);
-    return state_covariance;
+    if (!use_sqrt_method_) {
+      Eigen::MatrixXd state_covariance(num_states_, num_states_);
+      internal::ExtractSquareMatrix(context.get_discrete_state_vector().value(),
+                                    state_covariance);
+      return state_covariance;
+    } else {
+      Eigen::MatrixXd state_covariance_sqrt(num_states_, num_states_);
+      internal::ExtractLowerTriMatrix(
+          context.get_discrete_state_vector().value(), state_covariance_sqrt);
+      return state_covariance_sqrt * state_covariance_sqrt.transpose();
+    }
   }
 
  private:
