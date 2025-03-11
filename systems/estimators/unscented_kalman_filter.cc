@@ -115,6 +115,10 @@ class UnscentedKalmanFilterBase : public GaussianStateObserver<double> {
           "options.initial_state_covariance is required when "
           "options.use_square_root_method is set to 'true'.");
     }
+
+    // Check the unscented transform parameters.
+    internal::CheckUnscentedTransformParams(unscented_transform_params_,
+                                            num_states_, w_size, v_size);
   }
 
   const InputPort<double>& get_observed_system_input_input_port()
@@ -351,8 +355,16 @@ class UnscentedKalmanFilterDD final : public UnscentedKalmanFilterBase {
 
     //  We declare only one discrete state containing both the estimated state
     //  and variance so that this observer will be IsDifferenceEquationSystem().
-    this->DeclareDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
-        initial_state_estimate, initial_state_covariance));
+    if (!use_sqrt_method_) {
+      this->DeclareDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
+          initial_state_estimate, initial_state_covariance));
+    } else {
+      // Check if options.initial_state_covariance is specified and positive
+      // definite when use_sqrt_method_ is true is done in the base class
+      // constructor.
+      this->DeclareDiscreteState(internal::ConcatenateVectorAndLowerTriMatrix(
+          initial_state_estimate, initial_state_covariance.llt().matrixL()));
+    }
 
     // Declare estimated state output.
     this->DeclareVectorOutputPort("estimated_state", num_states_,
@@ -398,8 +410,13 @@ class UnscentedKalmanFilterDD final : public UnscentedKalmanFilterBase {
     DRAKE_THROW_UNLESS(math::IsPositiveDefinite(
         state_covariance, std::numeric_limits<double>::epsilon(),
         kSymmetryTolerance));
-    context->SetDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
-        state_estimate, state_covariance));
+    if (!use_sqrt_method_) {
+      context->SetDiscreteState(internal::ConcatenateVectorAndSquareMatrix(
+          state_estimate, state_covariance));
+    } else {
+      context->SetDiscreteState(internal::ConcatenateVectorAndLowerTriMatrix(
+          state_estimate, state_covariance.llt().matrixL()));
+    }
   }
 
   // Implements GaussianStateObserver interface.
@@ -413,10 +430,17 @@ class UnscentedKalmanFilterDD final : public UnscentedKalmanFilterBase {
   Eigen::MatrixXd GetStateCovariance(
       const Context<double>& context) const override {
     this->ValidateContext(context);
-    Eigen::MatrixXd state_covariance(num_states_, num_states_);
-    internal::ExtractSquareMatrix(context.get_discrete_state_vector().value(),
-                                  state_covariance);
-    return state_covariance;
+    if (!use_sqrt_method_) {
+      Eigen::MatrixXd state_covariance(num_states_, num_states_);
+      internal::ExtractSquareMatrix(context.get_discrete_state_vector().value(),
+                                    state_covariance);
+      return state_covariance;
+    } else {
+      Eigen::MatrixXd state_covariance_sqrt(num_states_, num_states_);
+      internal::ExtractLowerTriMatrix(
+          context.get_discrete_state_vector().value(), state_covariance_sqrt);
+      return state_covariance_sqrt * state_covariance_sqrt.transpose();
+    }
   }
 
  private:
