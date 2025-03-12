@@ -219,11 +219,95 @@ SimulatorConfig ExtractSimulatorConfig(const Simulator<T>& simulator) {
   return result;
 }
 
+// A functor that implements ResetIntegrator.
+template <typename T>
+using CreateIntegratorFunc = function<std::unique_ptr<IntegratorBase<T>>(
+    const System<T>&, const T& /* max_step_size */)>;
+
+// Returns (scheme, functor) pair that implements ResetIntegrator.
+template <typename T>
+using NamedCreateIntegratorFunc = pair<string, CreateIntegratorFunc<T>>;
+
+// Returns (scheme, functor) pair to implement reset for this `Integrator`.
+// This would be much simpler if all integrators accepted a max_step_size.
+template <typename T, template <typename> class Integrator>
+NamedCreateIntegratorFunc<T> MakeCreater() {
+  constexpr bool is_fixed_step =
+      std::is_constructible_v<Integrator<T>, const System<T>&, T, Context<T>*>;
+  constexpr bool is_error_controlled =
+      std::is_constructible_v<Integrator<T>, const System<T>&, Context<T>*>;
+  static_assert(is_fixed_step ^ is_error_controlled);
+
+  if constexpr (std::is_same_v<T, symbolic::Expression> &&
+                is_error_controlled) {
+    return NamedCreateIntegratorFunc<T>(GetIntegratorName<Integrator>(),
+                                        {});  // Return empty function
+  } else {
+    return NamedCreateIntegratorFunc<T>(
+        GetIntegratorName<Integrator>(),
+        [](const System<T>& system, const T& max_step_size) {
+          if constexpr (is_fixed_step) {
+            return std::make_unique<Integrator<T>>(system, max_step_size);
+          } else {
+            auto result = std::make_unique<Integrator<T>>(system);
+            result->set_maximum_step_size(max_step_size);
+            return result;
+          }
+        });
+  }
+}
+
+// Returns the full list of supported (scheme, functor) pairs.  N.B. The list
+// here must be kept in sync with the help string in simulator_gflags.cc.
+template <typename T>
+const vector<NamedCreateIntegratorFunc<T>>& GetAllNamedCreateIntegratorFuncs() {
+  static const never_destroyed<vector<NamedCreateIntegratorFunc<T>>> result{
+      std::initializer_list<NamedCreateIntegratorFunc<T>>{
+          // Keep this list sorted alphabetically.
+          MakeCreater<T, BogackiShampine3Integrator>(),
+          MakeCreater<T, ExplicitEulerIntegrator>(),
+          MakeCreater<T, ImplicitEulerIntegrator>(),
+          MakeCreater<T, Radau1Integrator>(),
+          MakeCreater<T, Radau3Integrator>(),
+          MakeCreater<T, RungeKutta2Integrator>(),
+          MakeCreater<T, RungeKutta3Integrator>(),
+          MakeCreater<T, RungeKutta5Integrator>(),
+          MakeCreater<T, SemiExplicitEulerIntegrator>(),
+          MakeCreater<T, VelocityImplicitEulerIntegrator>(),
+      }};
+  return result.access();
+}
+
+template <typename T>
+std::unique_ptr<IntegratorBase<T>> CreateIntegratorFromFlags(
+    const std::string& scheme, const System<T>& system,
+    const T& max_step_size) {
+  const auto& name_func_pairs = GetAllNamedCreateIntegratorFuncs<T>();
+  for (const auto& [one_name, one_func] : name_func_pairs) {
+    if (scheme == one_name) {
+      if (one_func) {
+        return one_func(system, max_step_size);
+      } else {
+        throw std::logic_error(
+            fmt::format("Integration scheme {} does not support "
+                        "symbolic::Expression scalar type",
+                        scheme));
+      }
+    }
+  }
+  throw std::runtime_error(
+      fmt::format("Unknown integration scheme: {}", scheme));
+}
+
 // We can't support T=symbolic::Expression because Simulator doesn't support it.
 DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS((
       &ResetIntegratorFromFlags<T>,
       &ApplySimulatorConfig<T>,
       &ExtractSimulatorConfig<T>
 ));
+
+DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    (&CreateIntegratorFromFlags<T>));
+
 }  // namespace systems
 }  // namespace drake

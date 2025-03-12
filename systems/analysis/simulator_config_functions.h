@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,6 +73,24 @@ the integrator's scalar type's extra information such as gradients.
 template <typename T>
 SimulatorConfig ExtractSimulatorConfig(
     const drake::systems::Simulator<T>& simulator);
+
+/** Creates an integrator according to the given arguments.
+
+@param scheme Integration scheme to be used, e.g., "runge_kutta2".  See
+  GetIntegrationSchemes() for a the list of valid options.
+@param system A reference to the system to be integrated; the integrator will
+maintain a reference to the system in perpetuity, so the integrator must not
+outlive the system.
+@param max_step_size The IntegratorBase::set_maximum_step_size() value.
+@returns A newly created integrator.
+@throws std::exception if the integraton scheme does not support the scalar T.
+@tparam_default_scalar
+
+@ingroup simulator_configuration */
+template <typename T>
+std::unique_ptr<IntegratorBase<T>> CreateIntegratorFromFlags(
+    const std::string& scheme, const System<T>& system,
+    const T& max_step_size = std::numeric_limits<double>::infinity());
 
 }  // namespace systems
 }  // namespace drake

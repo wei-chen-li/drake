@@ -1,8 +1,11 @@
 #include "drake/systems/analysis/simulator_config_functions.h"
 
+#include <iostream>
+
 #include <gtest/gtest.h>
 
 #include "drake/common/nice_type_name.h"
+#include "drake/common/symbolic/expression/expression.h"
 #include "drake/common/test_utilities/expect_no_throw.h"
 #include "drake/common/yaml/yaml_io.h"
 #include "drake/systems/analysis/simulator.h"
@@ -107,6 +110,29 @@ TYPED_TEST(SimulatorConfigFunctionsTest, RoundTripTest) {
   EXPECT_EQ(readback.use_error_control, bespoke.use_error_control);
   EXPECT_EQ(readback.target_realtime_rate, bespoke.target_realtime_rate);
   EXPECT_EQ(readback.publish_every_time_step, bespoke.publish_every_time_step);
+}
+
+template <typename T>
+class CreateIntegratorTest : public ::testing::Test {};
+using AllScalarTypes =
+    ::testing::Types<double, AutoDiffXd, symbolic::Expression>;
+TYPED_TEST_SUITE(CreateIntegratorTest, AllScalarTypes);
+
+TYPED_TEST(CreateIntegratorTest, test) {
+  using T = TypeParam;
+  ConstantVectorSource<T> system(2);
+  std::set<std::string> expression_supporting_schemes{
+      "explicit_euler", "runge_kutta2", "semi_explicit_euler"};
+  for (auto& scheme : GetIntegrationSchemes()) {
+    std::cout << scheme << std::endl;
+    if (std::is_same_v<T, symbolic::Expression> &&
+        !expression_supporting_schemes.contains(scheme)) {
+      EXPECT_ANY_THROW(CreateIntegratorFromFlags(scheme, system));
+    } else {
+      auto integrator = CreateIntegratorFromFlags(scheme, system);
+      EXPECT_TRUE(integrator != nullptr);
+    }
+  }
 }
 
 }  // namespace
