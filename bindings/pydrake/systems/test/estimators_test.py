@@ -13,7 +13,8 @@ from pydrake.systems.estimators import (
     UnscentedKalmanFilterOptions,
 )
 from pydrake.systems.framework import (
-    InputPortSelection, OutputPortSelection
+    InputPortSelection, OutputPortSelection,
+    DiagramBuilder
 )
 from pydrake.systems.primitives import LinearSystem
 
@@ -136,3 +137,18 @@ class TestEstimators(unittest.TestCase):
         ukf.SetStateEstimateAndCovariance(context, xhat, Phat)
         np.testing.assert_array_equal(ukf.GetStateEstimate(context), xhat)
         np.testing.assert_array_equal(ukf.GetStateCovariance(context), Phat)
+
+    def test_binding(self):
+        sys = LinearSystem(
+            np.array([[0, 1], [0, 0]]), np.array([[0], [1]]),
+            np.array([[1, 0]]), np.array([[0]]))
+        W = np.eye(2)
+        V = np.eye(1)
+        kf = ExtendedKalmanFilter(
+            observed_system=sys,
+            observed_system_context=sys.CreateDefaultContext(),
+            W=W, V=V)
+
+        builder = DiagramBuilder()
+        kf = builder.AddSystem(kf)
+        builder.Build()
