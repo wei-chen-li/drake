@@ -162,7 +162,17 @@ PYBIND11_MODULE(estimators, m) {
             &Class::discrete_measurement_time_offset,
             cls_doc.discrete_measurement_time_offset.doc);
 
-    m.def("ExtendedKalmanFilter", &ExtendedKalmanFilter,
+    m.def(
+        "ExtendedKalmanFilter",
+        [](const System<double>& observed_system,
+            const Context<double>& observed_system_context,
+            const Eigen::Ref<const Eigen::MatrixXd>& W,
+            const Eigen::Ref<const Eigen::MatrixXd>& V,
+            const ExtendedKalmanFilterOptions& options) {
+          auto result = ExtendedKalmanFilter(
+              observed_system, observed_system_context, W, V, options);
+          return result.release();
+        },
         py::arg("observed_system"), py::arg("observed_system_context"),
         py::arg("W"), py::arg("V"),
         py::arg("options") = ExtendedKalmanFilterOptions(),
