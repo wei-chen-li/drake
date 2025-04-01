@@ -56,8 +56,10 @@ std::unique_ptr<AffineSystem<T>> DiscreteTimeApproximation(
  * accuracy).
  * @returns A discrete-time System.
  * @pre `system` is a continuous-time system. `time_period > 0`.
+ * @throw std::exception if the integration scheme does not support the scalar
+ * type T.
  *
- * @tparam_nonsymbolic_scalar
+ * @tparam_default_scalar
  * @ingroup analysis
  * @pydrake_mkdoc_identifier{3args_constSystem_double_SimulatorConfig}
  */
@@ -71,7 +73,7 @@ std::unique_ptr<System<T>> DiscreteTimeApproximation(
  * @warning The `system` reference must remain valid for the lifetime of the
  * returned system.
  *
- * @tparam_nonsymbolic_scalar
+ * @tparam_default_scalar
  * @ingroup analysis
  * @exclude_from_pydrake_mkdoc{This function is not bound.}
  */
