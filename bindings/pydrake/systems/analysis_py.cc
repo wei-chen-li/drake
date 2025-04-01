@@ -243,6 +243,21 @@ PYBIND11_MODULE(analysis, m) {
             const AffineSystem<T>&, double>(&DiscreteTimeApproximation),
         py::arg("system"), py::arg("time_period"),
         doc.DiscreteTimeApproximation.doc_affinesystem);
+
+    m.def(
+        "DiscreteTimeApproximation",
+        [](const System<T>& system, double time_period, double time_offset,
+            const SimulatorConfig& integrator_config) {
+          return DiscreteTimeApproximation(
+              // The lifetime of `system` is managed by the keep_alive below,
+              // not the C++ shared_ptr.
+              make_unowned_shared_ptr_from_raw(&system), time_period,
+              time_offset, integrator_config);
+        },
+        py::arg("system"), py::arg("time_period"), py::arg("time_offset") = 0.0,
+        py::arg("integrator_config") = SimulatorConfig(),
+        // Keep alive, reference: `result` keeps `system` alive.
+        py::keep_alive<0, 1>(), doc.DiscreteTimeApproximation.doc_system);
   };
   type_visit(bind_scalar_types, CommonScalarPack{});
 
@@ -408,21 +423,6 @@ Parameter ``interruptible``:
         .def("ExtractSimulatorConfig", &ExtractSimulatorConfig<T>,
             py::arg("simulator"),
             pydrake_doc.drake.systems.ExtractSimulatorConfig.doc);
-
-    m.def(
-        "DiscreteTimeApproximation",
-        [](const System<T>& system, double time_period, double time_offset,
-            const SimulatorConfig& integrator_config) {
-          return DiscreteTimeApproximation(
-              // The lifetime of `system` is managed by the keep_alive below,
-              // not the C++ shared_ptr.
-              make_unowned_shared_ptr_from_raw(&system), time_period,
-              time_offset, integrator_config);
-        },
-        py::arg("system"), py::arg("time_period"), py::arg("time_offset") = 0.0,
-        py::arg("integrator_config") = SimulatorConfig(),
-        // Keep alive, reference: `result` keeps `system` alive.
-        py::keep_alive<0, 1>(), doc.DiscreteTimeApproximation.doc_system);
   };
   type_visit(bind_nonsymbolic_scalar_types, NonSymbolicScalarPack{});
 
