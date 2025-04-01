@@ -92,5 +92,17 @@ template <typename T>
 std::unique_ptr<IntegratorBase<T>> CreateIntegratorFromConfig(
     const System<T>* system, const SimulatorConfig& integrator_config);
 
+/** Check if the integration scheme supports the scalar type T.
+
+@param integration_scheme Integration scheme to be checked.
+@throw std::exception if the integration scheme does not match any of
+  GetIntegrationSchemes().
+@tparam_default_scalar
+
+@ingroup simulator_configuration */
+template <typename T>
+bool IsIntegrationSchemeSupportedScalarType(
+    const std::string& integration_scheme);
+
 }  // namespace systems
 }  // namespace drake
