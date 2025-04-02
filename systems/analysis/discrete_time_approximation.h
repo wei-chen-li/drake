@@ -22,11 +22,11 @@ namespace systems {
  *
  * @tparam_default_scalar
  * @ingroup analysis
- * @pydrake_mkdoc_identifier{linearsystem}
+ * @pydrake_mkdoc_identifier{linear_system}
  */
 template <typename T>
 std::unique_ptr<LinearSystem<T>> DiscreteTimeApproximation(
-    const LinearSystem<T>& system, double time_period);
+    const LinearSystem<T>& linear_system, double time_period);
 
 /**
  * Converts a continuous-time affine system to a discrete-time affine system
@@ -40,11 +40,11 @@ std::unique_ptr<LinearSystem<T>> DiscreteTimeApproximation(
  *
  * @tparam_default_scalar
  * @ingroup analysis
- * @pydrake_mkdoc_identifier{affinesystem}
+ * @pydrake_mkdoc_identifier{affine_system}
  */
 template <typename T>
 std::unique_ptr<AffineSystem<T>> DiscreteTimeApproximation(
-    const AffineSystem<T>& system, double time_period);
+    const AffineSystem<T>& affine_system, double time_period);
 
 /**
  * Converts a general continuous-time system @f$ \dot{x} = f(t,x(t),u(t)) @f$

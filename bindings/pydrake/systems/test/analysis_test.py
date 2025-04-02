@@ -350,7 +350,7 @@ class TestAnalysis(unittest.TestCase):
 
         continuous_system = LinearSystem_[T](A, B, C, D)
         discrete_system = DiscreteTimeApproximation(
-            system=continuous_system, time_period=h)
+            linear_system=continuous_system, time_period=h)
         numpy_compare.assert_allclose(discrete_system.A(), Ad)
         numpy_compare.assert_allclose(discrete_system.B(), Bd)
         numpy_compare.assert_equal(discrete_system.C(), Cd)
@@ -358,7 +358,7 @@ class TestAnalysis(unittest.TestCase):
 
         continuous_system = AffineSystem_[T](A, B, f0, C, D, y0)
         discrete_system = DiscreteTimeApproximation(
-            system=continuous_system, time_period=h)
+            affine_system=continuous_system, time_period=h)
         numpy_compare.assert_allclose(discrete_system.A(),  Ad)
         numpy_compare.assert_allclose(discrete_system.B(),  Bd)
         numpy_compare.assert_allclose(discrete_system.f0(), f0d)

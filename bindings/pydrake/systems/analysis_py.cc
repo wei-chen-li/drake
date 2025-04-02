@@ -235,14 +235,14 @@ PYBIND11_MODULE(analysis, m) {
     m.def("DiscreteTimeApproximation",
         overload_cast_explicit<std::unique_ptr<LinearSystem<T>>,
             const LinearSystem<T>&, double>(&DiscreteTimeApproximation),
-        py::arg("system"), py::arg("time_period"),
-        doc.DiscreteTimeApproximation.doc_linearsystem);
+        py::arg("linear_system"), py::arg("time_period"),
+        doc.DiscreteTimeApproximation.doc_linear_system);
 
     m.def("DiscreteTimeApproximation",
         overload_cast_explicit<std::unique_ptr<AffineSystem<T>>,
             const AffineSystem<T>&, double>(&DiscreteTimeApproximation),
-        py::arg("system"), py::arg("time_period"),
-        doc.DiscreteTimeApproximation.doc_affinesystem);
+        py::arg("affine_system"), py::arg("time_period"),
+        doc.DiscreteTimeApproximation.doc_affine_system);
 
     m.def(
         "DiscreteTimeApproximation",
