@@ -1,0 +1,10 @@
+{
+    "name": "Drake developer environment",
+    "image": "williamrob104/drake-dev-env:latest",
+    "postCreateCommand": "setup/install_prereqs --developer",
+    "customizations": {
+        "vscode": {
+            "extensions": []
+        }
+    }
+}
