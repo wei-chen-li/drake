@@ -308,6 +308,12 @@ using Block3x3SparseLowerTriangularMatrix =
     BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, false>;
 using Block3x3SparseSymmetricMatrix =
     BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>, true>;
+template <typename T>
+using Block4x4SparseLowerTriangularMatrix =
+    BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<T>, false>;
+template <typename T>
+using Block4x4SparseSymmetricMatrix =
+    BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<T>, true>;
 
 }  // namespace internal
 }  // namespace contact_solvers
