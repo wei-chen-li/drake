@@ -1,0 +1,37 @@
+load("//tools/lint:lint.bzl", "add_lint_tests")
+load(
+    "//tools/skylark:drake_cc.bzl",
+    "drake_cc_binary",
+    "drake_cc_googletest",
+    "drake_cc_library",
+)
+
+package(default_visibility = ["//visibility:private"])
+
+drake_cc_binary(
+    name = "cantilever_beam",
+    srcs = ["cantilever_beam.cc"],
+    add_test_rule = 1,
+    test_rule_args = [
+        "-simulation_time=0.1",
+        "-realtime_rate=0.0",
+    ],
+    deps = [
+        "//geometry:drake_visualizer",
+        "//geometry:scene_graph",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "@gflags",
+    ],
+)
+
+drake_cc_binary(
+    name = "visualization",
+    srcs = ["visualization.cc"],
+    deps = [
+        "//geometry:meshcat",
+    ],
+)
+
+add_lint_tests()

@@ -410,6 +410,7 @@ void BlockSparseCholeskySolver<BlockType>::PermuteAndCopyToL(
 
 template class BlockSparseCholeskySolver<MatrixX<double>>;
 template class BlockSparseCholeskySolver<Matrix3<double>>;
+template class BlockSparseCholeskySolver<Matrix4<double>>;
 
 }  // namespace internal
 }  // namespace contact_solvers

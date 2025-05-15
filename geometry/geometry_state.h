@@ -382,6 +382,9 @@ class GeometryState {
   /** Implementation of SceneGraphInspector::GetReferenceMesh().  */
   const VolumeMesh<double>* GetReferenceMesh(GeometryId id) const;
 
+  /** Implementation of SceneGraphInspector::GetReferenceFilament().  */
+  const Filament* GetReferenceFilament(GeometryId id) const;
+
   /** Implementation of
    SceneGraphInspector::GetDrivenRenderMeshes().  */
   const std::vector<internal::RenderMesh>& GetDrivenRenderMeshes(

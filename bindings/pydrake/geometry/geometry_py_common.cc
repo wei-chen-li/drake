@@ -576,6 +576,40 @@ void DefineShapes(py::module m) {
                   std::get<0>(dims), std::get<1>(dims), std::get<2>(dims));
             }));
 
+    py::class_<Filament, Shape> filament_cls(m, "Filament", doc.Filament.doc);
+    {
+      using Nested = Filament::CrossSectionType;
+      constexpr auto& nested_doc = doc.Filament.CrossSectionType;
+      py::enum_<Nested>(filament_cls, "CrossSectionType", nested_doc.doc)
+          .value("kRectangular", Nested::kRectangular)
+          .value("kElliptical", Nested::kElliptical)
+          .export_values();
+    }
+    {
+      using Nested = Filament::CrossSection;
+      constexpr auto& nested_doc = doc.Filament.CrossSection;
+      py::class_<Nested>(filament_cls, "CrossSection", nested_doc.doc)
+          .def(py::init<Filament::CrossSectionType, double, double>(),
+              py::arg("type"), py::arg("width"), py::arg("height"))
+          .def_readwrite("type", &Nested::type, nested_doc.type.doc)
+          .def_readwrite("width", &Nested::width, nested_doc.width.doc)
+          .def_readwrite("height", &Nested::height, nested_doc.height.doc);
+    }
+    filament_cls  // BR
+        .def(py::init<bool, Eigen::Matrix3Xd, const Eigen::Vector3d&,
+                 const Filament::CrossSection&>(),
+            py::arg("closed"), py::arg("node_pos"), py::arg("first_edge_m1"),
+            py::arg("cross_section"), doc.Filament.ctor.doc_first_m1)
+        .def(py::init<bool, Eigen::Matrix3Xd, Eigen::Matrix3Xd,
+                 const Filament::CrossSection&>(),
+            py::arg("closed"), py::arg("node_pos"), py::arg("edge_m1"),
+            py::arg("cross_section"), doc.Filament.ctor.doc_all_m1)
+        .def("closed", &Filament::closed, doc.Filament.closed.doc)
+        .def("node_pos", &Filament::node_pos, doc.Filament.node_pos.doc)
+        .def("edge_m1", &Filament::edge_m1, doc.Filament.edge_m1.doc)
+        .def("cross_section", &Filament::cross_section,
+            doc.Filament.cross_section.doc);
+
     py::class_<HalfSpace, Shape>(m, "HalfSpace", doc.HalfSpace.doc)
         .def(py::init<>(), doc.HalfSpace.ctor.doc)
         .def_static("MakePose", &HalfSpace::MakePose, py::arg("Hz_dir_F"),

@@ -42,6 +42,7 @@ drake_cc_package_library(
         ":make_cylinder_mesh",
         ":make_ellipsoid_field",
         ":make_ellipsoid_mesh",
+        ":make_filament_mesh",
         ":make_mesh_field",
         ":make_mesh_from_vtk",
         ":make_sphere_field",
@@ -642,6 +643,17 @@ drake_cc_library(
         ":volume_mesh",
         ":volume_to_surface_mesh",
         "//geometry:shape_specification",
+    ],
+)
+
+drake_cc_library(
+    name = "make_filament_mesh",
+    srcs = ["make_filament_mesh.cc"],
+    hdrs = ["make_filament_mesh.h"],
+    deps = [
+        ":triangle_surface_mesh",
+        "//geometry:shape_specification",
+        "//math:frame_transport",
     ],
 )
 

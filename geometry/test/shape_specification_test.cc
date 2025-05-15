@@ -47,6 +47,10 @@ class ReifierTest : public ShapeReifier, public ::testing::Test {
     received_user_data_ = data;
     ellipsoid_made_ = true;
   }
+  void ImplementGeometry(const Filament&, void* data) override {
+    received_user_data_ = data;
+    filament_made_ = true;
+  }
   void ImplementGeometry(const HalfSpace&, void* data) override {
     received_user_data_ = data;
     half_space_made_ = true;
@@ -69,6 +73,7 @@ class ReifierTest : public ShapeReifier, public ::testing::Test {
     convex_made_ = false;
     cylinder_made_ = false;
     ellipsoid_made_ = false;
+    filament_made_ = false;
     half_space_made_ = false;
     mesh_made_ = false;
     meshcat_cone_made_ = false;
@@ -82,6 +87,7 @@ class ReifierTest : public ShapeReifier, public ::testing::Test {
   bool convex_made_{false};
   bool cylinder_made_{false};
   bool ellipsoid_made_{false};
+  bool filament_made_{false};
   bool half_space_made_{false};
   bool mesh_made_{false};
   bool meshcat_cone_made_{false};
@@ -109,6 +115,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -123,6 +130,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_TRUE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -137,6 +145,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_TRUE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -151,6 +160,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -165,6 +175,27 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_TRUE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
+  EXPECT_FALSE(mesh_made_);
+  EXPECT_FALSE(meshcat_cone_made_);
+
+  Reset();
+
+  Eigen::Matrix3Xd node_pos = Eigen::Matrix3Xd::Zero(3, 2);
+  node_pos(0, 1) = 1.0;
+  const Filament filament(
+      false, node_pos, Eigen::Vector3d(0, 1, 0),
+      Filament::CrossSection{
+          .type = Filament::kRectangular, .width = 0.02, .height = 0.01});
+  filament.Reify(this);
+  EXPECT_FALSE(sphere_made_);
+  EXPECT_FALSE(half_space_made_);
+  EXPECT_FALSE(cylinder_made_);
+  EXPECT_FALSE(box_made_);
+  EXPECT_FALSE(capsule_made_);
+  EXPECT_FALSE(convex_made_);
+  EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_TRUE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -179,6 +210,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -193,6 +225,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_TRUE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 
@@ -207,6 +240,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_TRUE(meshcat_cone_made_);
 
@@ -221,6 +255,7 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
   EXPECT_FALSE(capsule_made_);
   EXPECT_FALSE(convex_made_);
   EXPECT_FALSE(ellipsoid_made_);
+  EXPECT_FALSE(filament_made_);
   EXPECT_FALSE(mesh_made_);
   EXPECT_FALSE(meshcat_cone_made_);
 }

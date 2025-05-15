@@ -131,7 +131,9 @@ class InternalGeometry {
    contact usually have mesh representations, but those meshes are only used for
    proximity query purposes and do not affect whether the geometry is
    deformable. */
-  bool is_deformable() const { return reference_mesh_ != nullptr; }
+  bool is_deformable() const {
+    return reference_mesh_ != nullptr || reference_filament_ != nullptr;
+  }
 
   /* Returns true if the geometry can move with respect to the World frame. That
    includes any deformable geometry, and any rigid geometry attached to a frame
@@ -238,6 +240,13 @@ class InternalGeometry {
     return reference_mesh_.get();
   }
 
+  /* Returns a pointer to the geometry's reference configuration if the geometry
+   is a filament, or nullptr otherwise. The positions of the nodes is measured
+   and expressed in the geometry's frame G. */
+  const Filament* reference_filament() const {
+    return reference_filament_.get();
+  }
+
  private:
   // The specification for this instance's shape.
   copyable_unique_ptr<Shape> shape_spec_;
@@ -276,6 +285,11 @@ class InternalGeometry {
   // An optional representation of the convex hull associated with this
   // geometry.
   copyable_unique_ptr<PolygonSurfaceMesh<double>> convex_hull_;
+
+  // Representation a filement geometry at its reference configuration. The node
+  // positions are expressed in the geometry's frame, G. Is's a std::nullopt is
+  // the geometry is not a filament.
+  copyable_unique_ptr<Filament> reference_filament_;
 };
 
 }  // namespace internal

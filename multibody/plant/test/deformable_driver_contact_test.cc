@@ -163,7 +163,7 @@ class DeformableDriverContactTest : public ::testing::Test {
   }
 
   Vector3<double> GetIntegratorWeights() const {
-    return model_->integrator().GetWeights();
+    return model_->fem_integrator().GetWeights();
   }
 
   MultibodyPlant<double>* plant_{nullptr};

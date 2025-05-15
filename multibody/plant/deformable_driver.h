@@ -12,6 +12,7 @@
 #include "drake/multibody/contact_solvers/sap/partial_permutation.h"
 #include "drake/multibody/contact_solvers/sap/sap_fixed_constraint.h"
 #include "drake/multibody/contact_solvers/schur_complement.h"
+#include "drake/multibody/der/der_solver.h"
 #include "drake/multibody/fem/fem_solver.h"
 #include "drake/multibody/plant/deformable_contact_info.h"
 #include "drake/multibody/plant/deformable_model.h"
@@ -204,9 +205,9 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    the manager. */
   struct CacheIndexes {
     /* Per body cache entries indexed by DeformableBodyIndex. */
-    std::vector<systems::CacheIndex> fem_states;
-    std::vector<systems::CacheIndex> fem_solvers;
-    std::vector<systems::CacheIndex> next_fem_states;
+    std::vector<systems::CacheIndex> states;
+    std::vector<systems::CacheIndex> solvers;
+    std::vector<systems::CacheIndex> next_states;
     std::vector<systems::CacheIndex> constraint_participations;
     std::unordered_map<geometry::GeometryId, systems::CacheIndex>
         vertex_permutations;
@@ -275,9 +276,17 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                     DeformableBodyIndex index,
                     fem::FemState<T>* fem_state) const;
 
+  void CalcDerState(const systems::Context<T>& context,
+                    DeformableBodyIndex index,
+                    der::internal::DerState<T>* der_state) const;
+
   /* Eval version of CalcFemState(). */
   const fem::FemState<T>& EvalFemState(const systems::Context<T>& context,
                                        DeformableBodyIndex index) const;
+
+  /* Eval version of CalcDerState(). */
+  const der::internal::DerState<T>& EvalDerState(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Given the state of the deformable body with `index` in the given `context`,
    computes its "free motion" state (the state the body would have at the next
@@ -289,11 +298,22 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                                DeformableBodyIndex index,
                                fem::internal::FemSolver<T>* fem_solver) const;
 
+  void CalcFreeMotionDerSolver(const systems::Context<T>& context,
+                               DeformableBodyIndex index,
+                               der::internal::DerSolver<T>* der_solver) const;
+
   /* Eval version of CalcFreeMotionFemState(). */
   const fem::internal::FemSolver<T>& EvalFreeMotionFemSolver(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
+  /* Eval version of CalcFreeMotionDerState(). */
+  const der::internal::DerSolver<T>& EvalFreeMotionDerSolver(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
+
   const fem::FemState<T>& EvalFreeMotionFemState(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
+
+  const der::internal::DerState<T>& EvalFreeMotionDerState(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   const contact_solvers::internal::SchurComplement&
@@ -313,9 +333,17 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
                         DeformableBodyIndex index,
                         fem::FemState<T>* next_fem_state) const;
 
+  void CalcNextDerState(const systems::Context<T>& context,
+                        DeformableBodyIndex index,
+                        der::internal::DerState<T>* next_der_state) const;
+
   /* Eval version of CalcNextFemState(). */
   const fem::FemState<T>& EvalNextFemState(const systems::Context<T>& context,
                                            DeformableBodyIndex index) const;
+
+  /* Eval version of CalcNextDerState(). */
+  const der::internal::DerState<T>& EvalNextDerState(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Eval version of CalcDeformableContact(), though notably routed through
    MultibodyPlant so that the plant can own the GeometryContactData cache. */

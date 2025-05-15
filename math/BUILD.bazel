@@ -13,6 +13,7 @@ drake_cc_package_library(
     visibility = ["//visibility:public"],
     deps = [
         ":autodiff",
+        ":axis_angle",
         ":barycentric",
         ":binomial_coefficient",
         ":bspline_basis",
@@ -24,6 +25,7 @@ drake_cc_package_library(
         ":eigen_sparse_triplet",
         ":evenly_distributed_pts_on_sphere",
         ":fourth_order_tensor",
+        ":frame_transport",
         ":geometric_transform",
         ":gradient",
         ":gray_code",
@@ -45,6 +47,15 @@ drake_cc_library(
         "//common:autodiff",
         "//common:essential",
         "//common:unused",
+    ],
+)
+
+drake_cc_library(
+    name = "axis_angle",
+    srcs = ["axis_angle.cc"],
+    hdrs = ["axis_angle.h"],
+    deps = [
+        ":vector3_util",
     ],
 )
 
@@ -142,6 +153,15 @@ drake_cc_library(
     deps = [
         "//common:default_scalars",
         "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "frame_transport",
+    srcs = ["frame_transport.cc"],
+    hdrs = ["frame_transport.h"],
+    deps = [
+        ":vector3_util",
     ],
 )
 
@@ -447,6 +467,14 @@ drake_cc_googletest(
     name = "fourth_order_tensor_test",
     deps = [
         ":fourth_order_tensor",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
+    name = "frame_transport_test",
+    deps = [
+        ":frame_transport",
         "//common/test_utilities:eigen_matrix_compare",
     ],
 )

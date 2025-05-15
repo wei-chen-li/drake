@@ -262,6 +262,57 @@ lcmt_viewer_geometry_data MakeDeformableSurfaceMesh(
   return geometry_data;
 }
 
+/* Create an lcm message for a deformable filament representation of the
+ geometry described by the input parameters. The geometry data message is marked
+ as a FILAMENT.
+
+ @param[in] name                The name of the geometry.
+ @param[in] reference_filament  The reference filament containing the
+                                cross-section information.
+ @param[in] configuration       The configuration containing the position of all
+                                nodes and the m₁ of all frames.
+ @param[in] color               The diffuse color of the geometry. */
+template <typename T>
+lcmt_viewer_geometry_data MakeDeformableFilament(
+    const std::string& name, const Filament& reference_filament,
+    const VectorX<T>& configuration, const Rgba& color) {
+  lcmt_viewer_geometry_data geometry_data;
+  // The pose is unused and set to identity.
+  geometry_data.quaternion[0] = 1;
+  geometry_data.quaternion[1] = 0;
+  geometry_data.quaternion[2] = 0;
+  geometry_data.quaternion[3] = 0;
+  geometry_data.position[0] = 0;
+  geometry_data.position[1] = 0;
+  geometry_data.position[2] = 0;
+
+  geometry_data.type = geometry_data.FILAMENT;
+  EigenMapView(geometry_data.color) = color.rgba().cast<float>();
+  geometry_data.string_data = name;
+
+  const bool closed = reference_filament.closed();
+  const int num_nodes = reference_filament.node_pos().cols();
+  const int num_edges = reference_filament.edge_m1().cols();
+  const Filament::CrossSection& cs = reference_filament.cross_section();
+  DRAKE_DEMAND(configuration.size() == num_nodes * 3 + num_edges * 3);
+
+  // We can define the filament in the float data as:
+  // | closed | num_nodes | num_edges | type | width | height | x₀ | x₁ | ... |
+  //   m₁⁰ | m₁¹ | ... |
+  geometry_data.float_data.clear();
+  geometry_data.float_data.emplace_back(closed);
+  geometry_data.float_data.emplace_back(num_nodes);
+  geometry_data.float_data.emplace_back(num_edges);
+  geometry_data.float_data.emplace_back(cs.type);
+  geometry_data.float_data.emplace_back(cs.width);
+  geometry_data.float_data.emplace_back(cs.height);
+  for (int i = 0; i < configuration.size(); ++i) {
+    geometry_data.float_data.push_back(ExtractDoubleOrThrow(configuration[i]));
+  }
+  geometry_data.num_float_data = geometry_data.float_data.size();
+  return geometry_data;
+}
+
 // Simple class for converting shape specifications into LCM-compatible shapes.
 class ShapeToLcm : public ShapeReifier {
  public:
@@ -741,15 +792,29 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
     if (inspector.GetProperties(g_id, params.role) == nullptr) {
       continue;
     }
-    const std::vector<internal::RenderMesh>& render_meshes =
-        inspector.GetDrivenRenderMeshes(g_id, params.role);
-    const std::vector<VectorX<T>> vertex_positions =
-        query_object.GetDrivenMeshConfigurationsInWorld(g_id, params.role);
-    DRAKE_DEMAND(ssize(vertex_positions) == ssize(render_meshes));
-    for (int j = 0; j < ssize(vertex_positions); ++j) {
-      message.geom.emplace_back(MakeDeformableSurfaceMesh(
-          inspector.GetName(g_id), vertex_positions[j], render_meshes[j],
-          params.default_color));
+    if (inspector.GetReferenceMesh(g_id)) {  // FEM mesh.
+      const std::vector<internal::RenderMesh>& render_meshes =
+          inspector.GetDrivenRenderMeshes(g_id, params.role);
+      const std::vector<VectorX<T>> vertex_positions =
+          query_object.GetDrivenMeshConfigurationsInWorld(g_id, params.role);
+      DRAKE_DEMAND(ssize(vertex_positions) == ssize(render_meshes));
+      for (int j = 0; j < ssize(vertex_positions); ++j) {
+        message.geom.emplace_back(MakeDeformableSurfaceMesh(
+            inspector.GetName(g_id), vertex_positions[j], render_meshes[j],
+            params.default_color));
+      }
+    } else {  // DER filament.
+      const Filament* reference_filament = inspector.GetReferenceFilament(g_id);
+      DRAKE_DEMAND(reference_filament != nullptr);
+      const VectorX<T>& configuration =
+          query_object.GetConfigurationsInWorld(g_id);
+      const GeometryProperties* props =
+          inspector.GetProperties(g_id, params.role);
+      DRAKE_DEMAND(props != nullptr);
+      Rgba color =
+          props->GetPropertyOrDefault("phong", "diffuse", params.default_color);
+      message.geom.emplace_back(MakeDeformableFilament(
+          inspector.GetName(g_id), *reference_filament, configuration, color));
     }
   }
   message.num_geom = message.geom.size();

@@ -33,6 +33,7 @@ from pydrake.geometry import (
     Capsule,
     Cylinder,
     Ellipsoid,
+    Filament,
     InMemoryMesh,
     Mesh,
     Meshcat,
@@ -397,10 +398,17 @@ class _ViewerApplet:
         for i, geom in enumerate(message.geom):
             geom_name = geom.string_data
             geom_path = f"{link_path}/{geom_name}"
-            vertices, faces, rgba, pose = self._convert_deformable_geom(geom)
-            self._meshcat.SetTriangleMesh(
-                path=geom_path, vertices=vertices, faces=faces, rgba=rgba)
-            self._meshcat.SetTransform(path=link_path, X_ParentPath=pose)
+            if geom.type == lcmt_viewer_geometry_data.MESH:
+                vertices, faces, rgba, pose = self._convert_deformable_geom(
+                    geom)
+                self._meshcat.SetTriangleMesh(
+                    path=geom_path, vertices=vertices, faces=faces, rgba=rgba)
+                self._meshcat.SetTransform(path=link_path, X_ParentPath=pose)
+            elif geom.type == lcmt_viewer_geometry_data.FILAMENT:
+                filament = self._convert_filament_geom(geom)
+                rgba = Rgba(*geom.color)
+                self._meshcat.SetObject(
+                    path=geom_path, shape=filament, rgba=rgba)
         if self._waiting_for_first_draw_message:
             self._waiting_for_first_draw_message = False
             self._set_visible(True)
@@ -427,6 +435,27 @@ class _ViewerApplet:
         rgba = Rgba(*geom.color)
         pose = _to_pose(geom.position, geom.quaternion)
         return (vertices, faces, rgba, pose)
+
+    def _convert_filament_geom(self, geom):
+        """Given an lcmt_viewer_geometry_data, parses it into a
+        Filament object if the geometry type is a FILAMENT.
+        """
+        assert geom.type == lcmt_viewer_geometry_data.FILAMENT
+        closed = int(geom.float_data[0])
+        num_nodes = int(geom.float_data[1])
+        num_edges = int(geom.float_data[2])
+        cross_section = Filament.CrossSection(
+            type=Filament.CrossSectionType(int(geom.float_data[3])),
+            width=geom.float_data[4],
+            height=geom.float_data[5])
+        offset = 6
+        node_pos = np.array(geom.float_data[offset:offset+3*num_nodes])
+        node_pos = np.reshape(node_pos, (3, num_nodes), order='F')
+        offset += 3 * num_nodes
+        edge_m1 = np.array(geom.float_data[offset:offset+3*num_edges])
+        edge_m1 = np.reshape(edge_m1, (3, num_edges), order='F')
+        return Filament(closed=closed, node_pos=node_pos, edge_m1=edge_m1,
+                        cross_section=cross_section)
 
     def _convert_geom(self, geom):
         """Given an lcmt_viewer_geometry_data, parses it into a tuple of
@@ -703,6 +732,7 @@ class _PointCloudApplet:
 
 class _DrawFrameApplet:
     """Applet to visualize triads in meshcat"""
+
     def __init__(self, *, meshcat):
         """Constructs an applet."""
         self._meshcat = meshcat

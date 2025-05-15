@@ -79,8 +79,35 @@ void ThrowIfNotUnitVector(const Vector3<T>& unit_vector,
   }
 }
 
-DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
-    (&NormalizeOrThrow<T>, &ThrowIfNotUnitVector<T>));
+template <typename T>
+void ThrowIfNotOrthonormal(const Eigen::Ref<const Vector3<T>>& unit_vector1,
+                           const Eigen::Ref<const Vector3<T>>& unit_vector2,
+                           std::string_view function_name,
+                           double tolerance_unit_vector_norm,
+                           double tolerance_perpendicular_dot_product) {
+  DRAKE_DEMAND(!function_name.empty());
+  if constexpr (scalar_predicate<T>::is_bool) {
+    ThrowIfNotUnitVector<T>(unit_vector1, function_name,
+                            tolerance_unit_vector_norm);
+    ThrowIfNotUnitVector<T>(unit_vector2, function_name,
+                            tolerance_unit_vector_norm);
+    const T dot_product = unit_vector1.dot(unit_vector2);
+    if (std::abs(ExtractDoubleOrThrow(dot_product)) >
+        tolerance_perpendicular_dot_product) {
+      throw std::logic_error(
+          fmt::format("{}(): The two vectors are not perpendicular.\n"
+                      "[{}] [{}]ᵀ = {} is greater than {}.",
+                      function_name, fmt_eigen(unit_vector1.transpose()),
+                      fmt_eigen(unit_vector2.transpose()), dot_product,
+                      tolerance_perpendicular_dot_product));
+    }
+  } else {
+    unused(unit_vector1, unit_vector2, tolerance_unit_vector_norm);
+  }
+}
+
+DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS((
+    &NormalizeOrThrow<T>, &ThrowIfNotUnitVector<T>, &ThrowIfNotOrthonormal<T>));
 
 }  // namespace internal
 }  // namespace math

@@ -1,0 +1,320 @@
+load("//tools/lint:lint.bzl", "add_lint_tests")
+load(
+    "//tools/skylark:drake_cc.bzl",
+    "drake_cc_googletest",
+    "drake_cc_googletest_linux_only",
+    "drake_cc_library",
+    "drake_cc_library_linux_only",
+    "drake_cc_package_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+drake_cc_package_library(
+    name = "der",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":acceleration_newmark_scheme",
+        ":damping_model",
+        ":der_indexes",
+        ":der_model",
+        ":der_solver",
+        ":der_state",
+        ":der_state_system",
+        ":der_structural_property",
+        ":der_undeformed_state",
+        ":dirichlet_boundary_condition",
+        ":discrete_time_integrator",
+        ":elastic_energy",
+        ":energy_hessian_matrix_util",
+        ":external_force_field",
+        ":velocity_newmark_scheme",
+    ],
+)
+
+drake_cc_library(
+    name = "acceleration_newmark_scheme",
+    srcs = ["acceleration_newmark_scheme.cc"],
+    hdrs = ["acceleration_newmark_scheme.h"],
+    deps = [
+        ":discrete_time_integrator",
+    ],
+)
+
+drake_cc_library(
+    name = "damping_model",
+    srcs = ["damping_model.cc"],
+    hdrs = ["damping_model.h"],
+    deps = [
+        "//common:default_scalars",
+    ],
+)
+
+drake_cc_library(
+    name = "der_indexes",
+    hdrs = ["der_indexes.h"],
+    deps = [
+        "//common:type_safe_index",
+    ],
+)
+
+drake_cc_library(
+    name = "der_model",
+    srcs = ["der_model.cc"],
+    hdrs = ["der_model.h"],
+    deps = [
+        ":damping_model",
+        ":der_indexes",
+        ":der_state",
+        ":der_structural_property",
+        ":der_undeformed_state",
+        ":dirichlet_boundary_condition",
+        ":elastic_energy",
+        ":energy_hessian_matrix_util",
+        ":external_force_field",
+        "//common:pointer_cast",
+    ],
+)
+
+drake_cc_library(
+    name = "der_solver",
+    srcs = ["der_solver.cc"],
+    hdrs = ["der_solver.h"],
+    deps = [
+        ":der_model",
+        ":discrete_time_integrator",
+        "//common:copyable_unique_ptr",
+        "//multibody/contact_solvers:block_sparse_cholesky_solver",
+    ],
+)
+
+drake_cc_library(
+    name = "der_state",
+    srcs = ["der_state.cc"],
+    hdrs = ["der_state.h"],
+    deps = [
+        ":der_state_system",
+        "//common:copyable_unique_ptr",
+    ],
+)
+
+drake_cc_library(
+    name = "der_state_system",
+    srcs = ["der_state_system.cc"],
+    hdrs = ["der_state_system.h"],
+    deps = [
+        "//math:axis_angle",
+        "//math:frame_transport",
+        "//systems/framework:leaf_system",
+    ],
+)
+
+drake_cc_library(
+    name = "der_structural_property",
+    srcs = ["der_structural_property.cc"],
+    hdrs = ["der_structural_property.h"],
+    deps = [
+        "//common:default_scalars",
+    ],
+)
+
+drake_cc_library(
+    name = "der_undeformed_state",
+    srcs = ["der_undeformed_state.cc"],
+    hdrs = ["der_undeformed_state.h"],
+    deps = [
+        ":der_state",
+    ],
+)
+
+drake_cc_library(
+    name = "dirichlet_boundary_condition",
+    srcs = ["dirichlet_boundary_condition.cc"],
+    hdrs = ["dirichlet_boundary_condition.h"],
+    deps = [
+        ":der_indexes",
+        ":der_state",
+        ":energy_hessian_matrix_util",
+    ],
+)
+
+drake_cc_library(
+    name = "discrete_time_integrator",
+    srcs = ["discrete_time_integrator.cc"],
+    hdrs = ["discrete_time_integrator.h"],
+    deps = [
+        ":der_state",
+    ],
+)
+
+drake_cc_library(
+    name = "elastic_energy",
+    srcs = ["elastic_energy.cc"],
+    hdrs = ["elastic_energy.h"],
+    deps = [
+        ":der_indexes",
+        ":der_state",
+        ":der_structural_property",
+        ":der_undeformed_state",
+        ":energy_hessian_matrix_util",
+        "//math:vector3_util",
+    ],
+)
+
+drake_cc_library(
+    name = "energy_hessian_matrix_util",
+    srcs = ["energy_hessian_matrix_util.cc"],
+    hdrs = ["energy_hessian_matrix_util.h"],
+    deps = [
+        "//common:default_scalars",
+        "//multibody/contact_solvers:block_sparse_lower_triangular_or_symmetric_matrix",  # noqa
+    ],
+)
+
+drake_cc_library(
+    name = "external_force_field",
+    srcs = ["external_force_field.cc"],
+    hdrs = ["external_force_field.h"],
+    deps = [
+        ":der_state",
+        ":der_structural_property",
+        ":der_undeformed_state",
+        "//multibody/plant:force_density_field",
+    ],
+)
+
+drake_cc_library(
+    name = "velocity_newmark_scheme",
+    srcs = ["velocity_newmark_scheme.cc"],
+    hdrs = ["velocity_newmark_scheme.h"],
+    deps = [
+        ":discrete_time_integrator",
+    ],
+)
+
+# === test/ ===
+
+drake_cc_googletest(
+    name = "acceleration_newmark_scheme_test",
+    deps = [
+        ":acceleration_newmark_scheme",
+        ":velocity_newmark_scheme",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "damping_model_test",
+    deps = [
+        ":damping_model",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_model_test",
+    deps = [
+        ":der_model",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_solver_test",
+    timeout = "long",
+    deps = [
+        ":der_solver",
+        ":velocity_newmark_scheme",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:expect_throws_message",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_state_test",
+    deps = [
+        ":der_state",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_state_system_test",
+    deps = [
+        ":der_state_system",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_structural_property_test",
+    deps = [
+        ":der_structural_property",
+    ],
+)
+
+drake_cc_googletest(
+    name = "der_undeformed_state_test",
+    deps = [
+        ":der_undeformed_state",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
+    name = "dirichlet_boundary_condition_test",
+    deps = [
+        ":dirichlet_boundary_condition",
+        ":elastic_energy",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:expect_throws_message",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "discrete_time_integrator_test",
+    deps = [
+        ":discrete_time_integrator",
+    ],
+)
+
+drake_cc_googletest(
+    name = "elastic_energy_test",
+    deps = [
+        ":elastic_energy",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:gradient",
+    ],
+)
+
+drake_cc_googletest(
+    name = "energy_hessian_matrix_util_test",
+    deps = [
+        ":elastic_energy",
+        ":energy_hessian_matrix_util",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "external_force_field_test",
+    deps = [
+        ":external_force_field",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "velocity_newmark_scheme_test",
+    deps = [
+        ":acceleration_newmark_scheme",
+        ":velocity_newmark_scheme",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//common/test_utilities:limit_malloc",
+    ],
+)
+
+add_lint_tests()

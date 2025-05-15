@@ -35,6 +35,7 @@
 #include "drake/geometry/meshcat_internal.h"
 #include "drake/geometry/meshcat_recording_internal.h"
 #include "drake/geometry/meshcat_types_internal.h"
+#include "drake/geometry/proximity/make_filament_mesh.h"
 #include "drake/geometry/proximity/polygon_to_triangle_mesh.h"
 #include "drake/systems/analysis/realtime_rate_calculator.h"
 
@@ -658,6 +659,30 @@ class MeshcatShapeReifier : public ShapeReifier {
     matrix(0, 0) = ellipsoid.a();
     matrix(1, 1) = ellipsoid.b();
     matrix(2, 2) = ellipsoid.c();
+  }
+
+  void ImplementGeometry(const Filament& filament, void* data) override {
+    DRAKE_DEMAND(data != nullptr);
+    auto& output = *static_cast<Output*>(data);
+
+    const TriangleSurfaceMesh<double> tri =
+        internal::MakeFilamentSurfaceMesh<double>(filament);
+
+    Eigen::Matrix3Xd vertices(3, tri.num_vertices());
+    for (int i = 0; i < tri.num_vertices(); ++i) {
+      vertices.col(i) = tri.vertex(i);
+    }
+    Eigen::Matrix3Xi faces(3, tri.num_triangles());
+    for (int i = 0; i < tri.num_triangles(); ++i) {
+      const auto& e = tri.element(i);
+      for (int j = 0; j < 3; ++j) {
+        faces(j, i) = e.vertex(j);
+      }
+    }
+    SetLumpedObjectFromTriangleMesh(&output.lumped, vertices, faces, rgba_,
+                                    /* wireframe =*/false, 1.0,
+                                    Meshcat::SideOfFaceToRender::kDoubleSide,
+                                    &uuid_generator_);
   }
 
   void ImplementGeometry(const HalfSpace&, void*) override {

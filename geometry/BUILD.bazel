@@ -426,6 +426,7 @@ drake_cc_library(
         ":shape_specification",
         "//common:copyable_unique_ptr",
         "//common:essential",
+        "//common:overloaded",
         "//geometry/proximity:polygon_surface_mesh",
         "//geometry/proximity:volume_mesh",
         "//math:geometric_transform",
@@ -457,6 +458,7 @@ drake_cc_library(
         ":mesh_source",
         "//common:essential",
         "//geometry/proximity:polygon_surface_mesh",
+        "//math:frame_transport",
         "//math:geometric_transform",
     ],
     implementation_deps = [
@@ -592,6 +594,7 @@ drake_cc_library(
         "//common:network_policy",
         "//common:scope_exit",
         "//common:sha256",
+        "//geometry/proximity:make_filament_mesh",
         "//geometry/proximity:polygon_to_triangle_mesh",
         "//systems/analysis:realtime_rate_calculator",
         "@common_robotics_utilities_internal//:common_robotics_utilities",

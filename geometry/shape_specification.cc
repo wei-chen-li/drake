@@ -17,6 +17,8 @@
 #include "drake/geometry/proximity/obj_to_surface_mesh.h"
 #include "drake/geometry/proximity/polygon_to_triangle_mesh.h"
 #include "drake/geometry/proximity/triangle_surface_mesh.h"
+#include "drake/math/frame_transport.h"
+#include "drake/math/unit_vector.h"
 
 namespace {
 std::string PointsToObjString(const Eigen::Matrix3X<double>& points) {
@@ -219,6 +221,92 @@ std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
 
+Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
+                   const Eigen::Vector3d& first_edge_m1_in,
+                   const CrossSection& cross_section)
+    : closed_(closed),
+      node_pos_(std::move(node_pos)),
+      cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(
+      cross_section.type == Filament::CrossSectionType::kRectangular ||
+      cross_section.type == Filament::CrossSectionType::kElliptical);
+  DRAKE_THROW_UNLESS(cross_section.width > 0);
+  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  const int num_nodes = node_pos_.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  const int num_edges = closed ? num_nodes : num_nodes - 1;
+  Eigen::Matrix3Xd edge_t(3, num_edges);
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
+    if (edge_length < 1e-10) {
+      throw std::invalid_argument(fmt::format(
+          "Node {} and node {} has a distance value of {}, computing the unit "
+          "tangent vector from it would cause numerical problems.",
+          i, ip1, edge_length));
+    }
+    edge_t.col(i) = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
+  }
+  Eigen::Vector3d first_edge_m1 = first_edge_m1_in.normalized();
+  if (std::abs(edge_t.col(0).dot(first_edge_m1)) > 0.99) {
+    throw std::invalid_argument(fmt::format(
+        "The specified first frame m₁ director [{}] and the unit tangent "
+        "vector [{}] should be perpendicular but is nearly parallel.",
+        fmt_eigen(first_edge_m1_in.transpose()),
+        fmt_eigen(edge_t.col(0).transpose())));
+  }
+  first_edge_m1 -= edge_t.col(0).dot(first_edge_m1) * edge_t.col(0);
+  first_edge_m1.normalize();
+
+  edge_m1_.resize(3, num_edges);
+  math::SpaceParallelFrameTransport<double>(edge_t, first_edge_m1, &edge_m1_);
+}
+
+Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
+                   Eigen::Matrix3Xd edge_m1, const CrossSection& cross_section)
+    : closed_(closed),
+      node_pos_(std::move(node_pos)),
+      edge_m1_(std::move(edge_m1)),
+      cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(
+      cross_section.type == Filament::CrossSectionType::kRectangular ||
+      cross_section.type == Filament::CrossSectionType::kElliptical);
+  DRAKE_THROW_UNLESS(cross_section.width > 0);
+  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  const int num_nodes = node_pos_.cols();
+  const int num_edges = edge_m1_.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  DRAKE_THROW_UNLESS(num_edges == (closed ? num_nodes : num_nodes - 1));
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
+    if (edge_length < 1e-10) {
+      throw std::invalid_argument(fmt::format(
+          "Node {} and node {} has a distance value of {}, computing the unit "
+          "tangent vector from it would cause numerical problems.",
+          i, ip1, edge_length));
+    }
+    Eigen::Vector3d t = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
+    Eigen::Vector3d m1 = edge_m1_.col(i).normalized();
+    if (std::abs(t.dot(m1)) > 0.99) {
+      throw std::invalid_argument(fmt::format(
+          "The unit tangent vector [{}] and the m₁ director [{}] of edge {} "
+          "should be perpendicular but is nearly parallel.",
+          fmt_eigen(t.transpose()), fmt_eigen(edge_m1_.col(i).transpose()), i));
+    }
+    m1 -= t.dot(m1) * t;
+    m1.normalize();
+    edge_m1_.col(i) = m1;
+  }
+}
+
+std::string Filament::do_to_string() const {
+  return fmt::format("Filament(closed={}, num_nodes={})", closed_,
+                     node_pos_.cols());
+  // TODO(wei-chen): Make this string more descreptive, then add unit tests for
+  // the python binding.
+}
+
 HalfSpace::HalfSpace() = default;
 
 RigidTransform<double> HalfSpace::MakePose(const Vector3<double>& Hz_dir_F,
@@ -347,6 +435,10 @@ void ShapeReifier::ImplementGeometry(const Ellipsoid& ellipsoid, void*) {
   DefaultImplementGeometry(ellipsoid);
 }
 
+void ShapeReifier::ImplementGeometry(const Filament& filament, void*) {
+  DefaultImplementGeometry(filament);
+}
+
 void ShapeReifier::ImplementGeometry(const HalfSpace& hs, void*) {
   DefaultImplementGeometry(hs);
 }
@@ -388,6 +480,28 @@ double CalcMeshVolume(const Mesh& mesh) {
   return internal::CalcEnclosedVolume(surface_mesh);
 }
 
+double CalcFilamentVolume(const Filament& filament) {
+  double area = 0;
+  const Filament::CrossSection& cs = filament.cross_section();
+  if (cs.type == Filament::CrossSectionType::kRectangular) {
+    area = cs.width * cs.height;
+  } else if (cs.type == Filament::CrossSectionType::kElliptical) {
+    area = cs.width * cs.height * M_PI / 4;
+  } else {
+    DRAKE_UNREACHABLE();
+  }
+
+  const Eigen::Matrix3Xd& node_pos = filament.node_pos();
+  const int num_nodes = node_pos.cols();
+  const int num_edges = filament.closed() ? num_nodes : num_nodes - 1;
+  double length = 0;
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) * num_nodes;
+    length += (node_pos.col(ip1) - node_pos.col(i)).norm();
+  }
+  return area * length;
+}
+
 }  // namespace
 
 double CalcVolume(const Shape& shape) {
@@ -408,6 +522,9 @@ double CalcVolume(const Shape& shape) {
       },
       [](const Ellipsoid& ellipsoid) {
         return 4.0 / 3.0 * M_PI * ellipsoid.a() * ellipsoid.b() * ellipsoid.c();
+      },
+      [](const Filament& filament) {
+        return CalcFilamentVolume(filament);
       },
       [](const HalfSpace&) {
         return std::numeric_limits<double>::infinity();
@@ -447,6 +564,7 @@ DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Capsule)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Convex)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Cylinder)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Ellipsoid)
+DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Filament)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(HalfSpace)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Mesh)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(MeshcatCone)

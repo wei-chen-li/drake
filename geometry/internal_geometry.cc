@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "drake/common/drake_assert.h"
+#include "drake/common/overloaded.h"
 #include "drake/geometry/make_mesh_for_deformable.h"
 
 namespace drake {
@@ -35,8 +36,16 @@ InternalGeometry::InternalGeometry(SourceId source_id,
       source_id_(source_id),
       frame_id_(frame_id),
       X_FG_(std::move(X_FG)) {
-  // The function creates the mesh in frame G.
-  reference_mesh_ = MakeMeshForDeformable(*shape_spec_, resolution_hint);
+  shape_spec_->Visit(
+      overloaded{[this, resolution_hint](const Filament& filament) {
+                   this->reference_filament_ =
+                       MakeFinerFilament(filament, resolution_hint);
+                 },
+                 [this, resolution_hint](const auto& other_shape) {
+                   // The function creates the mesh in frame G.
+                   this->reference_mesh_ =
+                       MakeMeshForDeformable(other_shape, resolution_hint);
+                 }});
 }
 
 bool InternalGeometry::has_role(Role role) const {

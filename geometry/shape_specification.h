@@ -27,6 +27,7 @@ class Capsule;
 class Convex;
 class Cylinder;
 class Ellipsoid;
+class Filament;
 class HalfSpace;
 class Mesh;
 class MeshcatCone;
@@ -138,6 +139,7 @@ class Shape {
       const Convex*,                          //
       const Cylinder*,                        //
       const Ellipsoid*,                       //
+      const Filament*,                        //
       const HalfSpace*,                       //
       const Mesh*,                            //
       const MeshcatCone*,                     //
@@ -438,6 +440,73 @@ class Ellipsoid final : public Shape {
   VariantShapeConstPtr get_variant_this() const final;
 
   Vector3<double> radii_;
+};
+
+/** Definition of a general filament.
+
+ A filament describes a slender, thread-like shape defined by a sequence of
+ nodes connected by edges. Each edge is associated with a material frame,
+ consisting of a unit tangent vector (t) and two orthonormal material directors
+ (m₁ and m₂), which span the plane of the cross-section. The filament can either
+ be open-ended or form a closed loop. */
+class Filament final : public Shape {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Filament);
+
+  enum CrossSectionType { kRectangular, kElliptical };
+
+  struct CrossSection {
+    /** Type of the cross-section, can be kRectangular or kElliptical. */
+    CrossSectionType type;
+    /** Size of the cross-section in the m₁ direction. */
+    double width;
+    /** Size of the cross-section in the m₂ direction. */
+    double height;
+  };
+
+  /** Constructs a filament by specifying the position of nodes and the m₁
+   director in the first frame. The m₁ directors in the remaining frames are
+   implicitly defined so that the filament is twist free.
+   @pre `first_edge_m1 ≈ 1`.
+   @pre `first_edge_m1` is perpendicular to the first edge vector.
+   @pre `cross_section.width > 0`.
+   @pre `cross_section.height > 0`.
+   @pydrake_mkdoc_identifier{first_m1} */
+  Filament(bool closed, Eigen::Matrix3Xd node_pos,
+           const Eigen::Vector3d& first_edge_m1,
+           const CrossSection& cross_section);
+
+  /** Constructs a filament by specifying the position of nodes and the m₁
+   directors of all frame.
+   @pre Every column of `edge_m1` is perpendicular to the corresponding
+        edge vector.
+   @pre `cross_section.width > 0`.
+   @pre `cross_section.height > 0`.
+   @pydrake_mkdoc_identifier{all_m1} */
+  Filament(bool closed, Eigen::Matrix3Xd node_pos, Eigen::Matrix3Xd edge_m1,
+           const CrossSection& cross_section);
+
+  ~Filament() final;
+
+  bool closed() const { return closed_; }
+
+  const Eigen::Matrix3Xd& node_pos() const { return node_pos_; }
+
+  const Eigen::Matrix3Xd& edge_m1() const { return edge_m1_; }
+
+  const CrossSection& cross_section() const { return cross_section_; }
+
+ private:
+  void DoReify(ShapeReifier*, void*) const final;
+  std::unique_ptr<Shape> DoClone() const final;
+  std::string_view do_type_name() const final;
+  std::string do_to_string() const final;
+  VariantShapeConstPtr get_variant_this() const final;
+
+  bool closed_{};
+  Eigen::Matrix3Xd node_pos_;
+  Eigen::Matrix3Xd edge_m1_;
+  CrossSection cross_section_;
 };
 
 /** Definition of a half space. In its canonical frame, the plane defining the
@@ -753,6 +822,7 @@ class ShapeReifier {
   virtual void ImplementGeometry(const Convex& convex, void* user_data);
   virtual void ImplementGeometry(const Cylinder& cylinder, void* user_data);
   virtual void ImplementGeometry(const Ellipsoid& ellipsoid, void* user_data);
+  virtual void ImplementGeometry(const Filament& filament, void* user_data);
   virtual void ImplementGeometry(const HalfSpace& half_space, void* user_data);
   virtual void ImplementGeometry(const Mesh& mesh, void* user_data);
   virtual void ImplementGeometry(const MeshcatCone& cone, void* user_data);
@@ -792,6 +862,7 @@ DRAKE_FORMATTER_AS(, drake::geometry, Capsule, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Convex, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Cylinder, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Ellipsoid, x, x.to_string())
+DRAKE_FORMATTER_AS(, drake::geometry, Filament, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, HalfSpace, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Mesh, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, MeshcatCone, x, x.to_string())

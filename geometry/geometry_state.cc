@@ -736,6 +736,16 @@ const VolumeMesh<double>* GeometryState<T>::GetReferenceMesh(
 }
 
 template <typename T>
+const Filament* GeometryState<T>::GetReferenceFilament(GeometryId id) const {
+  const InternalGeometry* geometry = GetGeometry(id);
+  if (geometry == nullptr) {
+    throw std::logic_error(
+        fmt::format("Referenced geometry {} has not been registered", id));
+  }
+  return geometry->reference_filament();
+}
+
+template <typename T>
 const std::vector<RenderMesh>& GeometryState<T>::GetDrivenRenderMeshes(
     GeometryId id, Role role) const {
   const InternalGeometry* geometry = GetGeometry(id);
@@ -1069,16 +1079,32 @@ GeometryId GeometryState<T>::RegisterDeformableGeometry(
                                      geometry->pose(), resolution_hint);
   // The reference mesh is defined in the frame F.
   const VolumeMesh<double>* reference_mesh = internal_geometry.reference_mesh();
-  DRAKE_DEMAND(reference_mesh != nullptr);
+  const Filament* reference_filament = internal_geometry.reference_filament();
+  DRAKE_DEMAND(reference_mesh != nullptr || reference_filament != nullptr);
   const InternalFrame& frame = frames_[frame_id];
   const RigidTransform<T> X_WG =
       kinematics_data_.X_WFs[frame.index()] * geometry->pose().cast<T>();
-  VectorX<T> q_WG(reference_mesh->num_vertices() * 3);
-  for (int v = 0; v < reference_mesh->num_vertices(); ++v) {
-    q_WG.template segment<3>(3 * v) =
-        X_WG * Vector3<T>(reference_mesh->vertex(v));
+  if (reference_mesh != nullptr) {
+    VectorX<T> q_WG(reference_mesh->num_vertices() * 3);
+    for (int v = 0; v < reference_mesh->num_vertices(); ++v) {
+      q_WG.template segment<3>(3 * v) =
+          X_WG * Vector3<T>(reference_mesh->vertex(v));
+    }
+    kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
+  } else {
+    const Eigen::Matrix3Xd& node_pos = reference_filament->node_pos();
+    const Eigen::Matrix3Xd& edge_m1 = reference_filament->edge_m1();
+    VectorX<T> q_WG(node_pos.size() + edge_m1.size());
+    for (int i = 0; i < node_pos.cols(); ++i) {
+      q_WG.template segment<3>(3 * i) = X_WG * Vector3<T>(node_pos.col(i));
+    }
+    const int offset = node_pos.size();
+    for (int i = 0; i < edge_m1.cols(); ++i) {
+      q_WG.template segment<3>(3 * i + offset) =
+          X_WG.rotation() * Vector3<T>(edge_m1.col(i));
+    }
+    kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   }
-  kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   geometries_.emplace(geometry_id, std::move(internal_geometry));
 
   AssignAllDefinedRoles(source_id, std::move(geometry));
@@ -1286,7 +1312,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
   // If the geometry is deformable, we need to register its driven meshes. We
   // always blindly throw out the old driven mesh data and replace it with a new
   // driven mesh data.
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kProximity);
   }
 }
@@ -1309,7 +1335,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
 
   geometry.SetRole(std::move(properties));
 
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kPerception);
   }
 
@@ -1362,7 +1388,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
 
   geometry.SetRole(std::move(properties));
 
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kIllustration);
   }
 }

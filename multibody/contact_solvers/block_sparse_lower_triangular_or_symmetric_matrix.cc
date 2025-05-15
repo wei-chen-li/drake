@@ -4,6 +4,7 @@
 
 #include <fmt/format.h>
 
+#include "drake/common/default_scalars.h"
 #include "drake/common/drake_throw.h"
 #include "drake/common/fmt_eigen.h"
 
@@ -102,10 +103,11 @@ MatrixX<double> BlockSparseLowerTriangularOrSymmetricMatrix<
       const int dest_col = src_col - col_start;
       DRAKE_DEMAND(dest_row >= 0);
       DRAKE_DEMAND(dest_col >= 0);
-      result.block(dest_row, dest_col, num_rows, num_cols) = blocks_[j][flat];
+      result.block(dest_row, dest_col, num_rows, num_cols) =
+          ExtractDoubleOrThrow(blocks_[j][flat]);
       if (i != j && is_symmetric) {
         result.block(dest_col, dest_row, num_cols, num_rows) =
-            blocks_[j][flat].transpose();
+            ExtractDoubleOrThrow(blocks_[j][flat]).transpose();
       }
     }
   }
@@ -187,6 +189,14 @@ template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>,
                                                            true>;
 template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix3<double>,
                                                            false>;
+template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<double>,
+                                                           true>;
+template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<double>,
+                                                           false>;
+template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<AutoDiffXd>,
+                                                           true>;
+template class BlockSparseLowerTriangularOrSymmetricMatrix<
+    Matrix4<symbolic::Expression>, true>;
 
 }  // namespace internal
 }  // namespace contact_solvers
