@@ -1,0 +1,617 @@
+#include "drake/multibody/der/der_state_system.h"
+
+#include <fmt/format.h>
+
+#include "drake/multibody/der/transport.h"
+
+namespace drake {
+namespace multibody {
+namespace der {
+namespace internal {
+
+using systems::ValueProducer;
+
+namespace {
+
+/* Tolerance for ‖unit_vector‖ is 1e-14 (≈ 5.5 bits) of 1.0.
+   Tolerance for v1.dot(v2) if v1 ⊥ v2 is 1e-14 of 0.0.
+ Note: 1e-14 ≈ 2^5.5 * std::numeric_limits<double>::epsilon(); */
+constexpr double kTol = 1e-14;
+
+/* Returns a zero matrix with size `num_rows` × `num_cols`.  */
+template <typename T, int num_rows>
+Eigen::Matrix<T, num_rows, Eigen::Dynamic> Zero(int num_cols) {
+  static_assert(num_rows > 0);
+  DRAKE_ASSERT(num_cols > 0);
+  return Eigen::Matrix<T, num_rows, Eigen::Dynamic>::Zero(num_rows, num_cols);
+}
+
+/* Assembles the configuration vector `q` by interleaving the columns of
+ `node_positions` and `edge_angles`. */
+template <typename T>
+Eigen::VectorX<T> AssembleQVector(
+    const std::vector<Eigen::Vector3<T>>& node_positions,
+    const std::vector<T>& edge_angles) {
+  Eigen::VectorX<T> q(ssize(node_positions) * 3 + ssize(edge_angles));
+  for (int i = 0; i < ssize(node_positions); ++i) {
+    q.template segment<3>(i * 4) = node_positions[i];
+  }
+  for (int i = 0; i < ssize(edge_angles); ++i) {
+    q(i * 4 + 3) = edge_angles[i];
+  }
+  return q;
+}
+
+/* Computes tangent vectors from `node_positions`. Throws an error if any
+ consecutive pair of nodes are too close. */
+template <typename T>
+Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeTangentOrThrow(
+    bool has_closed_ends, const std::vector<Eigen::Vector3<T>>& node_positions,
+    const double edge_length_lb = 1e-8) {
+  const int num_nodes = node_positions.size();
+  const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
+  Eigen::Matrix<T, 3, Eigen::Dynamic> tangent(3, num_edges);
+
+  Eigen::Vector3<T> edge_vector;
+  T edge_length;
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    edge_vector = node_positions[ip1] - node_positions[i];
+    edge_length = edge_vector.norm();
+    if (ExtractDoubleOrThrow(edge_length) < edge_length_lb) {
+      throw std::logic_error(fmt::format(
+          "The initial distance between node {} and node {} is too short.", i,
+          ip1));
+    }
+    tangent.col(i) = edge_vector / edge_length;
+  }
+  return tangent;
+}
+
+/* Computes `d2` such that each set of columns in (`d1`, `d2`, `t`) form a
+ right-handed orthonormal frame. */
+template <typename T>
+void CompleteFrames(
+    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
+    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& d1,
+    EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d2) {
+  DRAKE_ASSERT(d2 != nullptr);
+  DRAKE_ASSERT(t.cols() == d1.cols() && d1.cols() == d2->cols());
+  for (int i = 0; i < t.cols(); ++i) {
+    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(t.col(i).norm()) - 1) < kTol);
+    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(d1.col(i).norm()) - 1) < kTol);
+    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(t.col(i).dot(d1.col(i)))) <
+                 kTol);
+    d2->col(i) = t.col(i).cross(d1.col(i));
+    d2->col(i) /= d2->col(i).norm();
+  }
+}
+
+/* Computes the rotation of `vec` around the specified `axis` by `angle`. */
+template <typename T>
+Eigen::Vector3<T> RotateAxisAngle(
+    const Eigen::Ref<const Eigen::Vector3<T>>& vec,
+    const Eigen::Ref<const Eigen::Vector3<T>>& axis, const T& angle) {
+  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.norm()) - 1) < kTol);
+  T cos_ang = cos(angle);
+  T sin_ang = sin(angle);
+  return cos_ang * vec + sin_ang * axis.cross(vec) +
+         axis.dot(vec) * (1.0 - cos_ang) * axis;
+}
+
+/* Computes the signed angle of rotation from `vec1` to `vec2` around a given
+ `axis`. The returned angle is in the range (−π, π]. The angle is positive if
+ the rotation follows the right-hand rule with `axis` as the thumb direction. */
+template <typename T>
+T ComputeSignedAngle(const Eigen::Ref<const Eigen::Vector3<T>>& vec1,
+                     const Eigen::Ref<const Eigen::Vector3<T>>& vec2,
+                     const Eigen::Ref<const Eigen::Vector3<T>>& axis) {
+  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.norm()) - 1) < kTol);
+  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.dot(vec1))) < kTol);
+  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.dot(vec2))) < kTol);
+  T angle = atan2(vec1.cross(vec2).dot(axis), vec1.dot(vec2));
+  return angle;
+}
+
+/* Remove the derivatives for all entries in the AutoDiffXd matrix. */
+void RemoveDerivatives(EigenPtr<Eigen::MatrixX<AutoDiffXd>> mat) {
+  DRAKE_ASSERT(mat != nullptr);
+  for (int j = 0; j < mat->cols(); ++j) {
+    for (int i = 0; i < mat->rows(); ++i) {
+      (*mat)(i, j).derivatives().setZero();
+    }
+  }
+}
+
+}  // namespace
+
+template <typename T>
+DerStateSystem<T>::DerStateSystem(
+    bool has_closed_ends,  //
+    const std::vector<Eigen::Vector3<T>>& node_positions,
+    const std::vector<T>& edge_angles,
+    const std::optional<Eigen::Vector3<T>>& d1_0)
+    : has_closed_ends_(has_closed_ends), num_nodes_(ssize(node_positions)) {
+  DRAKE_THROW_UNLESS(ssize(node_positions) == num_nodes());
+  DRAKE_THROW_UNLESS(ssize(edge_angles) == num_edges());
+  DRAKE_THROW_UNLESS(num_edges() >= 2);
+
+  auto q = AssembleQVector(node_positions, edge_angles);
+  DRAKE_ASSERT(q.size() == num_dofs());
+  q_index_ = this->DeclareDiscreteState(q);
+  qdot_index_ = this->DeclareDiscreteState(num_dofs());
+  qddot_index_ = this->DeclareDiscreteState(num_dofs());
+
+  PrevStep<T> prev_step;
+  prev_step.tangent = ComputeTangentOrThrow(has_closed_ends, node_positions);
+  prev_step.reference_frame_d1.resize(3, num_edges());
+  ComputeSpaceParallelTransport<T>(prev_step.tangent, d1_0,
+                                   &prev_step.reference_frame_d1);
+  prev_step.reference_twist =
+      Eigen::Matrix<T, 1, Eigen::Dynamic>::Zero(num_internal_nodes());
+  prev_step_index_ = this->DeclareAbstractState(Value(prev_step));
+
+  fix_ref_frame_flag_index_ =
+      AbstractParameterIndex{this->DeclareAbstractParameter(Value(false))};
+
+  serial_number_index_ =
+      AbstractParameterIndex{this->DeclareAbstractParameter(Value(int64_t(0)))};
+
+  edge_vector_index_ =
+      this->DeclareCacheEntry("edge vector", Zero<T, 3>(num_edges()),
+                              &DerStateSystem<T>::CalcEdgeVector,
+                              {this->discrete_state_ticket(q_index_)})
+          .cache_index();
+  edge_length_index_ =
+      this->DeclareCacheEntry("edge length", Zero<T, 1>(num_edges()),
+                              &DerStateSystem<T>::CalcEdgeLength,
+                              {this->cache_entry_ticket(edge_vector_index_)})
+          .cache_index();
+  tangent_index_ =
+      this->DeclareCacheEntry("tangent", Zero<T, 3>(num_edges()),
+                              &DerStateSystem<T>::CalcTangent,
+                              {this->cache_entry_ticket(edge_vector_index_),
+                               this->cache_entry_ticket(edge_length_index_)})
+          .cache_index();
+  reference_frame_d1_index_ =
+      this->DeclareCacheEntry("reference frame d1", Zero<T, 3>(num_edges()),
+                              &DerStateSystem<T>::CalcReferenceFrameD1,
+                              {this->cache_entry_ticket(tangent_index_)})
+          .cache_index();
+  reference_frame_d2_index_ =
+      this->DeclareCacheEntry(
+              "reference frame d2", Zero<T, 3>(num_edges()),
+              &DerStateSystem<T>::CalcReferenceFrameD2,
+              {this->cache_entry_ticket(tangent_index_),
+               this->cache_entry_ticket(reference_frame_d1_index_)})
+          .cache_index();
+  material_frame_m1_index_ =
+      this->DeclareCacheEntry(
+              "material frame m1", Zero<T, 3>(num_edges()),
+              &DerStateSystem<T>::CalcMaterialFrameM1,
+              {this->cache_entry_ticket(tangent_index_),
+               this->cache_entry_ticket(reference_frame_d1_index_),
+               this->discrete_state_ticket(q_index_),
+               this->abstract_parameter_ticket(fix_ref_frame_flag_index_)})
+          .cache_index();
+  material_frame_m2_index_ =
+      this->DeclareCacheEntry(
+              "material frame m2", Zero<T, 3>(num_edges()),
+              &DerStateSystem<T>::CalcMaterialFrameM2,
+              {this->cache_entry_ticket(tangent_index_),
+               this->cache_entry_ticket(material_frame_m1_index_),
+               this->abstract_parameter_ticket(fix_ref_frame_flag_index_)})
+          .cache_index();
+  discrete_integrated_curvature_index_ =
+      this->DeclareCacheEntry(
+              "discrete integrated curvature", Zero<T, 3>(num_internal_nodes()),
+              &DerStateSystem<T>::CalcDiscreteIntegratedCurvature,
+              {this->cache_entry_ticket(tangent_index_)})
+          .cache_index();
+  curvature_kappa1_index_ =
+      this->DeclareCacheEntry(
+              "curvature kappa1", Zero<T, 1>(num_internal_nodes()),
+              &DerStateSystem<T>::CalcCurvatureKappa1,
+              {this->cache_entry_ticket(discrete_integrated_curvature_index_),
+               this->cache_entry_ticket(material_frame_m2_index_)})
+          .cache_index();
+  curvature_kappa2_index_ =
+      this->DeclareCacheEntry(
+              "curvature kappa2", Zero<T, 1>(num_internal_nodes()),
+              &DerStateSystem<T>::CalcCurvatureKappa2,
+              {this->cache_entry_ticket(discrete_integrated_curvature_index_),
+               this->cache_entry_ticket(material_frame_m1_index_)})
+          .cache_index();
+  reference_twist_index_ =
+      this->DeclareCacheEntry(
+              "reference twist", Zero<T, 1>(num_internal_nodes()),
+              &DerStateSystem<T>::CalcReferenceTwist,
+              {this->cache_entry_ticket(tangent_index_),
+               this->cache_entry_ticket(reference_frame_d1_index_),
+               this->abstract_parameter_ticket(fix_ref_frame_flag_index_)})
+          .cache_index();
+  twist_index_ =  //
+      this->DeclareCacheEntry("twist", Zero<T, 1>(num_internal_nodes()),
+                              &DerStateSystem<T>::CalcTwist,
+                              {this->cache_entry_ticket(reference_twist_index_),
+                               this->discrete_state_ticket(q_index_)})
+          .cache_index();
+}
+
+template <typename T>
+DerStateSystem<T>::~DerStateSystem() = default;
+
+template <typename T>
+Eigen::VectorBlock<Eigen::VectorX<T>>
+DerStateSystem<T>::get_mutable_position_within_step(Context<T>* context) const {
+  this->ValidateContext(context);
+  increment_serial_number(context);
+  return context->get_mutable_discrete_state(q_index_).get_mutable_value();
+}
+
+template <typename T>
+Eigen::VectorBlock<Eigen::VectorX<T>> DerStateSystem<T>::get_mutable_velocity(
+    Context<T>* context) const {
+  this->ValidateContext(context);
+  increment_serial_number(context);
+  return context->get_mutable_discrete_state(qdot_index_).get_mutable_value();
+}
+
+template <typename T>
+Eigen::VectorBlock<Eigen::VectorX<T>>
+DerStateSystem<T>::get_mutable_acceleration(Context<T>* context) const {
+  this->ValidateContext(context);
+  increment_serial_number(context);
+  return context->get_mutable_discrete_state(qddot_index_).get_mutable_value();
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcEdgeVector(
+    const Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* edge_vector) const {
+  DRAKE_ASSERT(edge_vector->cols() == num_edges());
+  const Eigen::VectorX<T>& q = get_position(context);
+  for (int i = 0; i < num_edges(); ++i) {
+    const int ip1 = (i + 1) % num_nodes();
+    edge_vector->col(i) =
+        q.template segment<3>(4 * ip1) - q.template segment<3>(4 * i);
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcEdgeLength(
+    const Context<T>& context,
+    Eigen::Matrix<T, 1, Eigen::Dynamic>* edge_length) const {
+  DRAKE_ASSERT(edge_length->cols() == num_edges());
+  auto& edge_vector = get_edge_vector(context);
+  for (int i = 0; i < edge_length->cols(); ++i) {
+    (*edge_length)[i] = edge_vector.col(i).norm();
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcTangent(
+    const Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* tangent) const {
+  DRAKE_ASSERT(tangent->cols() == num_edges());
+  auto& edge_vector = get_edge_vector(context);
+  auto& edge_length = get_edge_length(context);
+  auto& prev_tangent = get_prev_step(context).tangent;
+  for (int i = 0; i < num_edges(); ++i) {
+    if (edge_length[i] > std::numeric_limits<double>::epsilon()) {
+      tangent->col(i) = edge_vector.col(i) / edge_length[i];
+    } else {
+      // Fallback to the previous step tangent if the denominator is too small.
+      tangent->col(i) = prev_tangent.col(i);
+    }
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcReferenceFrameD1(
+    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* d1) const {
+  DRAKE_ASSERT(d1->cols() == num_edges());
+  const auto& prev_tangent = get_prev_step(context).tangent;
+  const auto& prev_d1 = get_prev_step(context).reference_frame_d1;
+  auto& tangent = get_tangent(context);
+  ComputeTimeParallelTransport<T>(prev_tangent, prev_d1, tangent, d1);
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcReferenceFrameD2(
+    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* d2) const {
+  DRAKE_ASSERT(d2->cols() == num_edges());
+  auto& t = get_tangent(context);
+  auto& d1 = get_reference_frame_d1(context);
+  CompleteFrames<T>(t, d1, d2);
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcMaterialFrameM1(
+    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* m1) const {
+  DRAKE_ASSERT(m1->cols() == num_edges());
+  if constexpr (std::is_same_v<T, AutoDiffXd>) {
+    if (get_fix_reference_frame_during_autodiff_flag(context)) {
+      FixReferenceFrame_CalcMaterialFrameM1(this, context, m1);
+      return;
+    }
+  }
+  auto& t = get_tangent(context);
+  auto& d1 = get_reference_frame_d1(context);
+  auto& q = get_position(context);
+  for (int i = 0; i < num_edges(); ++i) {
+    m1->col(i) = RotateAxisAngle<T>(d1.col(i), t.col(i), q(4 * i + 3));
+  }
+}
+
+static void FixReferenceFrame_CalcMaterialFrameM1(
+    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>* m1) {
+  auto t = self->get_tangent(context);
+  RemoveDerivatives(&t);
+  auto d1 = self->get_reference_frame_d1(context);
+  RemoveDerivatives(&d1);
+  auto& q = self->get_position(context);
+  for (int i = 0; i < self->num_edges(); ++i) {
+    m1->col(i) = RotateAxisAngle<AutoDiffXd>(d1.col(i), t.col(i), q(4 * i + 3));
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcMaterialFrameM2(
+    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* m2) const {
+  DRAKE_ASSERT(m2->cols() == num_edges());
+  if constexpr (std::is_same_v<T, AutoDiffXd>) {
+    if (get_fix_reference_frame_during_autodiff_flag(context)) {
+      FixReferenceFrame_CalcMaterialFrameM2(this, context, m2);
+      return;
+    }
+  }
+  auto& t = get_tangent(context);
+  auto& m1 = get_material_frame_m1(context);
+  CompleteFrames<T>(t, m1, m2);
+}
+
+static void FixReferenceFrame_CalcMaterialFrameM2(
+    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>* m2) {
+  auto t = self->get_tangent(context);
+  RemoveDerivatives(&t);
+  auto& m1 = self->get_material_frame_m1(context);
+  CompleteFrames<AutoDiffXd>(t, m1, m2);
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcDiscreteIntegratedCurvature(
+    const Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* curvature) const {
+  DRAKE_ASSERT(curvature->cols() == num_internal_nodes());
+  auto& t = get_tangent(context);
+  for (int i = 0; i < num_internal_nodes(); ++i) {
+    const int ip1 = (i + 1) % num_edges();
+    curvature->col(i) = 2 * t.col(i).cross(t.col(ip1));
+    curvature->col(i) /= 1.0 + t.col(i).dot(t.col(ip1));
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcCurvatureKappa1(
+    const Context<T>& context,
+    Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa1) const {
+  DRAKE_ASSERT(kappa1->cols() == num_internal_nodes());
+  auto& curvature = get_discrete_integrated_curvature(context);
+  auto& m2 = get_material_frame_m2(context);
+  for (int i = 0; i < num_internal_nodes(); ++i) {
+    const int ip1 = (i + 1) % num_edges();
+    (*kappa1)[i] = 0.5 * (m2.col(i) + m2.col(ip1)).dot(curvature.col(i));
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcCurvatureKappa2(
+    const Context<T>& context,
+    Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa2) const {
+  DRAKE_ASSERT(kappa2->cols() == num_internal_nodes());
+  auto& curvature = get_discrete_integrated_curvature(context);
+  auto& m1 = get_material_frame_m1(context);
+  for (int i = 0; i < num_internal_nodes(); ++i) {
+    const int ip1 = (i + 1) % num_edges();
+    (*kappa2)[i] = -0.5 * (m1.col(i) + m1.col(ip1)).dot(curvature.col(i));
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcReferenceTwist(
+    const Context<T>& context,
+    Eigen::Matrix<T, 1, Eigen::Dynamic>* ref_twist) const {
+  DRAKE_ASSERT(ref_twist->cols() == num_internal_nodes());
+  if constexpr (std::is_same_v<T, AutoDiffXd>) {
+    if (get_fix_reference_frame_during_autodiff_flag(context)) {
+      FixReferenceFrame_CalcReferenceTwist(
+          this, context, get_prev_step(context).reference_twist, ref_twist);
+      return;
+    }
+  }
+  const auto& prev_ref_twist = get_prev_step(context).reference_twist;
+  auto& t = get_tangent(context);
+  auto& d1 = get_reference_frame_d1(context);
+  Eigen::Vector3<T> vec;
+  for (int i = 0; i < num_internal_nodes(); ++i) {
+    const int ip1 = (i + 1) % num_edges();
+    /* We transform d₁ⁱ using the transport operator that maps tⁱ to tⁱ⁺¹ and
+     write the result to `vec`. */
+    ComputeTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
+    /* The angle between `vec` and d₁ⁱ⁺¹ is the reference twist. However,
+     instead of directly calculating the angle, we first rotate `vec` by the
+     previous reference twist. Then we calculate the delta angle and add it
+     to the previous reference twist. This avoids incorrect angle wrapping. */
+    vec = RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
+    (*ref_twist)[i] =
+        prev_ref_twist[i] + ComputeSignedAngle<T>(vec, d1.col(ip1), t.col(ip1));
+  }
+}
+
+static void FixReferenceFrame_CalcReferenceTwist(
+    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    const Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>& prev_ref_twist,
+    Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>* ref_twist) {
+  using T = AutoDiffXd;
+  auto& t = self->get_tangent(context);
+  auto d1 = self->get_reference_frame_d1(context);
+  RemoveDerivatives(&d1);
+  Eigen::Vector3<T> vec;
+  for (int i = 0; i < self->num_internal_nodes(); ++i) {
+    const int ip1 = (i + 1) % self->num_edges();
+    ComputeTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
+    vec = RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
+    (*ref_twist)[i] =
+        prev_ref_twist[i] + ComputeSignedAngle<T>(vec, d1.col(ip1), t.col(ip1));
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CalcTwist(
+    const Context<T>& context,
+    Eigen::Matrix<T, 1, Eigen::Dynamic>* twist) const {
+  DRAKE_ASSERT(twist->cols() == num_internal_nodes());
+  auto& ref_twist = get_reference_twist(context);
+  auto& q = get_position(context);
+  for (int i = 0; i < num_internal_nodes(); ++i) {
+    const int edge_i = 4 * i + 3;
+    const int edge_ip1 = 4 * ((i + 1) % num_edges()) + 3;
+    (*twist)[i] = q[edge_ip1] - q[edge_i] + ref_twist[i];
+  }
+}
+
+template <typename T>
+void DerStateSystem<T>::CopyContext(const Context<T>& from_context,
+                                    Context<T>* to_context) const {
+  this->ValidateContext(from_context);
+  this->ValidateContext(to_context);
+  if (&from_context == to_context) return;
+
+  /* Copy the discrete state vectors representing the position, velocity, and
+   acceleration, as well as the abstract state holding previous step data. */
+  to_context->SetTimeStateAndParametersFrom(from_context);
+
+  /* Copy the cache entry values that are up-to-date to avoid recalculation when
+   the `to_context` is later used. */
+  for (CacheIndex i(0); i < this->num_cache_entries(); ++i) {
+    const systems::CacheEntryValue& from_cache_entry_value =
+        this->get_cache_entry(i).get_cache_entry_value(from_context);
+    if (from_cache_entry_value.is_out_of_date()) continue;
+
+    systems::CacheEntryValue& to_cache_entry_value =
+        this->get_cache_entry(i).get_mutable_cache_entry_value(*to_context);
+    to_cache_entry_value.mark_out_of_date();
+    to_cache_entry_value.GetMutableAbstractValueOrThrow().SetFrom(
+        from_cache_entry_value.GetAbstractValueOrThrow());
+    to_cache_entry_value.mark_up_to_date();
+  }
+}
+
+template <typename T>
+int64_t DerStateSystem<T>::serial_number(const Context<T>& context) const {
+  this->ValidateContext(context);
+  return context.get_abstract_parameter(serial_number_index_)
+      .template get_value<int64_t>();
+}
+
+template <typename T>
+void DerStateSystem<T>::increment_serial_number(Context<T>* context) const {
+  this->ValidateContext(context);
+  context->get_mutable_abstract_parameter(serial_number_index_)
+      .set_value(serial_number(*context) + 1);
+}
+
+template <typename T>
+void DerStateSystem<T>::FixReferenceFrameDuringAutoDiff(
+    Context<T>* context) const {
+  this->ValidateContext(context);
+  DRAKE_THROW_UNLESS((std::is_same_v<T, AutoDiffXd>));
+  if (!get_fix_reference_frame_during_autodiff_flag(*context)) {
+    context->get_mutable_abstract_parameter(fix_ref_frame_flag_index_)
+        .set_value(true);
+    increment_serial_number(context);
+  }
+}
+
+template <typename T>
+bool DerStateSystem<T>::get_fix_reference_frame_during_autodiff_flag(
+    const Context<T>& context) const {
+  this->ValidateContext(context);
+  return context.get_abstract_parameter(fix_ref_frame_flag_index_)
+      .template get_value<bool>();
+}
+
+template <typename T>
+const PrevStep<T>& DerStateSystem<T>::get_prev_step(
+    const Context<T>& context) const {
+  this->ValidateContext(context);
+  return context.template get_abstract_state<PrevStep<T>>(prev_step_index_);
+}
+
+template <typename T>
+void DerStateSystem<T>::StorePrevStep(Context<T>* context) const {
+  this->ValidateContext(context);
+  /* Force the calculation of tangent, reference_frame_d1, and reference_twist
+   (if not already calculated and cached). */
+  this->get_reference_twist(*context);
+  /* Store the previous step tangent, reference_frame_d1, and reference_twist.
+   Use GetKnownUpToDate() to ensure that the quantities aren't recalculated.
+   Do not add `abstract_state_ticket(prev_step_index_)` to the prerequisites
+   of any of the cache entries, otherwise GetKnownUpToDate() will throw. */
+  PrevStep<T>& prev_step =
+      context->template get_mutable_abstract_state<PrevStep<T>>(
+          prev_step_index_);
+  prev_step.tangent =
+      this->get_cache_entry(tangent_index_)
+          .template GetKnownUpToDate<Eigen::Matrix<T, 3, Eigen::Dynamic>>(
+              *context);
+  prev_step.reference_frame_d1 =
+      this->get_cache_entry(reference_frame_d1_index_)
+          .template GetKnownUpToDate<Eigen::Matrix<T, 3, Eigen::Dynamic>>(
+              *context);
+  prev_step.reference_twist =
+      this->get_cache_entry(reference_twist_index_)
+          .template GetKnownUpToDate<Eigen::Matrix<T, 1, Eigen::Dynamic>>(
+              *context);
+}
+
+template <typename T>
+const Eigen::VectorX<T>& DerStateSystem<T>::get_discrete_state_vector(
+    const Context<T>& context, DiscreteStateIndex index) const {
+  this->ValidateContext(context);
+  return context.get_discrete_state(index).value();
+}
+
+template <typename T>
+template <int num_rows>
+const Eigen::Matrix<T, num_rows, Eigen::Dynamic>&
+DerStateSystem<T>::get_cache_matrix(const Context<T>& context,
+                                    CacheIndex index) const {
+  this->ValidateContext(context);
+  return this->get_cache_entry(index)
+      .template Eval<Eigen::Matrix<T, num_rows, Eigen::Dynamic>>(context);
+}
+// Instantiate for num_rows=1 and num_rows=3.
+template const Eigen::Matrix<double, 1, Eigen::Dynamic>&
+DerStateSystem<double>::get_cache_matrix<1>(const Context<double>&,
+                                            CacheIndex) const;
+template const Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>&
+DerStateSystem<AutoDiffXd>::get_cache_matrix<1>(const Context<AutoDiffXd>&,
+                                                CacheIndex) const;
+template const Eigen::Matrix<double, 3, Eigen::Dynamic>&
+DerStateSystem<double>::get_cache_matrix<3>(const Context<double>&,
+                                            CacheIndex) const;
+template const Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>&
+DerStateSystem<AutoDiffXd>::get_cache_matrix<3>(const Context<AutoDiffXd>&,
+                                                CacheIndex) const;
+
+}  // namespace internal
+}  // namespace der
+}  // namespace multibody
+}  // namespace drake
+
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+    class ::drake::multibody::der::internal::DerStateSystem);
