@@ -184,6 +184,10 @@ void Geometries::ImplementGeometry(const Ellipsoid& ellipsoid,
   AddRigidGeometry(ellipsoid, *static_cast<ReifyData*>(user_data));
 }
 
+void Geometries::ImplementGeometry(const Filament& filament, void* user_data) {
+  AddRigidGeometry(filament, *static_cast<ReifyData*>(user_data));
+}
+
 void Geometries::ImplementGeometry(const HalfSpace&, void*) {
   static const logging::Warn log_once(
       "Rigid (non-deformable) half spaces are not currently supported for "

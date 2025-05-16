@@ -219,6 +219,14 @@ std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
 
+Filament::Filament(
+    const Eigen::Ref<Eigen::Matrix<double, 3, Eigen::Dynamic>>& nodes)
+    : nodes_(nodes) {}
+
+std::string Filament::do_to_string() const {
+  return "Filament";
+}
+
 HalfSpace::HalfSpace() = default;
 
 RigidTransform<double> HalfSpace::MakePose(const Vector3<double>& Hz_dir_F,
@@ -347,6 +355,10 @@ void ShapeReifier::ImplementGeometry(const Ellipsoid& ellipsoid, void*) {
   DefaultImplementGeometry(ellipsoid);
 }
 
+void ShapeReifier::ImplementGeometry(const Filament& filament, void*) {
+  DefaultImplementGeometry(filament);
+}
+
 void ShapeReifier::ImplementGeometry(const HalfSpace& hs, void*) {
   DefaultImplementGeometry(hs);
 }
@@ -409,6 +421,9 @@ double CalcVolume(const Shape& shape) {
       [](const Ellipsoid& ellipsoid) {
         return 4.0 / 3.0 * M_PI * ellipsoid.a() * ellipsoid.b() * ellipsoid.c();
       },
+      [](const Filament&) {
+        return 0.0;
+      },
       [](const HalfSpace&) {
         return std::numeric_limits<double>::infinity();
       },
@@ -447,6 +462,7 @@ DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Capsule)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Convex)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Cylinder)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Ellipsoid)
+DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Filament)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(HalfSpace)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(Mesh)
 DRAKE_DEFINE_SHAPE_SUBCLASS_BOILERPLATE(MeshcatCone)
