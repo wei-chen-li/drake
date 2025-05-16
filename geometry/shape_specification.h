@@ -27,6 +27,7 @@ class Capsule;
 class Convex;
 class Cylinder;
 class Ellipsoid;
+class Filament;
 class HalfSpace;
 class Mesh;
 class MeshcatCone;
@@ -138,6 +139,7 @@ class Shape {
       const Convex*,                          //
       const Cylinder*,                        //
       const Ellipsoid*,                       //
+      const Filament*,                        //
       const HalfSpace*,                       //
       const Mesh*,                            //
       const MeshcatCone*,                     //
@@ -438,6 +440,27 @@ class Ellipsoid final : public Shape {
   VariantShapeConstPtr get_variant_this() const final;
 
   Vector3<double> radii_;
+};
+
+class Filament final : public Shape {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Filament);
+
+  explicit Filament(
+      const Eigen::Ref<Eigen::Matrix<double, 3, Eigen::Dynamic>>& nodes);
+
+  ~Filament() final;
+
+  Eigen::Matrix<double, 3, Eigen::Dynamic> nodes() const { return nodes_; }
+
+ private:
+  void DoReify(ShapeReifier*, void*) const final;
+  std::unique_ptr<Shape> DoClone() const final;
+  std::string_view do_type_name() const final;
+  std::string do_to_string() const final;
+  VariantShapeConstPtr get_variant_this() const final;
+
+  Eigen::Matrix<double, 3, Eigen::Dynamic> nodes_;
 };
 
 /** Definition of a half space. In its canonical frame, the plane defining the
@@ -753,6 +776,7 @@ class ShapeReifier {
   virtual void ImplementGeometry(const Convex& convex, void* user_data);
   virtual void ImplementGeometry(const Cylinder& cylinder, void* user_data);
   virtual void ImplementGeometry(const Ellipsoid& ellipsoid, void* user_data);
+  virtual void ImplementGeometry(const Filament& filament, void* user_data);
   virtual void ImplementGeometry(const HalfSpace& half_space, void* user_data);
   virtual void ImplementGeometry(const Mesh& mesh, void* user_data);
   virtual void ImplementGeometry(const MeshcatCone& cone, void* user_data);
@@ -792,6 +816,7 @@ DRAKE_FORMATTER_AS(, drake::geometry, Capsule, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Convex, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Cylinder, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Ellipsoid, x, x.to_string())
+DRAKE_FORMATTER_AS(, drake::geometry, Filament, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, HalfSpace, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, Mesh, x, x.to_string())
 DRAKE_FORMATTER_AS(, drake::geometry, MeshcatCone, x, x.to_string())
