@@ -83,6 +83,10 @@ CalcSpatialInertiaResult CalcSpatialInertiaImpl(const geometry::Shape& shape,
         return SpatialInertia<double>::SolidEllipsoidWithDensity(
             density, ellipsoid.a(), ellipsoid.b(), ellipsoid.c());
       },
+      [](const geometry::Filament&) -> CalcSpatialInertiaResult {
+        return std::string(
+            "CalcSpatialInertia: Cannot compute mass of a Filament");
+      },
       [](const geometry::HalfSpace&) -> CalcSpatialInertiaResult {
         return std::string(
             "CalcSpatialInertia: Cannot compute mass of a HalfSpace");
