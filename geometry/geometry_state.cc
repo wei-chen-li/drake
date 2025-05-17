@@ -1069,16 +1069,28 @@ GeometryId GeometryState<T>::RegisterDeformableGeometry(
                                      geometry->pose(), resolution_hint);
   // The reference mesh is defined in the frame F.
   const VolumeMesh<double>* reference_mesh = internal_geometry.reference_mesh();
-  DRAKE_DEMAND(reference_mesh != nullptr);
+  const Eigen::Matrix<double, 3, Eigen::Dynamic>* reference_filament_nodes =
+      internal_geometry.reference_filament_nodes();
+  DRAKE_DEMAND(reference_mesh != nullptr ||
+               reference_filament_nodes != nullptr);
   const InternalFrame& frame = frames_[frame_id];
   const RigidTransform<T> X_WG =
       kinematics_data_.X_WFs[frame.index()] * geometry->pose().cast<T>();
-  VectorX<T> q_WG(reference_mesh->num_vertices() * 3);
-  for (int v = 0; v < reference_mesh->num_vertices(); ++v) {
-    q_WG.template segment<3>(3 * v) =
-        X_WG * Vector3<T>(reference_mesh->vertex(v));
+  if (reference_mesh != nullptr) {
+    VectorX<T> q_WG(reference_mesh->num_vertices() * 3);
+    for (int v = 0; v < reference_mesh->num_vertices(); ++v) {
+      q_WG.template segment<3>(3 * v) =
+          X_WG * Vector3<T>(reference_mesh->vertex(v));
+    }
+    kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
+  } else {
+    VectorX<T> q_WG(reference_filament_nodes->size());
+    for (int i = 0; i < reference_filament_nodes->cols(); ++i) {
+      q_WG.template segment<3>(3 * i) =
+          X_WG * Vector3<T>(reference_filament_nodes->col(i));
+    }
+    kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   }
-  kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   geometries_.emplace(geometry_id, std::move(internal_geometry));
 
   AssignAllDefinedRoles(source_id, std::move(geometry));

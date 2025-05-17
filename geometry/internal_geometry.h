@@ -238,6 +238,15 @@ class InternalGeometry {
     return reference_mesh_.get();
   }
 
+  /* Returns a pointer to the geometry's reference nodes if the geometry is
+   a filament, or nullptr otherwise. The positions of the nodes is measured and
+   expressed in the geometry's frame G. */
+  const Eigen::Matrix<double, 3, Eigen::Dynamic>* reference_filament_nodes()
+      const {
+    return reference_filament_nodes_ ? &reference_filament_nodes_.value()
+                                     : nullptr;
+  }
+
  private:
   // The specification for this instance's shape.
   copyable_unique_ptr<Shape> shape_spec_;
@@ -276,6 +285,11 @@ class InternalGeometry {
   // An optional representation of the convex hull associated with this
   // geometry.
   copyable_unique_ptr<PolygonSurfaceMesh<double>> convex_hull_;
+
+  // Representation a filement's nodes expressed in the geometry's frame, G.
+  // Is's a std::nullopt is the geometry is not a filament.
+  std::optional<Eigen::Matrix<double, 3, Eigen::Dynamic>>
+      reference_filament_nodes_;
 };
 
 }  // namespace internal
