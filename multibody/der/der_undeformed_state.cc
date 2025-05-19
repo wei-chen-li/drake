@@ -68,21 +68,6 @@ DerUndeformedState<T> DerUndeformedState<T>::FromCurrentDerState(
 }
 
 template <typename T>
-template <typename U>
-DerUndeformedState<U> DerUndeformedState<T>::ToScalarType() const {
-  static_assert(!std::is_same_v<T, U>);
-  if constexpr (std::is_same_v<T, AutoDiffXd>) {
-    return DerUndeformedState<U>(
-        has_closed_ends_, ExtractDoubleOrThrow(edge_length_),
-        ExtractDoubleOrThrow(voronoi_length_), ExtractDoubleOrThrow(kappa1_),
-        ExtractDoubleOrThrow(kappa2_), ExtractDoubleOrThrow(twist_));
-  } else {
-    return DerUndeformedState<U>(has_closed_ends_, edge_length_,
-                                 voronoi_length_, kappa1_, kappa2_, twist_);
-  }
-}
-
-template <typename T>
 DerUndeformedState<T>::DerUndeformedState(bool has_closed_ends,
                                           Eigen::RowVectorX<T> edge_length,
                                           Eigen::RowVectorX<T> voronoi_length,
@@ -104,6 +89,16 @@ DerUndeformedState<T>::DerUndeformedState(bool has_closed_ends,
   DRAKE_THROW_UNLESS(kappa1_.size() == num_internal_nodes());
   DRAKE_THROW_UNLESS(kappa2_.size() == num_internal_nodes());
   DRAKE_THROW_UNLESS(twist_.size() == num_internal_nodes());
+}
+
+template <typename T>
+template <typename U>
+DerUndeformedState<U> DerUndeformedState<T>::ToScalarType() const {
+  static_assert(!std::is_same_v<T, U>);
+  return DerUndeformedState<U>(
+      has_closed_ends_, ExtractDoubleOrThrow(edge_length_),
+      ExtractDoubleOrThrow(voronoi_length_), ExtractDoubleOrThrow(kappa1_),
+      ExtractDoubleOrThrow(kappa2_), ExtractDoubleOrThrow(twist_));
 }
 
 template DerUndeformedState<AutoDiffXd>

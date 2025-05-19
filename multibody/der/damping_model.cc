@@ -14,6 +14,19 @@ DampingModel<T>::DampingModel(const T& mass_coeff_alpha,
   DRAKE_THROW_UNLESS(stiffness_coeff_beta >= 0.0);
 }
 
+template <typename T>
+template <typename U>
+DampingModel<U> DampingModel<T>::ToScalarType() const {
+  static_assert(!std::is_same_v<T, U>);
+  return DampingModel<U>(ExtractDoubleOrThrow(mass_coeff_alpha_),
+                         ExtractDoubleOrThrow(stiffness_coeff_beta_));
+}
+
+template DampingModel<AutoDiffXd>
+DampingModel<double>::ToScalarType<AutoDiffXd>() const;
+template DampingModel<double> DampingModel<AutoDiffXd>::ToScalarType<double>()
+    const;
+
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody

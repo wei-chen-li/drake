@@ -116,6 +116,34 @@ void DirichletBoundaryCondition<T>::VerifyIndices(int num_dofs) const {
   }
 }
 
+template <typename T>
+template <typename U>
+DirichletBoundaryCondition<U> DirichletBoundaryCondition<T>::ToScalarType()
+    const {
+  static_assert(!std::is_same_v<T, U>);
+  DirichletBoundaryCondition<U> to;
+  NodeState<U> to_node_state;
+  for (const auto& [node_index, from_node_state] : node_to_boundary_state_) {
+    to_node_state.x = ExtractDoubleOrThrow(from_node_state.x);
+    to_node_state.x_dot = ExtractDoubleOrThrow(from_node_state.x_dot);
+    to_node_state.x_ddot = ExtractDoubleOrThrow(from_node_state.x_ddot);
+    to.AddBoundaryCondition(node_index, to_node_state);
+  }
+  EdgeState<U> to_edge_state;
+  for (const auto& [edge_index, from_edge_state] : edge_to_boundary_state_) {
+    to_edge_state.gamma = ExtractDoubleOrThrow(from_edge_state.gamma);
+    to_edge_state.gamma_dot = ExtractDoubleOrThrow(from_edge_state.gamma_dot);
+    to_edge_state.gamma_ddot = ExtractDoubleOrThrow(from_edge_state.gamma_ddot);
+    to.AddBoundaryCondition(edge_index, to_edge_state);
+  }
+  return to;
+}
+
+template DirichletBoundaryCondition<AutoDiffXd>
+DirichletBoundaryCondition<double>::ToScalarType<AutoDiffXd>() const;
+template DirichletBoundaryCondition<double>
+DirichletBoundaryCondition<AutoDiffXd>::ToScalarType<double>() const;
+
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody

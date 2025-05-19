@@ -283,6 +283,14 @@ class DerModel {
    not compatible with the cloned model, and vice versa. */
   std::unique_ptr<DerModel<T>> Clone() const;
 
+  /** Creates a deep copy of this DerModel, transmogrified to use the scalar
+   type selected by a template parameter.
+   @throws std::exception if this model does not support the destination type.
+   @tparam U The destination scalar type, which must be one of the default
+             nonsymbolic scalars.  */
+  template <typename U>
+  std::unique_ptr<DerModel<U>> ToScalarType() const;
+
   /** Returns the structural property of this model. */
   const internal::DerStructuralProperty<T>& structural_property() const {
     return der_structural_property_;
@@ -292,11 +300,14 @@ class DerModel {
   void ValidateDerState(const internal::DerState<T>& state) const;
 
  private:
+  /* All DerModel of different template type can see other's private fields. */
+  template <typename U>
+  friend class DerModel;
+
   /* Friend class to facilitate testing. */
   friend class DerModelTester;
 
-  /* Private constructor called by DerModel::Builder::Build() and
-   DerModel::Clone(). */
+  /* Private constructor. */
   DerModel(std::unique_ptr<const internal::DerStateSystem<T>> der_state_system,
            internal::DerStructuralProperty<T> der_structural_property,
            internal::DerUndeformedState<T> der_undeformed_state,

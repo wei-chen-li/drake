@@ -24,6 +24,14 @@ GTEST_TEST(DampingModelTest, InvalidModel) {
   EXPECT_NO_THROW(DampingModel<double>(0, 0));
 }
 
+GTEST_TEST(DampingModelTest, ScalarConversion) {
+  DampingModel<AutoDiffXd> damp1(0.1, 0.2);
+  DampingModel<double> damp2 = damp1.ToScalarType<double>();
+
+  EXPECT_EQ(damp1.mass_coeff_alpha().value(), damp2.mass_coeff_alpha());
+  EXPECT_EQ(damp1.stiffness_coeff_beta().value(), damp2.stiffness_coeff_beta());
+}
+
 }  // namespace
 }  // namespace internal
 }  // namespace der

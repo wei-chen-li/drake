@@ -39,6 +39,9 @@ class DampingModel {
   const T& mass_coeff_alpha() const { return mass_coeff_alpha_; }
   const T& stiffness_coeff_beta() const { return stiffness_coeff_beta_; }
 
+  template <typename U>
+  DampingModel<U> ToScalarType() const;
+
  private:
   T mass_coeff_alpha_{};
   T stiffness_coeff_beta_{};

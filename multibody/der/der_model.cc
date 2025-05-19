@@ -399,6 +399,24 @@ std::unique_ptr<DerModel<T>> DerModel<T>::Clone() const {
 }
 
 template <typename T>
+template <typename U>
+std::unique_ptr<DerModel<U>> DerModel<T>::ToScalarType() const {
+  static_assert(!std::is_same_v<T, U>);
+  return std::unique_ptr<DerModel<U>>(
+      new DerModel<U>(dynamic_pointer_cast<internal::DerStateSystem<U>>(
+                          der_state_system_->template ToScalarType<U>()),
+                      der_structural_property_.template ToScalarType<U>(),
+                      der_undeformed_state_.template ToScalarType<U>(),
+                      damping_model_.template ToScalarType<U>(),
+                      boundary_condition_.template ToScalarType<U>()));
+}
+
+template std::unique_ptr<DerModel<AutoDiffXd>>
+DerModel<double>::ToScalarType<AutoDiffXd>() const;
+template std::unique_ptr<DerModel<double>>
+DerModel<AutoDiffXd>::ToScalarType<double>() const;
+
+template <typename T>
 void DerModel<T>::ValidateDerState(const internal::DerState<T>& state) const {
   if (!state.is_created_from_system(*der_state_system_))
     throw std::invalid_argument(
