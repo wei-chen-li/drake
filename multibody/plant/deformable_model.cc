@@ -193,7 +193,7 @@ void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
                                                   const Vector3<T>& p_WQ,
                                                   const Vector3<T>& n_W) {
   this->ThrowIfSystemResourcesDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   DRAKE_DEMAND(n_W.norm() > 1e-10);
   const Vector3<T>& nhat_W = n_W.normalized();
 
@@ -226,7 +226,7 @@ MultibodyConstraintId DeformableModel<T>::AddFixedConstraint(
     const math::RigidTransform<double>& X_BG) {
   ThrowIfNotDouble(__func__);
   this->ThrowIfSystemResourcesDeclared(__func__);
-  ThrowUnlessRegistered(__func__, body_A_id);
+  ThrowUnlessRegisteredFem(__func__, body_A_id);
   if (&this->plant().get_body(body_B.index()) != &body_B) {
     throw std::logic_error(
         fmt::format("The rigid body with name {} is not registered with the "
@@ -288,7 +288,7 @@ template <typename T>
 systems::DiscreteStateIndex DeformableModel<T>::GetDiscreteStateIndex(
     DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return discrete_state_indexes_.at(id);
 }
 
@@ -299,7 +299,7 @@ void DeformableModel<T>::SetPositions(
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   const int num_nodes = fem_models_.at(id)->num_nodes();
   DRAKE_THROW_UNLESS(q.cols() == num_nodes);
   auto all_finite = [](const Matrix3X<T>& positions) {
@@ -317,7 +317,7 @@ Matrix3X<T> DeformableModel<T>::GetPositions(const systems::Context<T>& context,
                                              DeformableBodyId id) const {
   this->plant().ValidateContext(context);
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
 
   const int num_nodes = fem_models_.at(id)->num_nodes();
   const VectorX<T>& q = context.get_discrete_state(GetDiscreteStateIndex(id))
@@ -338,7 +338,7 @@ template <typename T>
 const std::vector<const ForceDensityFieldBase<T>*>&
 DeformableModel<T>::GetExternalForces(DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return body_index_to_force_densities_[GetBodyIndex(id)];
 }
 
@@ -347,7 +347,7 @@ void DeformableModel<T>::Disable(DeformableBodyId id,
                                  systems::Context<T>* context) const {
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   context->get_mutable_abstract_parameter(is_enabled_parameter_indexes_.at(id))
       .set_value(false);
   /* Set both the accelerations and the velocities to zero, noting that the
@@ -363,7 +363,7 @@ void DeformableModel<T>::Enable(DeformableBodyId id,
                                 systems::Context<T>* context) const {
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   context->get_mutable_abstract_parameter(is_enabled_parameter_indexes_.at(id))
       .set_value(true);
 }
@@ -371,14 +371,14 @@ void DeformableModel<T>::Enable(DeformableBodyId id,
 template <typename T>
 const fem::FemModel<T>& DeformableModel<T>::GetFemModel(
     DeformableBodyId id) const {
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return *fem_models_.at(id);
 }
 
 template <typename T>
 const VectorX<T>& DeformableModel<T>::GetReferencePositions(
     DeformableBodyId id) const {
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return reference_positions_.at(id);
 }
 
@@ -419,13 +419,13 @@ template <typename T>
 DeformableBodyIndex DeformableModel<T>::GetBodyIndex(
     DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return body_id_to_index_.at(id);
 }
 
 template <typename T>
 GeometryId DeformableModel<T>::GetGeometryId(DeformableBodyId id) const {
-  ThrowUnlessRegistered(__func__, id);
+  ThrowUnlessRegisteredFem(__func__, id);
   return body_id_to_geometry_id_.at(id);
 }
 
@@ -692,12 +692,22 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
 }
 
 template <typename T>
-void DeformableModel<T>::ThrowUnlessRegistered(const char* function_name,
-                                               DeformableBodyId id) const {
+void DeformableModel<T>::ThrowUnlessRegisteredFem(const char* function_name,
+                                                  DeformableBodyId id) const {
   if (fem_models_.find(id) == fem_models_.end()) {
-    throw std::logic_error(
-        fmt::format("{}(): No deformable body with id {} has been registered.",
-                    function_name, id));
+    throw std::logic_error(fmt::format(
+        "{}(): No deformable FEM body with id {} has been registered.",
+        function_name, id));
+  }
+}
+
+template <typename T>
+void DeformableModel<T>::ThrowUnlessRegisteredDer(const char* function_name,
+                                                  DeformableBodyId id) const {
+  if (der_models_.find(id) == der_models_.end()) {
+    throw std::logic_error(fmt::format(
+        "{}(): No deformable DER body with id {} has been registered.",
+        function_name, id));
   }
 }
 
