@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "drake/common/identifier.h"
 #include "drake/common/parallelism.h"
 #include "drake/common/string_unordered_map.h"
+#include "drake/multibody/der/der_model.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/discrete_time_integrator.h"
 #include "drake/multibody/fem/fem_model.h"
@@ -94,6 +96,29 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   DeformableBodyId RegisterDeformableBody(
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
+
+  /** Registers a discrete elastic rod (DER) body in `this` DeformableModel with
+   the given `der_body`. The DER is represented in the world frame. Returns a
+   unique identifier for the added body.
+   @param[in] der_body The DER body to be added to this deformable model.
+   @param[in] model_instance The model instance index which this body is part
+   of.
+   @param[in] name The name of the geometry coresponding to the added body.
+   @throws std::exception if `this` %DeformableModel is not of scalar type
+   double.
+   @throws std::exception if the model instance does not exist.
+   @throws std::exception if Finalize() has been called on the multibody plant
+   owning this deformable model.
+   @pydrake_mkdoc_identifier{der_3args} */
+  DeformableBodyId RegisterDeformableBody(
+      std::unique_ptr<der::DerModel<T>> der_body,
+      ModelInstanceIndex model_instance, std::string_view name);
+
+  /** Registers a discrete elastic rod (DER) in `this` DeformableModel with the
+   default model instance.
+   @pydrake_mkdoc_identifier{der_2args} */
+  DeformableBodyId RegisterDeformableBody(
+      std::unique_ptr<der::DerModel<T>> der_body, std::string_view name);
 
   // TODO(xuchenhan-tri): Consider pulling PosedHalfSpace out of internal
   // namespace and use it here.
@@ -471,6 +496,8 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       geometry_id_to_body_id_;
   std::unordered_map<DeformableBodyId, std::unique_ptr<fem::FemModel<T>>>
       fem_models_;
+  std::unordered_map<DeformableBodyId, std::unique_ptr<der::DerModel<T>>>
+      der_models_;
   string_unordered_map<DeformableBodyId> name_to_body_id_;
   std::unordered_map<ModelInstanceIndex, std::vector<DeformableBodyId>>
       model_instance_to_body_ids_;

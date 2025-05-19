@@ -281,6 +281,10 @@ class DerModel {
   /** Checks whether the given `state` is created from `this` DerModel. */
   void ValidateDerState(const internal::DerState<T>& state) const;
 
+  const internal::DerStructuralProperty<T>& structural_property() const {
+    return der_structural_property_;
+  }
+
  private:
   /* Friend class to facilitate testing. */
   friend class DerModelTester;

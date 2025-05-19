@@ -60,8 +60,9 @@ void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
   builder.SetCircularCrossSection(FLAGS_radius);
   builder.SetDampingCoefficients(0.0, 0.0);
 
-  std::unique_ptr<DerModel<double>> model = builder.Build();
-  unused(deformable_model);
+  std::unique_ptr<DerModel<double>> der_model = builder.Build();
+  deformable_model->RegisterDeformableBody(std::move(der_model),
+                                           "cantilever beam");
 }
 
 int do_main() {
