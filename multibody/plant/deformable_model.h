@@ -291,7 +291,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    registered. */
   bool is_enabled(DeformableBodyId id,
                   const systems::Context<T>& context) const {
-    ThrowUnlessRegistered(__func__, id);
+    ThrowUnlessRegisteredFem(__func__, id);
     this->plant().ValidateContext(context);
     return context.get_parameters().template get_abstract_parameter<bool>(
         is_enabled_parameter_indexes_.at(id));
@@ -469,10 +469,15 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   void CopyVertexPositions(const systems::Context<T>& context,
                            AbstractValue* output) const;
 
-  /* Helper to throw a useful message if a deformable body with the given `id`
-   doesn't exist. */
-  void ThrowUnlessRegistered(const char* function_name,
-                             DeformableBodyId id) const;
+  /* Helper to throw a useful message if a deformable FEM body with the given
+   `id` doesn't exist. */
+  void ThrowUnlessRegisteredFem(const char* function_name,
+                                DeformableBodyId id) const;
+
+  /* Helper to throw a useful message if a deformable DER body with the given
+   `id` doesn't exist. */
+  void ThrowUnlessRegisteredDer(const char* function_name,
+                                DeformableBodyId id) const;
 
   /* Helper to throw a useful message if the given `function_name` is called on
    a DeformableModel that doesn't have scalar type double. */
