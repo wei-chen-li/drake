@@ -5,12 +5,19 @@
 #include "drake/multibody/der/transport.h"
 
 namespace drake {
+namespace systems {
+namespace scalar_conversion {
+template <>
+struct Traits<drake::multibody::der::internal::DerStateSystem>
+    : public NonSymbolicTraits {};
+}  // namespace scalar_conversion
+}  // namespace systems
+}  // namespace drake
+
+namespace drake {
 namespace multibody {
 namespace der {
 namespace internal {
-
-using systems::ValueProducer;
-
 namespace {
 
 /* Tolerance for ‖unit_vector‖ is 1e-14 (≈ 5.5 bits) of 1.0.
@@ -292,9 +299,6 @@ DerStateSystem<T>::DerStateSystem(const DerStateSystem<U>& other)
                      cast<T, U>(other.initial_d1_0_)) {}
 
 template <typename T>
-DerStateSystem<T>::~DerStateSystem() = default;
-
-template <typename T>
 Eigen::VectorBlock<Eigen::VectorX<T>>
 DerStateSystem<T>::get_mutable_position_within_step(Context<T>* context) const {
   this->ValidateContext(context);
@@ -570,6 +574,9 @@ Eigen::VectorX<T> DerStateSystem<T>::Serialize(
   const int size = num_dofs() * 3 + num_edges() * 6 + num_internal_nodes();
   Eigen::VectorX<T> serialized(size);
   const PrevStep<T>& prev_step = get_prev_step(context);
+  DRAKE_ASSERT(prev_step.tangent.cols() == num_edges());
+  DRAKE_ASSERT(prev_step.reference_frame_d1.cols() == num_edges());
+  DRAKE_ASSERT(prev_step.reference_twist.cols() == num_internal_nodes());
   serialized << get_position(context), get_velocity(context),
       get_acceleration(context), prev_step.tangent.reshaped(),
       prev_step.reference_frame_d1.reshaped(),
@@ -588,7 +595,6 @@ void DerStateSystem<T>::Deserialize(
         "The serialized vector has size incompatible with this DerState and "
         "therefore cannot be deserialized.");
   }
-
   int start = 0;
   context->SetDiscreteState(q_index_, serialized.segment(start, num_dofs()));
   start += num_dofs();

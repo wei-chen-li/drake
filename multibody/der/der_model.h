@@ -278,23 +278,30 @@ class DerModel {
    @pre `state` is allocated using CreateDerState() of the same DerModel. */
   void ApplyBoundaryCondition(internal::DerState<T>* state) const;
 
-  /** Checks whether the given `state` is created from `this` DerModel. */
-  void ValidateDerState(const internal::DerState<T>& state) const;
+  /** Creates a deep copy of this DerModel. Even though the cloned model is
+   functionally identical, any DerState and Scratch created for this model are
+   not compatible with the cloned model, and vice versa. */
+  std::unique_ptr<DerModel<T>> Clone() const;
 
+  /** Returns the structural property of this model. */
   const internal::DerStructuralProperty<T>& structural_property() const {
     return der_structural_property_;
   }
+
+  /** Checks whether the given `state` is created from `this` DerModel. */
+  void ValidateDerState(const internal::DerState<T>& state) const;
 
  private:
   /* Friend class to facilitate testing. */
   friend class DerModelTester;
 
-  /* Private constructor called by DerModel::Builder::Build(). */
+  /* Private constructor called by DerModel::Builder::Build() and
+   DerModel::Clone(). */
   DerModel(std::unique_ptr<const internal::DerStateSystem<T>> der_state_system,
-           internal::DerStructuralProperty<T>&& der_structural_property,
-           internal::DerUndeformedState<T>&& der_undeformed_state,
-           internal::DampingModel<T>&& damping_model,
-           internal::DirichletBoundaryCondition<T>&& boundary_condition);
+           internal::DerStructuralProperty<T> der_structural_property,
+           internal::DerUndeformedState<T> der_undeformed_state,
+           internal::DampingModel<T> damping_model,
+           internal::DirichletBoundaryCondition<T> boundary_condition);
 
   /** Checks whether `scratch` is nonnull and created from `this` DerModel. */
   void ValidateScratch(const Scratch* scratch) const;

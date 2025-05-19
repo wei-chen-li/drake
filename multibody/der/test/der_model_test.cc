@@ -505,6 +505,25 @@ TEST_P(DerModelTest, ApplyBoundaryCondition) {
   EXPECT_TRUE(CompareMatrices(state->get_acceleration(), a_expected));
 }
 
+TEST_P(DerModelTest, Clone) {
+  std::unique_ptr<DerModel<double>> cloned = der_model_->Clone();
+  EXPECT_NO_THROW(cloned->CreateDerState());
+
+  EXPECT_EQ(cloned->has_closed_ends(), der_model_->has_closed_ends());
+  EXPECT_EQ(cloned->num_nodes(), der_model_->num_nodes());
+
+  EXPECT_EQ(DerModelTester::get_der_structural_property(*cloned).GJ(),
+            DerModelTester::get_der_structural_property(*der_model_).GJ());
+  EXPECT_EQ(
+      DerModelTester::get_der_undeformed_state(*cloned).get_voronoi_length(),
+      DerModelTester::get_der_undeformed_state(*der_model_)
+          .get_voronoi_length());
+  EXPECT_EQ(DerModelTester::get_damping_model(*cloned).mass_coeff_alpha(),
+            DerModelTester::get_damping_model(*der_model_).mass_coeff_alpha());
+  EXPECT_EQ(DerModelTester::get_node_boundary_condition(*cloned).size(),
+            DerModelTester::get_node_boundary_condition(*der_model_).size());
+}
+
 }  // namespace
 }  // namespace der
 }  // namespace multibody
