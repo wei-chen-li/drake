@@ -129,6 +129,39 @@ TYPED_TEST(DerStateSystemTest, CopyContext) {
   }
 }
 
+/* Test that serializing and deseralizing the context results in the same q, q̇,
+ and q̈ vectors and quantity calculation results. */
+TYPED_TEST(DerStateSystemTest, Serialize) {
+  using T = TypeParam;
+  const DerStateSystem<T>& system = *this->der_state_system_;
+  const int num_dofs = system.num_dofs();
+
+  auto context1 = system.CreateDefaultContext();
+  system.SetVelocity(context1.get(), VectorX<T>::Constant(num_dofs, 1.2));
+  system.SetAcceleration(context1.get(), VectorX<T>::Constant(num_dofs, 3.4));
+
+  /* Set a random q vector. */
+  system.AdvancePositionToNextStep(context1.get(),
+                                   VectorX<T>::LinSpaced(num_dofs, 0.0, 1.0));
+  /* Set a new random q vector. */
+  system.AdvancePositionToNextStep(context1.get(),
+                                   VectorX<T>::LinSpaced(num_dofs, 1.0, 2.0));
+
+  auto context2 = system.CreateDefaultContext();
+  system.Deserialize(context2.get(), system.Serialize(*context1));
+
+  /* If the abstract state holding PrevStep is not serialized, some of these
+   EXPECT_EQ will fail. */
+  EXPECT_EQ(system.get_position(*context1), system.get_position(*context2));
+  EXPECT_EQ(system.get_velocity(*context1), system.get_velocity(*context2));
+  EXPECT_EQ(system.get_acceleration(*context1),
+            system.get_acceleration(*context2));
+  EXPECT_EQ(system.get_reference_frame_d1(*context1),
+            system.get_reference_frame_d1(*context2));
+  EXPECT_EQ(system.get_reference_twist(*context1),
+            system.get_reference_twist(*context2));
+}
+
 TYPED_TEST(DerStateSystemTest, SerialNumber) {
   using T = TypeParam;
   const DerStateSystem<T>& system = *this->der_state_system_;
@@ -153,9 +186,11 @@ TYPED_TEST(DerStateSystemTest, SerialNumber) {
   EXPECT_EQ(system.serial_number(context), 6);
   system.get_mutable_acceleration(&context);
   EXPECT_EQ(system.serial_number(context), 7);
+  system.Deserialize(&context, system.Serialize(context));
+  EXPECT_EQ(system.serial_number(context), 8);
   if constexpr (std::is_same_v<T, AutoDiffXd>) {
     system.FixReferenceFrameDuringAutoDiff(&context);
-    EXPECT_EQ(system.serial_number(context), 8);
+    EXPECT_EQ(system.serial_number(context), 9);
   }
 
   auto context2 = system.CreateDefaultContext();

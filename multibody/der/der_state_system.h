@@ -203,6 +203,17 @@ class DerStateSystem : public systems::LeafSystem<T> {
   void CopyContext(const Context<T>& from_context,
                    Context<T>* to_context) const;
 
+  /* Serializes the states in `context` into an Eigen::VectorX. The resulting
+   vetor will have size greater than `3 * num_dofs()` because it also containts
+   data at the prevoius time step. */
+  Eigen::VectorX<T> Serialize(const Context<T>& context) const;
+
+  /* Deserializes from `serialized` into `context`.
+   @pre `context != nullptr`.
+   @pre `serialized` has the correct size. */
+  void Deserialize(Context<T>* context,
+                   const Eigen::Ref<const Eigen::VectorX<T>>& serialized) const;
+
   /* Returns the serial number. The serial number is incremented every time the
    `context` is modified by DerStateStstem. */
   int64_t serial_number(const Context<T>& context) const;
@@ -254,6 +265,7 @@ class DerStateSystem : public systems::LeafSystem<T> {
       const Context<T>& context) const;
 
   const PrevStep<T>& get_prev_step(const Context<T>& context) const;
+
   void StorePrevStep(Context<T>* context) const;
 
   const Eigen::VectorX<T>& get_discrete_state_vector(
