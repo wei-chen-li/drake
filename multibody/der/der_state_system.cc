@@ -82,34 +82,20 @@ template <typename T, typename U>
 std::vector<Eigen::Vector3<T>> cast(
     const std::vector<Eigen::Vector3<U>>& from) {
   std::vector<Eigen::Vector3<T>> to(from.size());
-  for (int i = 0; i < ssize(from); ++i) {
-    if constexpr (std::is_same_v<T, double>)
-      to[i] = ExtractDoubleOrThrow(from[i]);
-    else
-      to[i] = from[i];
-  }
+  for (int i = 0; i < ssize(from); ++i) to[i] = ExtractDoubleOrThrow(from[i]);
   return to;
 }
 template <typename T, typename U>
 std::vector<T> cast(const std::vector<U>& from) {
   std::vector<T> to(from.size());
-  for (int i = 0; i < ssize(from); ++i) {
-    if constexpr (std::is_same_v<T, double>)
-      to[i] = ExtractDoubleOrThrow(from[i]);
-    else
-      to[i] = from[i];
-  }
+  for (int i = 0; i < ssize(from); ++i) to[i] = ExtractDoubleOrThrow(from[i]);
   return to;
 }
 template <typename T, typename U>
 std::optional<Eigen::Vector3<T>> cast(
     const std::optional<Eigen::Vector3<U>>& from) {
   std::optional<Eigen::Vector3<T>> to;
-  if constexpr (std::is_same_v<T, double>) {
-    if (from) to = ExtractDoubleOrThrow(from.value());
-  } else {
-    if (from) to = from.value();
-  }
+  if (from) to = ExtractDoubleOrThrow(*from);
   return to;
 }
 

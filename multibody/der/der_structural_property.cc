@@ -40,18 +40,6 @@ DerStructuralProperty<T> DerStructuralProperty<T>::FromCircularCrossSection(
 }
 
 template <typename T>
-template <typename U>
-DerStructuralProperty<U> DerStructuralProperty<T>::ToScalarType() const {
-  static_assert(!std::is_same_v<T, U>);
-  if constexpr (std::is_same_v<T, AutoDiffXd>) {
-    return DerStructuralProperty<U>(E_.value(), G_.value(), rho_.value(),
-                                    A_.value(), I1_.value(), I2_.value());
-  } else {
-    return DerStructuralProperty<U>(E_, G_, rho_, A_, I1_, I2_);
-  }
-}
-
-template <typename T>
 DerStructuralProperty<T>::DerStructuralProperty(const T& E, const T& G,
                                                 const T& rho, const T& A,
                                                 const T& I1, const T& I2)
@@ -62,6 +50,16 @@ DerStructuralProperty<T>::DerStructuralProperty(const T& E, const T& G,
   DRAKE_THROW_UNLESS(A > 0);
   DRAKE_THROW_UNLESS(I1 > 0);
   DRAKE_THROW_UNLESS(I2 > 0);
+}
+
+template <typename T>
+template <typename U>
+DerStructuralProperty<U> DerStructuralProperty<T>::ToScalarType() const {
+  static_assert(!std::is_same_v<T, U>);
+  return DerStructuralProperty<U>(
+      ExtractDoubleOrThrow(E_), ExtractDoubleOrThrow(G_),
+      ExtractDoubleOrThrow(rho_), ExtractDoubleOrThrow(A_),
+      ExtractDoubleOrThrow(I1_), ExtractDoubleOrThrow(I2_));
 }
 
 template DerStructuralProperty<AutoDiffXd>

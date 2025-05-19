@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "drake/systems/framework/leaf_system.h"
+#include "drake/systems/framework/scalar_conversion_traits.h"
 
 namespace drake {
 namespace multibody {

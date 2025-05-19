@@ -92,6 +92,9 @@ class DirichletBoundaryCondition {
   void ApplyBoundaryConditionToTangentMatrix(
       Block4x4SparseSymmetricMatrix<T>* tangent_matrix) const;
 
+  template <typename U>
+  DirichletBoundaryCondition<U> ToScalarType() const;
+
  private:
   /* Friend class to facilitate testing. */
   friend class DirichletBoundaryConditionTester;
