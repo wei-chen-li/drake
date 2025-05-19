@@ -60,6 +60,8 @@ class DerStructuralProperty {
       const T& r, const T& youngs_modulus, const T& shear_modulus,
       const T& mass_density);
 
+  /* Mass density. */
+  const T& rho() const { return rho_; }
   /* ∫dA. */
   const T& A() const { return A_; }
   /* Young's modulus times ∫dA. */
