@@ -27,28 +27,30 @@ Eigen::Matrix<T, num_rows, Eigen::Dynamic> Zero(int num_cols) {
 }
 
 /* Assembles the configuration vector `q` by interleaving the columns of
- `node_positions` and `edge_angles`. */
+ `initial_node_positions_` and `initial_edge_angles_`. */
 template <typename T>
 Eigen::VectorX<T> AssembleQVector(
-    const std::vector<Eigen::Vector3<T>>& node_positions,
-    const std::vector<T>& edge_angles) {
-  Eigen::VectorX<T> q(ssize(node_positions) * 3 + ssize(edge_angles));
-  for (int i = 0; i < ssize(node_positions); ++i) {
-    q.template segment<3>(i * 4) = node_positions[i];
+    const std::vector<Eigen::Vector3<T>>& initial_node_positions_,
+    const std::vector<T>& initial_edge_angles_) {
+  Eigen::VectorX<T> q(ssize(initial_node_positions_) * 3 +
+                      ssize(initial_edge_angles_));
+  for (int i = 0; i < ssize(initial_node_positions_); ++i) {
+    q.template segment<3>(i * 4) = initial_node_positions_[i];
   }
-  for (int i = 0; i < ssize(edge_angles); ++i) {
-    q(i * 4 + 3) = edge_angles[i];
+  for (int i = 0; i < ssize(initial_edge_angles_); ++i) {
+    q(i * 4 + 3) = initial_edge_angles_[i];
   }
   return q;
 }
 
-/* Computes tangent vectors from `node_positions`. Throws an error if any
- consecutive pair of nodes are too close. */
+/* Computes tangent vectors from `initial_node_positions_`. Throws an error if
+ any consecutive pair of nodes are too close. */
 template <typename T>
 Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeTangentOrThrow(
-    bool has_closed_ends, const std::vector<Eigen::Vector3<T>>& node_positions,
+    bool has_closed_ends,
+    const std::vector<Eigen::Vector3<T>>& initial_node_positions_,
     const double edge_length_lb = 1e-8) {
-  const int num_nodes = node_positions.size();
+  const int num_nodes = initial_node_positions_.size();
   const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
   Eigen::Matrix<T, 3, Eigen::Dynamic> tangent(3, num_edges);
 
@@ -56,7 +58,7 @@ Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeTangentOrThrow(
   T edge_length;
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
-    edge_vector = node_positions[ip1] - node_positions[i];
+    edge_vector = initial_node_positions_[ip1] - initial_node_positions_[i];
     edge_length = edge_vector.norm();
     if (ExtractDoubleOrThrow(edge_length) < edge_length_lb) {
       throw std::logic_error(fmt::format(
@@ -66,6 +68,42 @@ Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeTangentOrThrow(
     tangent.col(i) = edge_vector / edge_length;
   }
   return tangent;
+}
+
+/* Casts objects from type U to type T. */
+template <typename T, typename U>
+std::vector<Eigen::Vector3<T>> cast(
+    const std::vector<Eigen::Vector3<U>>& from) {
+  std::vector<Eigen::Vector3<T>> to(from.size());
+  for (int i = 0; i < ssize(from); ++i) {
+    if constexpr (std::is_same_v<T, double>)
+      to[i] = ExtractDoubleOrThrow(from[i]);
+    else
+      to[i] = from[i];
+  }
+  return to;
+}
+template <typename T, typename U>
+std::vector<T> cast(const std::vector<U>& from) {
+  std::vector<T> to(from.size());
+  for (int i = 0; i < ssize(from); ++i) {
+    if constexpr (std::is_same_v<T, double>)
+      to[i] = ExtractDoubleOrThrow(from[i]);
+    else
+      to[i] = from[i];
+  }
+  return to;
+}
+template <typename T, typename U>
+std::optional<Eigen::Vector3<T>> cast(
+    const std::optional<Eigen::Vector3<U>>& from) {
+  std::optional<Eigen::Vector3<T>> to;
+  if constexpr (std::is_same_v<T, double>) {
+    if (from) to = ExtractDoubleOrThrow(from.value());
+  } else {
+    if (from) to = from.value();
+  }
+  return to;
 }
 
 /* Computes `d2` such that each set of columns in (`d1`, `d2`, `t`) form a
@@ -128,24 +166,31 @@ void RemoveDerivatives(EigenPtr<Eigen::MatrixX<AutoDiffXd>> mat) {
 template <typename T>
 DerStateSystem<T>::DerStateSystem(
     bool has_closed_ends,  //
-    const std::vector<Eigen::Vector3<T>>& node_positions,
-    const std::vector<T>& edge_angles,
-    const std::optional<Eigen::Vector3<T>>& d1_0)
-    : has_closed_ends_(has_closed_ends), num_nodes_(ssize(node_positions)) {
-  DRAKE_THROW_UNLESS(ssize(node_positions) == num_nodes());
-  DRAKE_THROW_UNLESS(ssize(edge_angles) == num_edges());
+    std::vector<Eigen::Vector3<T>> initial_node_positions,
+    std::vector<T> initial_edge_angles,
+    std::optional<Eigen::Vector3<T>> initial_d1_0)
+    : systems::LeafSystem<T>(systems::SystemTypeTag<DerStateSystem>{}),
+      has_closed_ends_(has_closed_ends),
+      initial_node_positions_(std::move(initial_node_positions)),
+      initial_edge_angles_(std::move(initial_edge_angles)),
+      initial_d1_0_(std::move(initial_d1_0)) {
+  DRAKE_THROW_UNLESS(ssize(initial_node_positions_) == num_nodes());
+  DRAKE_THROW_UNLESS(ssize(initial_edge_angles_) == num_edges());
+  DRAKE_THROW_UNLESS(num_edges() ==
+                     (has_closed_ends_ ? num_nodes() : num_nodes() - 1));
   DRAKE_THROW_UNLESS(num_edges() >= 2);
 
-  auto q = AssembleQVector(node_positions, edge_angles);
+  auto q = AssembleQVector(initial_node_positions_, initial_edge_angles_);
   DRAKE_ASSERT(q.size() == num_dofs());
   q_index_ = this->DeclareDiscreteState(q);
   qdot_index_ = this->DeclareDiscreteState(num_dofs());
   qddot_index_ = this->DeclareDiscreteState(num_dofs());
 
   PrevStep<T> prev_step;
-  prev_step.tangent = ComputeTangentOrThrow(has_closed_ends, node_positions);
+  prev_step.tangent =
+      ComputeTangentOrThrow(has_closed_ends, initial_node_positions_);
   prev_step.reference_frame_d1.resize(3, num_edges());
-  ComputeSpaceParallelTransport<T>(prev_step.tangent, d1_0,
+  ComputeSpaceParallelTransport<T>(prev_step.tangent, initial_d1_0_,
                                    &prev_step.reference_frame_d1);
   prev_step.reference_twist =
       Eigen::Matrix<T, 1, Eigen::Dynamic>::Zero(num_internal_nodes());
@@ -237,6 +282,14 @@ DerStateSystem<T>::DerStateSystem(
                                this->discrete_state_ticket(q_index_)})
           .cache_index();
 }
+
+template <typename T>
+template <typename U>
+DerStateSystem<T>::DerStateSystem(const DerStateSystem<U>& other)
+    : DerStateSystem(other.has_closed_ends_,
+                     cast<T, U>(other.initial_node_positions_),
+                     cast<T, U>(other.initial_edge_angles_),
+                     cast<T, U>(other.initial_d1_0_)) {}
 
 template <typename T>
 DerStateSystem<T>::~DerStateSystem() = default;
@@ -549,10 +602,10 @@ void DerStateSystem<T>::Deserialize(
       context->template get_mutable_abstract_state<PrevStep<T>>(
           prev_step_index_);
   prev_step.tangent =
-      serialized.segment(start, 3 * num_edges() * 3).reshaped(3, num_edges());
+      serialized.segment(start, 3 * num_edges()).reshaped(3, num_edges());
   start += 3 * num_edges();
   prev_step.reference_frame_d1 =
-      serialized.segment(start, 3 * num_edges() * 3).reshaped(3, num_edges());
+      serialized.segment(start, 3 * num_edges()).reshaped(3, num_edges());
   start += 3 * num_edges();
   prev_step.reference_twist = serialized.segment(start, num_internal_nodes())
                                   .reshaped(1, num_internal_nodes());

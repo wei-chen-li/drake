@@ -32,7 +32,7 @@ struct PrevStep {
  @tparam_nonsymbolic_scalar
  */
 template <typename T>
-class DerStateSystem : public systems::LeafSystem<T> {
+class DerStateSystem final : public systems::LeafSystem<T> {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DerStateSystem);
 
@@ -41,19 +41,23 @@ class DerStateSystem : public systems::LeafSystem<T> {
    the reference frame and material frame of each edge. d₁⁰ is the reference
    frame director on the first edge, it must be perpendicular to x₁-x₀. */
   DerStateSystem(bool has_closed_ends,
-                 const std::vector<Eigen::Vector3<T>>& node_positions,
-                 const std::vector<T>& edge_angles,
-                 const std::optional<Eigen::Vector3<T>>& d1_0);
+                 std::vector<Eigen::Vector3<T>> initial_node_positions,
+                 std::vector<T> initial_edge_angles,
+                 std::optional<Eigen::Vector3<T>> initial_d1_0);
+
+  /* Scalar-converting copy constructor.  See @ref system_scalar_conversion. */
+  template <typename U>
+  explicit DerStateSystem(const DerStateSystem<U>& other);
 
   ~DerStateSystem() override;
 
   bool has_closed_ends() const { return has_closed_ends_; }
-  int num_nodes() const { return num_nodes_; }
+  int num_nodes() const { return ssize(initial_node_positions_); }
   int num_edges() const {
-    return has_closed_ends_ ? num_nodes_ : num_nodes_ - 1;
+    return has_closed_ends_ ? num_nodes() : num_nodes() - 1;
   }
   int num_internal_nodes() const {
-    return has_closed_ends_ ? num_nodes_ : num_nodes_ - 2;
+    return has_closed_ends_ ? num_nodes() : num_nodes() - 2;
   }
   int num_dofs() const { return num_nodes() * 3 + num_edges(); }
 
@@ -224,6 +228,13 @@ class DerStateSystem : public systems::LeafSystem<T> {
   void FixReferenceFrameDuringAutoDiff(Context<T>* context) const;
 
  private:
+  /* All DerStateSystem of different template type can access other's data. */
+  template <typename U>
+  friend class DerStateSystem;
+
+  /* Friend class to facilitate testing. */
+  friend class DerStateSystemTester;
+
   void CalcEdgeVector(const Context<T>& context,
                       Eigen::Matrix<T, 3, Eigen::Dynamic>* edge_vector) const;
 
@@ -277,11 +288,10 @@ class DerStateSystem : public systems::LeafSystem<T> {
 
   void increment_serial_number(Context<T>* context) const;
 
-  // Friend class to facilitate testing.
-  friend class DerStateSystemTester;
-
   const bool has_closed_ends_;
-  const int num_nodes_;
+  const std::vector<Eigen::Vector3<T>> initial_node_positions_;
+  const std::vector<T> initial_edge_angles_;
+  const std::optional<Eigen::Vector3<T>> initial_d1_0_;
 
   DiscreteStateIndex q_index_{};
   DiscreteStateIndex qdot_index_{};
@@ -306,6 +316,16 @@ class DerStateSystem : public systems::LeafSystem<T> {
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
+}  // namespace drake
+
+namespace drake {
+namespace systems {
+namespace scalar_conversion {
+template <>
+struct Traits<drake::multibody::der::internal::DerStateSystem>
+    : public NonSymbolicTraits {};
+}  // namespace scalar_conversion
+}  // namespace systems
 }  // namespace drake
 
 DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
