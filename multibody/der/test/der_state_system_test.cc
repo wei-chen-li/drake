@@ -162,6 +162,14 @@ TYPED_TEST(DerStateSystemTest, Serialize) {
             system.get_reference_twist(*context2));
 }
 
+TYPED_TEST(DerStateSystemTest, ScalarConversion) {
+  using T = TypeParam;
+  const DerStateSystem<T>& system = *this->der_state_system_;
+  using U = std::conditional_t<std::is_same_v<T, double>, AutoDiffXd, double>;
+  EXPECT_NO_THROW(system.template ToScalarType<U>());
+  EXPECT_NO_THROW(system.Clone());
+}
+
 TYPED_TEST(DerStateSystemTest, SerialNumber) {
   using T = TypeParam;
   const DerStateSystem<T>& system = *this->der_state_system_;
