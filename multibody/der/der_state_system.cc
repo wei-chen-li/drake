@@ -511,6 +511,56 @@ void DerStateSystem<T>::CopyContext(const Context<T>& from_context,
 }
 
 template <typename T>
+Eigen::VectorX<T> DerStateSystem<T>::Serialize(
+    const Context<T>& context) const {
+  this->ValidateContext(context);
+  const int size = num_dofs() * 3 + num_edges() * 6 + num_internal_nodes();
+  Eigen::VectorX<T> serialized(size);
+  const PrevStep<T>& prev_step = get_prev_step(context);
+  serialized << get_position(context), get_velocity(context),
+      get_acceleration(context), prev_step.tangent.reshaped(),
+      prev_step.reference_frame_d1.reshaped(),
+      prev_step.reference_twist.reshaped();
+  return serialized;
+}
+
+template <typename T>
+void DerStateSystem<T>::Deserialize(
+    Context<T>* context,
+    const Eigen::Ref<const Eigen::VectorX<T>>& serialized) const {
+  this->ValidateContext(context);
+  if (serialized.size() !=
+      num_dofs() * 3 + num_edges() * 6 + num_internal_nodes()) {
+    throw std::logic_error(
+        "The serialized vector has size incompatible with this DerState and "
+        "therefore cannot be deserialized.");
+  }
+
+  int start = 0;
+  context->SetDiscreteState(q_index_, serialized.segment(start, num_dofs()));
+  start += num_dofs();
+  context->SetDiscreteState(qdot_index_, serialized.segment(start, num_dofs()));
+  start += num_dofs();
+  context->SetDiscreteState(qddot_index_,
+                            serialized.segment(start, num_dofs()));
+  start += num_dofs();
+
+  PrevStep<T>& prev_step =
+      context->template get_mutable_abstract_state<PrevStep<T>>(
+          prev_step_index_);
+  prev_step.tangent =
+      serialized.segment(start, 3 * num_edges() * 3).reshaped(3, num_edges());
+  start += 3 * num_edges();
+  prev_step.reference_frame_d1 =
+      serialized.segment(start, 3 * num_edges() * 3).reshaped(3, num_edges());
+  start += 3 * num_edges();
+  prev_step.reference_twist = serialized.segment(start, num_internal_nodes())
+                                  .reshaped(1, num_internal_nodes());
+
+  increment_serial_number(context);
+}
+
+template <typename T>
 int64_t DerStateSystem<T>::serial_number(const Context<T>& context) const {
   this->ValidateContext(context);
   return context.get_abstract_parameter(serial_number_index_)
