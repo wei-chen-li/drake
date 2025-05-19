@@ -49,7 +49,8 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   template <typename U>
   explicit DerStateSystem(const DerStateSystem<U>& other);
 
-  ~DerStateSystem() override;
+  // TODO(wei-chen): Move this destructor definition to cc file.
+  ~DerStateSystem() override = default;
 
   bool has_closed_ends() const { return has_closed_ends_; }
   int num_nodes() const { return ssize(initial_node_positions_); }
@@ -316,16 +317,6 @@ class DerStateSystem final : public systems::LeafSystem<T> {
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
-}  // namespace drake
-
-namespace drake {
-namespace systems {
-namespace scalar_conversion {
-template <>
-struct Traits<drake::multibody::der::internal::DerStateSystem>
-    : public NonSymbolicTraits {};
-}  // namespace scalar_conversion
-}  // namespace systems
 }  // namespace drake
 
 DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(

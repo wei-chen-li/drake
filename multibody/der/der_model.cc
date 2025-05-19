@@ -3,6 +3,8 @@
 #include <exception>
 #include <tuple>
 
+#include "common/pointer_cast.h"
+
 #include "drake/multibody/der/elastic_energy.h"
 #include "drake/multibody/der/energy_hessian_matrix_util.h"
 
@@ -215,15 +217,16 @@ std::unique_ptr<DerModel<T>> DerModel<T>::Builder::Build() {
 template <typename T>
 DerModel<T>::DerModel(
     std::unique_ptr<const internal::DerStateSystem<T>> der_state_system,
-    internal::DerStructuralProperty<T>&& der_structural_property,
-    internal::DerUndeformedState<T>&& der_undeformed_state,
-    internal::DampingModel<T>&& damping_model,
-    internal::DirichletBoundaryCondition<T>&& boundary_condition)
+    internal::DerStructuralProperty<T> der_structural_property,
+    internal::DerUndeformedState<T> der_undeformed_state,
+    internal::DampingModel<T> damping_model,
+    internal::DirichletBoundaryCondition<T> boundary_condition)
     : der_state_system_(std::move(der_state_system)),
       der_structural_property_(std::move(der_structural_property)),
       der_undeformed_state_(std::move(der_undeformed_state)),
       damping_model_(std::move(damping_model)),
       boundary_condition_(std::move(boundary_condition)) {
+  DRAKE_THROW_UNLESS(der_state_system_ != nullptr);
   DRAKE_THROW_UNLESS(der_state_system_->has_closed_ends() ==
                      der_undeformed_state_.has_closed_ends());
   DRAKE_THROW_UNLESS(der_state_system_->num_nodes() ==
@@ -384,6 +387,15 @@ void DerModel<T>::ApplyBoundaryCondition(internal::DerState<T>* state) const {
   DRAKE_THROW_UNLESS(state != nullptr);
   this->ValidateDerState(*state);
   boundary_condition_.ApplyBoundaryConditionToState(state);
+}
+
+template <typename T>
+std::unique_ptr<DerModel<T>> DerModel<T>::Clone() const {
+  return std::unique_ptr<DerModel<T>>(
+      new DerModel<T>(dynamic_pointer_cast<internal::DerStateSystem<T>>(
+                          der_state_system_->Clone()),
+                      der_structural_property_, der_undeformed_state_,
+                      damping_model_, boundary_condition_));
 }
 
 template <typename T>
