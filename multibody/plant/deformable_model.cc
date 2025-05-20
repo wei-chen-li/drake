@@ -167,7 +167,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
 
     const DeformableBodyId body_id = DeformableBodyId::get_new_id();
     /* Do the book-keeping. */
-    // reference_positions_.emplace(body_id, state->get_position());
+    reference_positions_.emplace(body_id, state->get_position());
     body_id_to_geometry_id_.emplace(body_id, geometry_id);
     geometry_id_to_body_id_.emplace(geometry_id, body_id);
     body_ids_.emplace_back(body_id);
@@ -193,7 +193,7 @@ void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
                                                   const Vector3<T>& p_WQ,
                                                   const Vector3<T>& n_W) {
   this->ThrowIfSystemResourcesDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   DRAKE_DEMAND(n_W.norm() > 1e-10);
   const Vector3<T>& nhat_W = n_W.normalized();
 
@@ -226,7 +226,7 @@ MultibodyConstraintId DeformableModel<T>::AddFixedConstraint(
     const math::RigidTransform<double>& X_BG) {
   ThrowIfNotDouble(__func__);
   this->ThrowIfSystemResourcesDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, body_A_id);
+  ThrowUnlessRegistered(__func__, body_A_id);
   if (&this->plant().get_body(body_B.index()) != &body_B) {
     throw std::logic_error(
         fmt::format("The rigid body with name {} is not registered with the "
@@ -288,7 +288,7 @@ template <typename T>
 systems::DiscreteStateIndex DeformableModel<T>::GetDiscreteStateIndex(
     DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   return discrete_state_indexes_.at(id);
 }
 
@@ -299,7 +299,7 @@ void DeformableModel<T>::SetPositions(
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   const int num_nodes = fem_models_.at(id)->num_nodes();
   DRAKE_THROW_UNLESS(q.cols() == num_nodes);
   auto all_finite = [](const Matrix3X<T>& positions) {
@@ -317,7 +317,7 @@ Matrix3X<T> DeformableModel<T>::GetPositions(const systems::Context<T>& context,
                                              DeformableBodyId id) const {
   this->plant().ValidateContext(context);
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
 
   const int num_nodes = fem_models_.at(id)->num_nodes();
   const VectorX<T>& q = context.get_discrete_state(GetDiscreteStateIndex(id))
@@ -338,7 +338,7 @@ template <typename T>
 const std::vector<const ForceDensityFieldBase<T>*>&
 DeformableModel<T>::GetExternalForces(DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   return body_index_to_force_densities_[GetBodyIndex(id)];
 }
 
@@ -347,7 +347,7 @@ void DeformableModel<T>::Disable(DeformableBodyId id,
                                  systems::Context<T>* context) const {
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   context->get_mutable_abstract_parameter(is_enabled_parameter_indexes_.at(id))
       .set_value(false);
   /* Set both the accelerations and the velocities to zero, noting that the
@@ -363,7 +363,7 @@ void DeformableModel<T>::Enable(DeformableBodyId id,
                                 systems::Context<T>* context) const {
   DRAKE_THROW_UNLESS(context != nullptr);
   this->plant().ValidateContext(*context);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   context->get_mutable_abstract_parameter(is_enabled_parameter_indexes_.at(id))
       .set_value(true);
 }
@@ -371,14 +371,45 @@ void DeformableModel<T>::Enable(DeformableBodyId id,
 template <typename T>
 const fem::FemModel<T>& DeformableModel<T>::GetFemModel(
     DeformableBodyId id) const {
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
+  DRAKE_THROW_UNLESS(IsFemModel(id));
   return *fem_models_.at(id);
+}
+
+template <typename T>
+const der::DerModel<T>& DeformableModel<T>::GetDerModel(
+    DeformableBodyId id) const {
+  ThrowUnlessRegistered(__func__, id);
+  DRAKE_THROW_UNLESS(IsDerModel(id));
+  return *der_models_.at(id);
+}
+
+template <typename T>
+bool DeformableModel<T>::IsFemModel(DeformableBodyId id) const {
+  ThrowUnlessRegistered(__func__, id);
+  return fem_models_.find(id) != fem_models_.end();
+}
+
+template <typename T>
+bool DeformableModel<T>::IsDerModel(DeformableBodyId id) const {
+  ThrowUnlessRegistered(__func__, id);
+  return der_models_.find(id) != der_models_.end();
+}
+
+template <typename T>
+bool DeformableModel<T>::IsFemModel(DeformableBodyIndex index) const {
+  return IsFemModel(GetBodyId(index));
+}
+
+template <typename T>
+bool DeformableModel<T>::IsDerModel(DeformableBodyIndex index) const {
+  return IsDerModel(GetBodyId(index));
 }
 
 template <typename T>
 const VectorX<T>& DeformableModel<T>::GetReferencePositions(
     DeformableBodyId id) const {
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   return reference_positions_.at(id);
 }
 
@@ -419,13 +450,13 @@ template <typename T>
 DeformableBodyIndex DeformableModel<T>::GetBodyIndex(
     DeformableBodyId id) const {
   this->ThrowIfSystemResourcesNotDeclared(__func__);
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   return body_id_to_index_.at(id);
 }
 
 template <typename T>
 GeometryId DeformableModel<T>::GetGeometryId(DeformableBodyId id) const {
-  ThrowUnlessRegisteredFem(__func__, id);
+  ThrowUnlessRegistered(__func__, id);
   return body_id_to_geometry_id_.at(id);
 }
 
@@ -473,6 +504,9 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
     result->geometry_id_to_body_id_ = geometry_id_to_body_id_;
     for (const auto& [deformable_id, fem_model] : fem_models_) {
       result->fem_models_.emplace(deformable_id, fem_model->Clone());
+    }
+    for (const auto& [deformable_id, der_model] : der_models_) {
+      result->der_models_.emplace(deformable_id, der_model->Clone());
     }
     result->name_to_body_id_ = name_to_body_id_;
     result->model_instance_to_body_ids_ = model_instance_to_body_ids_;
@@ -617,6 +651,14 @@ void DeformableModel<T>::DoDeclareSystemResources() {
     is_enabled_parameter_indexes_.emplace(
         deformable_id, this->DeclareAbstractParameter(Value<bool>(true)));
   }
+  for (const auto& [deformable_id, der_model] : der_models_) {
+    std::unique_ptr<der::internal::DerState<T>> der_state =
+        der_model->CreateDerState();
+    discrete_state_indexes_.emplace(
+        deformable_id, this->DeclareDiscreteState(der_state->Serialize()));
+    is_enabled_parameter_indexes_.emplace(
+        deformable_id, this->DeclareAbstractParameter(Value<bool>(true)));
+  }
 
   std::sort(body_ids_.begin(), body_ids_.end());
   for (DeformableBodyIndex i(0); i < static_cast<int>(body_ids_.size()); ++i) {
@@ -633,7 +675,7 @@ void DeformableModel<T>::DoDeclareSystemResources() {
   }
 
   /* Add gravity to each body. */
-  for (const auto& [deformable_id, fem_model] : fem_models_) {
+  for (DeformableBodyId deformable_id : body_ids_) {
     const T& density = body_id_to_density_prefinalize_.at(deformable_id);
     const Vector3<T>& gravity = this->plant().gravity_field().gravity_vector();
     auto gravity_force =
@@ -682,32 +724,35 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
       output->get_mutable_value<geometry::GeometryConfigurationVector<T>>();
   output_value.clear();
   for (const auto& [body_id, geometry_id] : body_id_to_geometry_id_) {
-    const auto& fem_model = GetFemModel(body_id);
-    const int num_dofs = fem_model.num_dofs();
-    const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
-    VectorX<T> vertex_positions =
-        context.get_discrete_state(discrete_state_index).value().head(num_dofs);
-    output_value.set_value(geometry_id, std::move(vertex_positions));
+    if (IsFemModel(body_id)) {
+      const int num_dofs = GetFemModel(body_id).num_dofs();
+      const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
+      VectorX<T> vertex_positions =
+          context.get_discrete_state(discrete_state_index)
+              .value()
+              .head(num_dofs);
+      output_value.set_value(geometry_id, std::move(vertex_positions));
+    } else if (IsDerModel(body_id)) {
+      const int num_dofs = GetDerModel(body_id).num_dofs();
+      const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
+      VectorX<T> positions = context.get_discrete_state(discrete_state_index)
+                                 .value()
+                                 .head(num_dofs);
+      output_value.set_value(geometry_id, std::move(positions));
+    } else {
+      DRAKE_UNREACHABLE();
+    }
   }
 }
 
 template <typename T>
-void DeformableModel<T>::ThrowUnlessRegisteredFem(const char* function_name,
-                                                  DeformableBodyId id) const {
-  if (fem_models_.find(id) == fem_models_.end()) {
-    throw std::logic_error(fmt::format(
-        "{}(): No deformable FEM body with id {} has been registered.",
-        function_name, id));
-  }
-}
-
-template <typename T>
-void DeformableModel<T>::ThrowUnlessRegisteredDer(const char* function_name,
-                                                  DeformableBodyId id) const {
-  if (der_models_.find(id) == der_models_.end()) {
-    throw std::logic_error(fmt::format(
-        "{}(): No deformable DER body with id {} has been registered.",
-        function_name, id));
+void DeformableModel<T>::ThrowUnlessRegistered(const char* function_name,
+                                               DeformableBodyId id) const {
+  if (fem_models_.find(id) == fem_models_.end() &&
+      der_models_.find(id) == der_models_.end()) {
+    throw std::logic_error(
+        fmt::format("{}(): No deformable body with id {} has been registered.",
+                    function_name, id));
   }
 }
 
