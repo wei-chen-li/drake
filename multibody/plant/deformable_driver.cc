@@ -126,7 +126,8 @@ void DeformableDriver<T>::DeclareCacheEntries(
     cache_indexes_.vertex_permutations.emplace(
         g_id, vertex_permutation_cache_entry.cache_index());
 
-    FemSolver<T> model_fem_solver(&fem_model, &deformable_model_->integrator());
+    FemSolver<T> model_fem_solver(&fem_model,
+                                  &deformable_model_->fem_integrator());
     /* Cache entry for free motion FEM state and data. */
     const auto& fem_solver_cache_entry = manager->DeclareCacheEntry(
         fmt::format("FEM solver and data for body with index {}", i),
@@ -1034,8 +1035,8 @@ void DeformableDriver<T>::CalcNextFemState(const systems::Context<T>& context,
     VectorX<T>& v_next = dv;
     v_next += EvalFreeMotionFemState(context, index).GetVelocities();
     const FemState<T>& fem_state = EvalFemState(context, index);
-    deformable_model_->integrator().AdvanceOneTimeStep(fem_state, v_next,
-                                                       next_fem_state);
+    deformable_model_->fem_integrator().AdvanceOneTimeStep(fem_state, v_next,
+                                                           next_fem_state);
   }
 }
 

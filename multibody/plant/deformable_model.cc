@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "drake/geometry/proximity/volume_mesh.h"
+#include "drake/multibody/der/velocity_newmark_scheme.h"
 #include "drake/multibody/fem/corotated_model.h"
 #include "drake/multibody/fem/fem_state.h"
 #include "drake/multibody/fem/linear_constitutive_model.h"
@@ -37,7 +38,9 @@ DeformableModel<T>::DeformableModel(MultibodyPlant<T>* plant)
    we may create a deformable model for various reasons, but the deformable
    model will always be empty. */
   if (plant->time_step() > 0) {
-    integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
+    fem_integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
+        plant->time_step(), 1.0, 0.5);
+    der_integrator_ = std::make_unique<der::internal::VelocityNewmarkScheme<T>>(
         plant->time_step(), 1.0, 0.5);
   }
 }
@@ -525,7 +528,8 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
      because callers to `PhysicalModel::CloneToScalar` are required to
      subsequently call `DeclareSceneGraphPorts`. */
     result->parallelism_ = parallelism_;
-    result->integrator_ = integrator_->Clone();
+    result->fem_integrator_ = fem_integrator_->Clone();
+    result->der_integrator_ = der_integrator_->Clone();
   }
 
   return result;
@@ -607,7 +611,8 @@ DeformableModel<T>::BuildLinearVolumetricModelHelper(
       config.mass_damping_coefficient(),
       config.stiffness_damping_coefficient());
 
-  auto fem_model = std::make_unique<FemModelType>(integrator_->GetWeights());
+  auto fem_model =
+      std::make_unique<FemModelType>(fem_integrator_->GetWeights());
   ConstitutiveModelType constitutive_model(config.youngs_modulus(),
                                            config.poissons_ratio());
   typename FemModelType::VolumetricBuilder builder(fem_model.get());
