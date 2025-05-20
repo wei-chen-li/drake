@@ -1,10 +1,12 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "drake/common/eigen_types.h"
@@ -59,7 +61,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   /** Returns the number of deformable bodies registered with this
    DeformableModel. */
-  int num_bodies() const { return reference_positions_.size(); }
+  int num_bodies() const { return body_ids_.size(); }
 
   // TODO(xuchenhan-tri): Document the minimal requirement on the geometry
   //  instance. For example, it must have a friction proximity property to be
@@ -291,16 +293,26 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    registered. */
   bool is_enabled(DeformableBodyId id,
                   const systems::Context<T>& context) const {
-    ThrowUnlessRegisteredFem(__func__, id);
+    ThrowUnlessRegistered(__func__, id);
     this->plant().ValidateContext(context);
     return context.get_parameters().template get_abstract_parameter<bool>(
         is_enabled_parameter_indexes_.at(id));
   }
 
   /** Returns the FemModel for the body with `id`.
-   @throws exception if no deformable body with `id` is registered with `this`
+   @throws exception if no FEM body with `id` is registered with `this`
    %DeformableModel. */
   const fem::FemModel<T>& GetFemModel(DeformableBodyId id) const;
+
+  /** Returns the DerModel for the body with `id`.
+   @throws exception if no DER body with `id` is registered with `this`
+   %DeformableModel. */
+  const der::DerModel<T>& GetDerModel(DeformableBodyId id) const;
+
+  bool IsFemModel(DeformableBodyId id) const;
+  bool IsDerModel(DeformableBodyId id) const;
+  bool IsFemModel(DeformableBodyIndex index) const;
+  bool IsDerModel(DeformableBodyIndex index) const;
 
   // TODO(xuchenhan-tri): The use of T over double is not well-reasoned.
   //  Consider whether T is really necessary when we support autodiff in
@@ -469,15 +481,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   void CopyVertexPositions(const systems::Context<T>& context,
                            AbstractValue* output) const;
 
-  /* Helper to throw a useful message if a deformable FEM body with the given
-   `id` doesn't exist. */
-  void ThrowUnlessRegisteredFem(const char* function_name,
-                                DeformableBodyId id) const;
-
-  /* Helper to throw a useful message if a deformable DER body with the given
-   `id` doesn't exist. */
-  void ThrowUnlessRegisteredDer(const char* function_name,
-                                DeformableBodyId id) const;
+  /* Helper to throw a useful message if a deformable body with the given `id`
+   * doesn't exist. */
+  void ThrowUnlessRegistered(const char* function_name,
+                             DeformableBodyId id) const;
 
   /* Helper to throw a useful message if the given `function_name` is called on
    a DeformableModel that doesn't have scalar type double. */
