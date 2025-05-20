@@ -14,6 +14,7 @@
 #include "drake/common/parallelism.h"
 #include "drake/common/string_unordered_map.h"
 #include "drake/multibody/der/der_model.h"
+#include "drake/multibody/der/discrete_time_integrator.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/discrete_time_integrator.h"
 #include "drake/multibody/fem/fem_model.h"
@@ -392,10 +393,19 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   /** (Internal use only) Returns the time integrator used to for all FemModels
    in this model.
    @throws std::exception if the integrator hasn't been set. */
-  const multibody::fem::internal::DiscreteTimeIntegrator<T>& integrator()
+  const multibody::fem::internal::DiscreteTimeIntegrator<T>& fem_integrator()
       const {
-    DRAKE_THROW_UNLESS(integrator_ != nullptr);
-    return *integrator_;
+    DRAKE_THROW_UNLESS(fem_integrator_ != nullptr);
+    return *fem_integrator_;
+  }
+
+  /** (Internal use only) Returns the time integrator used to for all DerModels
+   in this model.
+   @throws std::exception if the integrator hasn't been set. */
+  const multibody::der::internal::DiscreteTimeIntegrator<T>& der_integrator()
+      const {
+    DRAKE_THROW_UNLESS(der_integrator_ != nullptr);
+    return *der_integrator_;
   }
 
   /** Returns the output port index of the vertex positions port for all
@@ -529,9 +539,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       fixed_constraint_specs_;
   systems::OutputPortIndex configuration_output_port_index_;
   Parallelism parallelism_{false};
-  /* The integrator used to advance deformable body free motion states in
-   time. */
-  std::unique_ptr<fem::internal::DiscreteTimeIntegrator<T>> integrator_;
+  /* The integrator used to advance FEM free motion states in time. */
+  std::unique_ptr<fem::internal::DiscreteTimeIntegrator<T>> fem_integrator_;
+  /* The integrator used to advance DER free motion states in time. */
+  std::unique_ptr<der::internal::DiscreteTimeIntegrator<T>> der_integrator_;
 };
 
 }  // namespace multibody
