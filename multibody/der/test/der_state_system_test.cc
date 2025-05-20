@@ -53,8 +53,9 @@ class DerStateSystemTest : public ::testing::Test {
   std::unique_ptr<const DerStateSystem<T>> der_state_system_;
 };
 
-using NonsymbolicScalarTypes = ::testing::Types<double, AutoDiffXd>;
-TYPED_TEST_SUITE(DerStateSystemTest, NonsymbolicScalarTypes);
+using DefaultScalarTypes =
+    ::testing::Types<double, AutoDiffXd, symbolic::Expression>;
+TYPED_TEST_SUITE(DerStateSystemTest, DefaultScalarTypes);
 
 /* Test that copying the context results in the same q, q̇, and q̈ vectors and
  quantity calculation results. */

@@ -23,13 +23,12 @@ template <typename T>
     for (int j = 0; j < mat.block_cols(); ++j) {
       for (int i : mat.sparsity_pattern().neighbors()[j]) {  // i ≥ j
         if (i < mat.block_rows() - 1) continue;
+        const Eigen::Matrix4d block = ExtractDoubleOrThrow(mat.block(i, j));
         if (i == j) {
-          const Eigen::Matrix4<T>& block = mat.block(i, j);
           if (!block.template rightCols<1>().isZero() ||
               !block.template bottomRows<1>().isZero())
             return false;
         } else {
-          const Eigen::Matrix4<T>& block = mat.block(i, j);
           if (!block.template bottomRows<1>().isZero()) return false;
         }
       }
@@ -125,7 +124,7 @@ void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
   }
 }
 
-DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (static_cast<void (*)(Block4x4SparseSymmetricMatrix<T>*,
                           const Eigen::DiagonalMatrix<T, Eigen::Dynamic>&,
                           const T&)>(&AddScaledMatrix<T>),
@@ -138,6 +137,6 @@ DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::
         Block4x4SparseSymmetricMatrixVectorProduct);

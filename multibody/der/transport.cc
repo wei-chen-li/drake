@@ -83,7 +83,7 @@ void ComputeTimeParallelTransport(
   }
 }
 
-DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (&ComputeTransport<T>, &ComputeSpaceParallelTransport<T>,
      &ComputeTimeParallelTransport<T>));
 

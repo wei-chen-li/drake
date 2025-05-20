@@ -62,15 +62,24 @@ DerStructuralProperty<U> DerStructuralProperty<T>::ToScalarType() const {
       ExtractDoubleOrThrow(I1_), ExtractDoubleOrThrow(I2_));
 }
 
+using symbolic::Expression;
 template DerStructuralProperty<AutoDiffXd>
 DerStructuralProperty<double>::ToScalarType<AutoDiffXd>() const;
+template DerStructuralProperty<Expression>
+DerStructuralProperty<double>::ToScalarType<Expression>() const;
 template DerStructuralProperty<double>
 DerStructuralProperty<AutoDiffXd>::ToScalarType<double>() const;
+template DerStructuralProperty<Expression>
+DerStructuralProperty<AutoDiffXd>::ToScalarType<Expression>() const;
+template DerStructuralProperty<double>
+DerStructuralProperty<Expression>::ToScalarType<double>() const;
+template DerStructuralProperty<AutoDiffXd>
+DerStructuralProperty<Expression>::ToScalarType<AutoDiffXd>() const;
 
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerStructuralProperty);

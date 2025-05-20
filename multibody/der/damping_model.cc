@@ -22,15 +22,24 @@ DampingModel<U> DampingModel<T>::ToScalarType() const {
                          ExtractDoubleOrThrow(stiffness_coeff_beta_));
 }
 
+using symbolic::Expression;
 template DampingModel<AutoDiffXd>
 DampingModel<double>::ToScalarType<AutoDiffXd>() const;
-template DampingModel<double> DampingModel<AutoDiffXd>::ToScalarType<double>()
-    const;
+template DampingModel<Expression>
+DampingModel<double>::ToScalarType<Expression>() const;
+template DampingModel<double>  //
+DampingModel<AutoDiffXd>::ToScalarType<double>() const;
+template DampingModel<Expression>
+DampingModel<AutoDiffXd>::ToScalarType<Expression>() const;
+template DampingModel<double>  //
+DampingModel<Expression>::ToScalarType<double>() const;
+template DampingModel<AutoDiffXd>
+DampingModel<Expression>::ToScalarType<AutoDiffXd>() const;
 
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DampingModel);

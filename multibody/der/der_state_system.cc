@@ -5,16 +5,6 @@
 #include "drake/multibody/der/transport.h"
 
 namespace drake {
-namespace systems {
-namespace scalar_conversion {
-template <>
-struct Traits<drake::multibody::der::internal::DerStateSystem>
-    : public NonSymbolicTraits {};
-}  // namespace scalar_conversion
-}  // namespace systems
-}  // namespace drake
-
-namespace drake {
 namespace multibody {
 namespace der {
 namespace internal {
@@ -283,6 +273,9 @@ DerStateSystem<T>::DerStateSystem(const DerStateSystem<U>& other)
                      cast<T, U>(other.initial_node_positions_),
                      cast<T, U>(other.initial_edge_angles_),
                      cast<T, U>(other.initial_d1_0_)) {}
+
+template <typename T>
+DerStateSystem<T>::~DerStateSystem() = default;
 
 template <typename T>
 Eigen::VectorBlock<Eigen::VectorX<T>>
@@ -680,33 +673,10 @@ const Eigen::VectorX<T>& DerStateSystem<T>::get_discrete_state_vector(
   return context.get_discrete_state(index).value();
 }
 
-template <typename T>
-template <int num_rows>
-const Eigen::Matrix<T, num_rows, Eigen::Dynamic>&
-DerStateSystem<T>::get_cache_matrix(const Context<T>& context,
-                                    CacheIndex index) const {
-  this->ValidateContext(context);
-  return this->get_cache_entry(index)
-      .template Eval<Eigen::Matrix<T, num_rows, Eigen::Dynamic>>(context);
-}
-// Instantiate for num_rows=1 and num_rows=3.
-template const Eigen::Matrix<double, 1, Eigen::Dynamic>&
-DerStateSystem<double>::get_cache_matrix<1>(const Context<double>&,
-                                            CacheIndex) const;
-template const Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>&
-DerStateSystem<AutoDiffXd>::get_cache_matrix<1>(const Context<AutoDiffXd>&,
-                                                CacheIndex) const;
-template const Eigen::Matrix<double, 3, Eigen::Dynamic>&
-DerStateSystem<double>::get_cache_matrix<3>(const Context<double>&,
-                                            CacheIndex) const;
-template const Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>&
-DerStateSystem<AutoDiffXd>::get_cache_matrix<3>(const Context<AutoDiffXd>&,
-                                                CacheIndex) const;
-
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerStateSystem);

@@ -36,7 +36,7 @@ namespace internal {
         edge index ─ 0 ─ 1 ─────┘  │
  internal node index ─ 0 ─ 1 ──────┘
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DerState {
@@ -258,5 +258,5 @@ class DerState {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerState);

@@ -139,15 +139,24 @@ DirichletBoundaryCondition<U> DirichletBoundaryCondition<T>::ToScalarType()
   return to;
 }
 
+using symbolic::Expression;
 template DirichletBoundaryCondition<AutoDiffXd>
 DirichletBoundaryCondition<double>::ToScalarType<AutoDiffXd>() const;
+template DirichletBoundaryCondition<Expression>
+DirichletBoundaryCondition<double>::ToScalarType<Expression>() const;
 template DirichletBoundaryCondition<double>
 DirichletBoundaryCondition<AutoDiffXd>::ToScalarType<double>() const;
+template DirichletBoundaryCondition<Expression>
+DirichletBoundaryCondition<AutoDiffXd>::ToScalarType<Expression>() const;
+template DirichletBoundaryCondition<double>
+DirichletBoundaryCondition<Expression>::ToScalarType<double>() const;
+template DirichletBoundaryCondition<AutoDiffXd>
+DirichletBoundaryCondition<Expression>::ToScalarType<AutoDiffXd>() const;
 
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DirichletBoundaryCondition);

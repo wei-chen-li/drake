@@ -24,7 +24,7 @@ class Block4x4SparseSymmetricMatrixVectorProduct;
        mat.rows() == vec.size() + 1`.
  @pre If `mat.rows() == vec.size() + 1`, the last row and last column of `mat`
       should be zero.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 Block4x4SparseSymmetricMatrixVectorProduct<T> operator*(
     const Block4x4SparseSymmetricMatrix<T>& mat, const Eigen::VectorX<T>& vec) {
@@ -89,7 +89,7 @@ class Block4x4SparseSymmetricMatrixVectorProduct {
  @pre `lhs.rows() == rhs.rows() || lhs.rows() == rhs.rows() + 1`.
  @pre If `lhs.rows() == rhs.rows() + 1`, the last row and last column of `mat`
       should be zero.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
                      const Eigen::DiagonalMatrix<T, Eigen::Dynamic>& rhs,
@@ -103,7 +103,7 @@ void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
 
  @pre `lhs != nullptr`.
  @pre `lhs` should have compatible sparsity pattern with `rhs`.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
                      const Block4x4SparseSymmetricMatrix<T>& rhs,

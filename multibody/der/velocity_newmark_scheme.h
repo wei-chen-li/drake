@@ -25,7 +25,7 @@ namespace internal {
 
  [Newmark, 1959] Newmark, Nathan M. "A method of computation for structural
  dynamics." Journal of the engineering mechanics division 85.3 (1959): 67-94.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 class VelocityNewmarkScheme final : public DiscreteTimeIntegrator<T> {
  public:
@@ -64,5 +64,5 @@ class VelocityNewmarkScheme final : public DiscreteTimeIntegrator<T> {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::VelocityNewmarkScheme);

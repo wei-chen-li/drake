@@ -23,7 +23,7 @@ class ExternalForceVector;
  limited scope and then discard it. Constructing and populating an
  ExternalForceField is usually cheap.
 
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 class ExternalForceField {
  public:
@@ -98,7 +98,7 @@ class ExternalForceVector {
 };
 
 /* Computes the generalized mass matrix.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
     const DerStructuralProperty<T>& prop,
@@ -109,5 +109,5 @@ Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::ExternalForceField);

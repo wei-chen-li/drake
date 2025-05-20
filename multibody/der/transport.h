@@ -22,7 +22,7 @@ namespace internal {
  @pre `‖d1_0‖ ≈ 1`.
  @pre `‖t_1‖ ≈ 1`.
  @pre `t_0.dot(d1_0) ≈ 0`.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
                       const Eigen::Ref<const Eigen::Vector3<T>>& d1_0,
@@ -40,7 +40,7 @@ void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
  @pre `d1 != nullptr`.
  @pre `t.cols() == d1->cols()`.
  @pre `!d1_0 || d1_0.dot(t.col(0)) ≈ 0`.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 void ComputeSpaceParallelTransport(
     const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
@@ -57,7 +57,7 @@ void ComputeSpaceParallelTransport(
 
  @pre `d1_next != nullptr`.
  @pre Number of columns of `t`, `d1`, `t_next`, `d1_next` are the same.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 void ComputeTimeParallelTransport(
     const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,

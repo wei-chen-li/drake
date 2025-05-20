@@ -373,8 +373,8 @@ DerModel<T>::ComputeTangentMatrix(const internal::DerState<T>& state,
   if (tangent_matrix.rows() == num_dofs() + 1) {
     const int i = tangent_matrix.block_rows() - 1;
     Eigen::Matrix4<T> block = tangent_matrix.block(i, i);
-    DRAKE_ASSERT(block.template rightCols<1>().isZero());
-    DRAKE_ASSERT(block.template bottomRows<1>().isZero());
+    DRAKE_ASSERT(ExtractDoubleOrThrow(block).template rightCols<1>().isZero());
+    DRAKE_ASSERT(ExtractDoubleOrThrow(block).template bottomRows<1>().isZero());
     block(3, 3) = 1.0;
     tangent_matrix.SetBlock(i, i, block);
   }
@@ -411,10 +411,19 @@ std::unique_ptr<DerModel<U>> DerModel<T>::ToScalarType() const {
                       boundary_condition_.template ToScalarType<U>()));
 }
 
+using symbolic::Expression;
 template std::unique_ptr<DerModel<AutoDiffXd>>
 DerModel<double>::ToScalarType<AutoDiffXd>() const;
+template std::unique_ptr<DerModel<Expression>>
+DerModel<double>::ToScalarType<Expression>() const;
 template std::unique_ptr<DerModel<double>>
 DerModel<AutoDiffXd>::ToScalarType<double>() const;
+template std::unique_ptr<DerModel<Expression>>
+DerModel<AutoDiffXd>::ToScalarType<Expression>() const;
+template std::unique_ptr<DerModel<double>>
+DerModel<Expression>::ToScalarType<double>() const;
+template std::unique_ptr<DerModel<AutoDiffXd>>
+DerModel<Expression>::ToScalarType<AutoDiffXd>() const;
 
 template <typename T>
 void DerModel<T>::ValidateDerState(const internal::DerState<T>& state) const {
@@ -436,5 +445,5 @@ void DerModel<T>::ValidateScratch(
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::DerModel);
