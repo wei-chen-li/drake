@@ -20,6 +20,13 @@ template <typename T>
 VelocityNewmarkScheme<T>::~VelocityNewmarkScheme() = default;
 
 template <typename T>
+std::unique_ptr<DiscreteTimeIntegrator<T>> VelocityNewmarkScheme<T>::DoClone()
+    const {
+  return std::make_unique<VelocityNewmarkScheme<T>>(this->dt(), gamma_,
+                                                    beta_over_gamma_ * gamma_);
+}
+
+template <typename T>
 std::array<T, 3> VelocityNewmarkScheme<T>::DoGetWeights() const {
   const double dt = this->dt();
   return {beta_over_gamma_ * dt, 1.0, one_over_dt_gamma_};

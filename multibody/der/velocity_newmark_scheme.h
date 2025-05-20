@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
 #include "drake/multibody/der/discrete_time_integrator.h"
 
@@ -40,6 +41,8 @@ class VelocityNewmarkScheme final : public DiscreteTimeIntegrator<T> {
   ~VelocityNewmarkScheme() override;
 
  private:
+  std::unique_ptr<DiscreteTimeIntegrator<T>> DoClone() const final;
+
   std::array<T, 3> DoGetWeights() const final;
 
   const Eigen::VectorX<T>& DoGetUnknowns(const DerState<T>& state) const final {
