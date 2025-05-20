@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
 #include "drake/multibody/der/der_state.h"
 
@@ -49,6 +50,9 @@ class DiscreteTimeIntegrator {
 
   virtual ~DiscreteTimeIntegrator() = default;
 
+  /* Returns an identical copy of `this` DiscreteTimeIntegrator. */
+  std::unique_ptr<DiscreteTimeIntegrator<T>> Clone() const { return DoClone(); }
+
   /* Returns (αₚ, αᵥ, αₐ), the derivative of (q, v, a) with respect to the
    unknown variable z (See class documentation). These weights can be used to
    combine stiffness, damping, and mass matrices to form the tangent
@@ -89,6 +93,10 @@ class DiscreteTimeIntegrator {
 
  protected:
   explicit DiscreteTimeIntegrator(double dt);
+
+  /* Derived classes must override this method to implement the NVI
+   DoClone(). */
+  virtual std::unique_ptr<DiscreteTimeIntegrator<T>> DoClone() const = 0;
 
   /* Derived classes must override this method to implement the NVI
    GetWeights(). */

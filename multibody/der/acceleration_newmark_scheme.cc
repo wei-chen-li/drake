@@ -17,6 +17,13 @@ template <typename T>
 AccelerationNewmarkScheme<T>::~AccelerationNewmarkScheme() = default;
 
 template <typename T>
+std::unique_ptr<DiscreteTimeIntegrator<T>>
+AccelerationNewmarkScheme<T>::DoClone() const {
+  return std::make_unique<AccelerationNewmarkScheme<T>>(this->dt(), gamma_,
+                                                        beta_);
+}
+
+template <typename T>
 std::array<T, 3> AccelerationNewmarkScheme<T>::DoGetWeights() const {
   const double dt = this->dt();
   return {beta_ * dt * dt, gamma_ * dt, 1.0};

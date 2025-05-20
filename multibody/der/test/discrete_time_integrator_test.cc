@@ -22,6 +22,10 @@ class DummyScheme final : public DiscreteTimeIntegrator<double> {
   ~DummyScheme() = default;
 
  private:
+  std::unique_ptr<DiscreteTimeIntegrator<double>> DoClone() const final {
+    return std::make_unique<DummyScheme>(this->dt());
+  }
+
   std::array<double, 3> DoGetWeights() const final { return {1, 2, 3}; }
 
   // Dummy implementation to return the position.
