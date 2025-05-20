@@ -75,9 +75,14 @@ class DerSolver {
   /* Friend class to facilitate testing. */
   friend class DerSolverTester;
 
-  /* The solver is considered as converged if ‖r‖ < max(εᵣ * ‖r₀‖, εₐ) where r
-    and r₀ are `residual_norm` and `initial_residual_norm` respectively, and εᵣ
-    and εₐ are relative and absolute tolerance respectively. */
+  /* Scales the edge angle DoFs of `residual`, which has unit N⋅m, by the
+   inverse of a characteric radius so that all entries have unit N. Then returns
+   the 2-norm of the unit adjusted vector. */
+  T unit_adjusted_norm(const Eigen::Ref<const Eigen::VectorX<T>>& residual);
+
+  /* The solver is considered as converged if ‖r‖ < max(εᵣ * ‖r₀‖, εₐ) where
+    r and r₀ are `residual_norm` and `initial_residual_norm` respectively,
+    and εᵣ and εₐ are relative and absolute tolerance respectively. */
   bool solver_converged(const T& residual_norm,
                         const T& initial_residual_norm) const;
 

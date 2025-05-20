@@ -41,10 +41,9 @@ int DerSolver<T>::AdvanceOneTimeStep(
   const Eigen::VectorX<T>& z = integrator_->GetUnknowns(prev_state);
   integrator_->AdvanceOneTimeStep(prev_state, z, &state);
   model_->ApplyBoundaryCondition(&state);
-  b.head(num_dofs) = -model_->ComputeResidual(state, external_force_field,  //
-                                              der_model_scratch);
-  // TODO(wei-chen): For the edge angle DoF, normalize its residual unit to N.
-  T residual_norm = b.norm();
+  b.head(num_dofs) =
+      -model_->ComputeResidual(state, external_force_field, der_model_scratch);
+  T residual_norm = unit_adjusted_norm(b);
   const T initial_residual_norm = residual_norm;
   int iter = 0;
   /* For Newton-Raphson solver, we iterate until any of the following is true:
@@ -73,7 +72,7 @@ int DerSolver<T>::AdvanceOneTimeStep(
     integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
     b.head(num_dofs) = -model_->ComputeResidual(state, external_force_field,
                                                 der_model_scratch);
-    residual_norm = b.norm();
+    residual_norm = unit_adjusted_norm(b);
     ++iter;
   }
   if (!solver_converged(residual_norm, initial_residual_norm)) {
@@ -82,6 +81,19 @@ int DerSolver<T>::AdvanceOneTimeStep(
         "smaller timestep or reduce the stiffness of the material.");
   }
   return iter;
+}
+
+template <typename T>
+T DerSolver<T>::unit_adjusted_norm(
+    const Eigen::Ref<const Eigen::VectorX<T>>& residual) {
+  const DerStructuralProperty<T>& prop = model_->structural_property();
+  const T r_squared_inv = prop.rhoA() / prop.rhoJ();
+  T squared_sum = 0;
+  for (int i = 0; i < residual.size(); ++i) {
+    squared_sum +=
+        residual[i] * residual[i] * (i % 4 == 3 ? r_squared_inv : 1.0);
+  }
+  return sqrt(squared_sum);
 }
 
 template <typename T>
