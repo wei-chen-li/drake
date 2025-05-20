@@ -41,7 +41,7 @@ namespace internal {
 
  DiscreteTimeIntegrator provides the interface to query the relationship between
  the states (q, v = q̇, a = q̈) and the unknown variable z.
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 class DiscreteTimeIntegrator {
  public:
@@ -120,5 +120,5 @@ class DiscreteTimeIntegrator {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DiscreteTimeIntegrator);

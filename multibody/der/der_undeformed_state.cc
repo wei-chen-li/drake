@@ -101,15 +101,24 @@ DerUndeformedState<U> DerUndeformedState<T>::ToScalarType() const {
       ExtractDoubleOrThrow(kappa2_), ExtractDoubleOrThrow(twist_));
 }
 
+using symbolic::Expression;
 template DerUndeformedState<AutoDiffXd>
 DerUndeformedState<double>::ToScalarType<AutoDiffXd>() const;
+template DerUndeformedState<Expression>
+DerUndeformedState<double>::ToScalarType<Expression>() const;
 template DerUndeformedState<double>
 DerUndeformedState<AutoDiffXd>::ToScalarType<double>() const;
+template DerUndeformedState<Expression>
+DerUndeformedState<AutoDiffXd>::ToScalarType<Expression>() const;
+template DerUndeformedState<double>
+DerUndeformedState<Expression>::ToScalarType<double>() const;
+template DerUndeformedState<AutoDiffXd>
+DerUndeformedState<Expression>::ToScalarType<AutoDiffXd>() const;
 
 }  // namespace internal
 }  // namespace der
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerUndeformedState);

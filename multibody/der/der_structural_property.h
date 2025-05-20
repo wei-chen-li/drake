@@ -12,7 +12,7 @@ namespace internal {
  @p DerStructuralProperty holds properties regarding the Young's modulus, shear
  modulus, mass density, and cross section of a discrete elastic rod.
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DerStructuralProperty {
@@ -101,5 +101,5 @@ class DerStructuralProperty {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerStructuralProperty);

@@ -195,6 +195,8 @@ template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<double>,
                                                            false>;
 template class BlockSparseLowerTriangularOrSymmetricMatrix<Matrix4<AutoDiffXd>,
                                                            true>;
+template class BlockSparseLowerTriangularOrSymmetricMatrix<
+    Matrix4<symbolic::Expression>, true>;
 
 }  // namespace internal
 }  // namespace contact_solvers

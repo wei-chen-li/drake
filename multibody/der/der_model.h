@@ -61,7 +61,7 @@ namespace der {
  It also provides a method to compute a weighted sum of the matrices ∂R/∂q,
  ∂R/∂q̇, and ∂R/∂q̈.
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DerModel {
@@ -328,5 +328,5 @@ class DerModel {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::DerModel);

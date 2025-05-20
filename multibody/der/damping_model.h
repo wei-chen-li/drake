@@ -23,7 +23,7 @@ namespace internal {
  ωₙ, and then choose numerical values for ζ (e.g 0 ≤ ζ < 0.05). Thereafter
  calculate the associated numerical values of α and β.
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DampingModel {
@@ -52,5 +52,5 @@ class DampingModel {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DampingModel);

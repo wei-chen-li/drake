@@ -30,7 +30,7 @@ struct PrevStep {
  compute the tangent vectors from q), and utilizes the cache mechanism of
  %System to cache the computation results.
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DerStateSystem final : public systems::LeafSystem<T> {
@@ -50,8 +50,7 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   template <typename U>
   explicit DerStateSystem(const DerStateSystem<U>& other);
 
-  // TODO(wei-chen): Move this destructor definition to cc file.
-  ~DerStateSystem() override = default;
+  ~DerStateSystem() override;
 
   bool has_closed_ends() const { return has_closed_ends_; }
   int num_nodes() const { return ssize(initial_node_positions_); }
@@ -286,7 +285,11 @@ class DerStateSystem final : public systems::LeafSystem<T> {
 
   template <int num_rows>
   const Eigen::Matrix<T, num_rows, Eigen::Dynamic>& get_cache_matrix(
-      const Context<T>& context, CacheIndex index) const;
+      const Context<T>& context, CacheIndex index) const {
+    this->ValidateContext(context);
+    return this->get_cache_entry(index)
+        .template Eval<Eigen::Matrix<T, num_rows, Eigen::Dynamic>>(context);
+  }
 
   void increment_serial_number(Context<T>* context) const;
 
@@ -320,5 +323,5 @@ class DerStateSystem final : public systems::LeafSystem<T> {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerStateSystem);

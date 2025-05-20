@@ -16,7 +16,7 @@ namespace internal {
  curvature and zero twist); or the undeformed state of a rubber band in a
  circular shape (constant curvature and zero twist).
 
- @tparam_nonsymbolic_scalar
+ @tparam_default_scalar
  */
 template <typename T>
 class DerUndeformedState {
@@ -97,5 +97,5 @@ class DerUndeformedState {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DerUndeformedState);

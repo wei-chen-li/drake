@@ -59,5 +59,5 @@ void AccelerationNewmarkScheme<T>::DoAdjustStateFromChangeInUnknowns(
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::AccelerationNewmarkScheme);

@@ -835,7 +835,7 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
   }
 }
 
-DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (&ComputeElasticEnergy<T>, &ComputeElasticEnergyJacobian<T>,
      &ComputeElasticEnergyHessian<T>, &MakeEnergyHessianMatrix<T>));
 

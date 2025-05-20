@@ -43,7 +43,7 @@ struct EdgeState {
  the node is subject to BCs. For example, we don't allow specifying BCs for
  just the x-components of the states while leaving the y and z components free.
 
- @tparam_nonsymbolic_scalar */
+ @tparam_default_scalar */
 template <typename T>
 class DirichletBoundaryCondition {
  public:
@@ -112,5 +112,5 @@ class DirichletBoundaryCondition {
 }  // namespace multibody
 }  // namespace drake
 
-DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::DirichletBoundaryCondition);
