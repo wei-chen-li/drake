@@ -10,33 +10,36 @@ namespace multibody {
 namespace der {
 namespace internal {
 
+using Eigen::Matrix3;
+using Eigen::Vector3;
+
 namespace {
 
 template <typename T>
-auto outer(const Eigen::Ref<const Eigen::Vector3<T>>& vec1,
-           const Eigen::Ref<const Eigen::Vector3<T>>& vec2) {
+auto outer(const Eigen::Ref<const Vector3<T>>& vec1,
+           const Eigen::Ref<const Vector3<T>>& vec2) {
   return vec1 * vec2.transpose();
 }
 
 template <typename T>
-auto symm(const Eigen::Ref<const Eigen::Matrix3<T>>& mat) {
+auto symm(const Eigen::Ref<const Matrix3<T>>& mat) {
   return 0.5 * (mat + mat.transpose());
 }
 
 template <typename T>
-auto skew(const Eigen::Ref<const Eigen::Vector3<T>>& vec) {
+auto skew(const Eigen::Ref<const Vector3<T>>& vec) {
   return math::VectorToSkewSymmetric(vec);
 }
 
 template <typename T>
 auto eye() {
-  return Eigen::Matrix3<T>::Identity();
+  return Matrix3<T>::Identity();
 }
 
 /* Add mat = ∂²E/∂(xᵢ)(xⱼ) to the hessian.  */
 template <typename T>
 void AddTo(Block4x4SparseSymmetricMatrix<T>* hessian, DerNodeIndex i,
-           DerNodeIndex j, const Eigen::Ref<const Eigen::Matrix3<T>>& mat) {
+           DerNodeIndex j, const Eigen::Ref<const Matrix3<T>>& mat) {
   Eigen::Matrix4<T> filler = Eigen::Matrix4<T>::Zero();
   filler.template topLeftCorner<3, 3>() = mat;
   if (int{i} >= int{j})
@@ -48,7 +51,7 @@ void AddTo(Block4x4SparseSymmetricMatrix<T>* hessian, DerNodeIndex i,
 /* Add vec = ∂²E/∂(xᵢ)(γʲ) to the hessian.  */
 template <typename T>
 void AddTo(Block4x4SparseSymmetricMatrix<T>* hessian, DerNodeIndex i,
-           DerEdgeIndex j, const Eigen::Ref<const Eigen::Vector3<T>>& vec) {
+           DerEdgeIndex j, const Eigen::Ref<const Vector3<T>>& vec) {
   Eigen::Matrix4<T> filler = Eigen::Matrix4<T>::Zero();
   filler.template topRightCorner<3, 1>() = vec;
   if (int{i} == int{j}) {
@@ -195,9 +198,8 @@ T ComputeStretchingEnergy(const DerStructuralProperty<T>& prop,
   ASSERT_NUM_COLS(l_bar, l, state.num_edges());
 
   T energy = 0;  // Eₛ
-  T strain;
   for (int i = 0; i < state.num_edges(); ++i) {
-    strain = l[i] / l_bar[i] - 1.0;
+    T strain = l[i] / l_bar[i] - 1.0;
     energy += 0.5 * prop.EA() * strain * strain * l_bar[i];
   }
   return energy;
@@ -216,9 +218,9 @@ void AddStretchingEnergyJacobian(const DerStructuralProperty<T>& prop,
   auto& tangent = state.get_tangent();
   ASSERT_NUM_COLS(l_bar, l, tangent, state.num_edges());
 
-  Eigen::Vector3<T> grad_E_ei;  // ∂Eₛ/∂eⁱ
   for (int i = 0; i < state.num_edges(); ++i) {
-    grad_E_ei = (l[i] / l_bar[i] - 1) * tangent.col(i) * prop.EA();
+    // ∂Eₛ/∂eⁱ
+    Vector3<T> grad_E_ei = (l[i] / l_bar[i] - 1.0) * tangent.col(i) * prop.EA();
 
     const int node_i = 4 * i;
     const int node_ip1 = 4 * ((i + 1) % state.num_nodes());
@@ -239,11 +241,12 @@ void AddStretchingEnergyHessian(const DerStructuralProperty<T>& prop,
   auto& tangent = state.get_tangent();
   ASSERT_NUM_COLS(l_bar, l, tangent, state.num_edges());
 
-  Eigen::Matrix3<T> grad2_E_ei_ei;  // ∂²Eₛ/∂(eⁱ)²
   for (int i = 0; i < state.num_edges(); ++i) {
-    grad2_E_ei_ei = ((1 / l_bar[i] - 1 / l[i]) * Eigen::Matrix3d::Identity() +
-                     1 / l[i] * outer<T>(tangent.col(i), tangent.col(i))) *
-                    prop.EA();
+    // ∂²Eₛ/∂(eⁱ)²
+    Matrix3<T> grad2_E_ei_ei =
+        ((1 / l_bar[i] - 1 / l[i]) * eye<T>() +
+         1 / l[i] * outer<T>(tangent.col(i), tangent.col(i))) *
+        prop.EA();
 
     const DerNodeIndex node_i(i);
     const DerNodeIndex node_ip1((i + 1) % state.num_nodes());
@@ -263,9 +266,8 @@ T ComputeTwistingEnergy(const DerStructuralProperty<T>& prop,
   ASSERT_NUM_COLS(V_bar, twist_bar, twist, state.num_internal_nodes());
 
   T energy = 0;  // Eₜ
-  T delta;
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
-    delta = twist[i] - twist_bar[i];
+    T delta = twist[i] - twist_bar[i];
     energy += 0.5 * prop.GJ() * delta * delta / V_bar[i];
   }
   return energy;
@@ -289,26 +291,26 @@ void AddTwistingEnergyJacobian(const DerStructuralProperty<T>& prop,
   auto& l = state.get_edge_length();
   ASSERT_NUM_COLS(l, state.num_edges());
 
-  T grad_E_twisti;                     // ∂Eₜ/∂τᵢ
-  Eigen::Vector3<T> grad_twisti_ei;    // ∂τᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_twisti_eip1;  // ∂τᵢ/∂eⁱ⁺¹
-  Eigen::Vector3<T> grad_E_ei;         // ∂Eₜ/∂eⁱ
-  Eigen::Vector3<T> grad_E_eip1;       // ∂Eₜ/∂eⁱ⁺¹
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % state.num_edges();
 
-    grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
+    // ∂Eₜ/∂τᵢ
+    T grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
 
     const int edge_i = 4 * i + 3;
     const int edge_ip1 = 4 * ip1 + 3;
     jacobian->coeffRef(edge_i) -= grad_E_twisti;
     jacobian->coeffRef(edge_ip1) += grad_E_twisti;
 
-    grad_twisti_ei = 0.5 / l[i] * curvature.col(i);
-    grad_twisti_eip1 = 0.5 / l[ip1] * curvature.col(i);
+    // ∂τᵢ/∂eⁱ
+    Vector3<T> grad_twisti_ei = 0.5 / l[i] * curvature.col(i);
+    // ∂τᵢ/∂eⁱ
+    Vector3<T> grad_twisti_eip1 = 0.5 / l[ip1] * curvature.col(i);
 
-    grad_E_ei = grad_E_twisti * grad_twisti_ei;
-    grad_E_eip1 = grad_E_twisti * grad_twisti_eip1;
+    // ∂Eₜ/∂eⁱ
+    Vector3<T> grad_E_ei = grad_E_twisti * grad_twisti_ei;
+    // ∂Eₜ/∂eⁱ⁺¹
+    Vector3<T> grad_E_eip1 = grad_E_twisti * grad_twisti_eip1;
 
     const int node_i = 4 * i;
     const int node_ip1 = 4 * ((i + 1) % state.num_nodes());
@@ -338,26 +340,13 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
   auto& t = state.get_tangent();
   ASSERT_NUM_COLS(l, t, state.num_edges());
 
-  T grad_E_twisti;                           // ∂Eₜ/∂τᵢ
-  T grad2_E_twisti_twisti;                   // ∂²Eₜ/∂(τᵢ)²
-  Eigen::Vector3<T> grad_twisti_ei;          // ∂τᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_twisti_eip1;        // ∂τᵢ/∂eⁱ⁺¹
-  Eigen::Vector3<T> tilde_t;                 // t̃
-  Eigen::Matrix3<T> grad2_twisti_ei_ei;      // ∂²τᵢ/∂(eⁱ)²
-  Eigen::Matrix3<T> grad2_twisti_eip1_eip1;  // ∂²τᵢ/∂(eⁱ⁺¹)²
-  Eigen::Matrix3<T> grad2_twisti_ei_eip1;    // ∂²τᵢ/∂(eⁱ)(eⁱ⁺¹)
-  Eigen::Matrix3<T> grad2_E_ei_ei;           // ∂²Eₜ/∂(eⁱ)²
-  Eigen::Matrix3<T> grad2_E_eip1_eip1;       // ∂²Eₜ/∂(eⁱ⁺¹)²
-  Eigen::Matrix3<T> grad2_E_ei_eip1;         // ∂²Eₜ/∂(eⁱ)(eⁱ⁺¹)
-  Eigen::Vector3<T> grad2_E_ei_gammai;       // ∂²Eₜ/∂(eⁱ)(γⁱ)
-  Eigen::Vector3<T> grad2_E_ei_gammaip1;     // ∂²Eₜ/∂(eⁱ)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_E_eip1_gammai;     // ∂²Eₜ/∂(eⁱ⁺¹)(γⁱ)
-  Eigen::Vector3<T> grad2_E_eip1_gammaip1;   // ∂²Eₜ/∂(eⁱ⁺¹)(γⁱ⁺¹)
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % state.num_edges();
 
-    grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
-    grad2_E_twisti_twisti = prop.GJ() / V_bar[i];
+    // ∂Eₜ/∂τᵢ
+    T grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
+    // ∂²Eₜ/∂(τᵢ)²
+    T grad2_E_twisti_twisti = prop.GJ() / V_bar[i];
 
     const DerEdgeIndex edge_i(i);
     const DerEdgeIndex edge_ip1((i + 1) % state.num_edges());
@@ -365,29 +354,39 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
     AddTo<T>(hessian, edge_ip1, edge_ip1, grad2_E_twisti_twisti);
     AddTo<T>(hessian, edge_i, edge_ip1, -grad2_E_twisti_twisti);
 
-    grad_twisti_ei = 0.5 / l[i] * curvature.col(i);
-    grad_twisti_eip1 = 0.5 / l[ip1] * curvature.col(i);
+    // ∂τᵢ/∂eⁱ
+    Vector3<T> grad_twisti_ei = 0.5 / l[i] * curvature.col(i);
+    // ∂τᵢ/∂eⁱ⁺¹
+    Vector3<T> grad_twisti_eip1 = 0.5 / l[ip1] * curvature.col(i);
 
-    tilde_t = (t.col(i) + t.col(ip1)) / (1 + t.col(ip1).dot(t.col(i)));
+    // t̃
+    Vector3<T> tilde_t =
+        (t.col(i) + t.col(ip1)) / (1 + t.col(ip1).dot(t.col(i)));
 
-    grad2_twisti_ei_ei =
+    // ∂²τᵢ/∂(eⁱ)²
+    Matrix3<T> grad2_twisti_ei_ei =
         -0.5 / (l[i] * l[i]) *
         symm<T>(outer<T>(curvature.col(i), t.col(i) + tilde_t));
-    grad2_twisti_eip1_eip1 =
+    // ∂²τᵢ/∂(eⁱ⁺¹)²
+    Matrix3<T> grad2_twisti_eip1_eip1 =
         -0.5 / (l[ip1] * l[ip1]) *
         symm<T>(outer<T>(curvature.col(i), t.col(ip1) + tilde_t));
-    grad2_twisti_ei_eip1 =
+    // ∂²τᵢ/∂(eⁱ)(eⁱ⁺¹)
+    Matrix3<T> grad2_twisti_ei_eip1 =
         (skew<T>(t.col(i)) -
          outer<T>(curvature.col(i), 0.5 * (t.col(i) + t.col(ip1)))) /
         (l[i] * l[ip1] * (1 + t.col(ip1).dot(t.col(i))));
 
-    grad2_E_ei_ei =
+    // ∂²Eₜ/∂(eⁱ)²
+    Matrix3<T> grad2_E_ei_ei =
         grad2_E_twisti_twisti * outer<T>(grad_twisti_ei, grad_twisti_ei) +
         grad_E_twisti * grad2_twisti_ei_ei;
-    grad2_E_eip1_eip1 =
+    // ∂²Eₜ/∂(eⁱ⁺¹)²
+    Matrix3<T> grad2_E_eip1_eip1 =
         grad2_E_twisti_twisti * outer<T>(grad_twisti_eip1, grad_twisti_eip1) +
         grad_E_twisti * grad2_twisti_eip1_eip1;
-    grad2_E_ei_eip1 =
+    // ∂²Eₜ/∂(eⁱ)(eⁱ⁺¹)
+    Matrix3<T> grad2_E_ei_eip1 =
         grad2_E_twisti_twisti * outer<T>(grad_twisti_ei, grad_twisti_eip1) +
         grad_E_twisti * grad2_twisti_ei_eip1;
 
@@ -408,10 +407,14 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
     AddTo<T>(hessian, node_ip1, node_ip1,
              -grad2_E_ei_eip1 - grad2_E_ei_eip1.transpose());
 
-    grad2_E_ei_gammai = -grad2_E_twisti_twisti * grad_twisti_ei;
-    grad2_E_ei_gammaip1 = grad2_E_twisti_twisti * grad_twisti_ei;
-    grad2_E_eip1_gammai = -grad2_E_twisti_twisti * grad_twisti_eip1;
-    grad2_E_eip1_gammaip1 = grad2_E_twisti_twisti * grad_twisti_eip1;
+    // ∂²Eₜ/∂(eⁱ)(γⁱ)
+    Vector3<T> grad2_E_ei_gammai = -grad2_E_twisti_twisti * grad_twisti_ei;
+    // ∂²Eₜ/∂(eⁱ)(γⁱ⁺¹)
+    Vector3<T> grad2_E_ei_gammaip1 = grad2_E_twisti_twisti * grad_twisti_ei;
+    // ∂²Eₜ/∂(eⁱ⁺¹)(γⁱ)
+    Vector3<T> grad2_E_eip1_gammai = -grad2_E_twisti_twisti * grad_twisti_eip1;
+    // ∂²Eₜ/∂(eⁱ⁺¹)(γⁱ⁺¹)
+    Vector3<T> grad2_E_eip1_gammaip1 = grad2_E_twisti_twisti * grad_twisti_eip1;
 
     AddTo<T>(hessian, node_i, edge_i, -grad2_E_ei_gammai);
     AddTo<T>(hessian, node_ip1, edge_i, grad2_E_ei_gammai);
@@ -440,9 +443,8 @@ T ComputeBendingEnergy(const DerStructuralProperty<T>& prop,
                   state.num_internal_nodes());
 
   T energy = 0;  // Eₙ
-  T delta;
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
-    delta = kappa1[i] - kappa1_bar[i];
+    T delta = kappa1[i] - kappa1_bar[i];
     energy += 0.5 * prop.EI1() * delta * delta / V_bar[i];
     delta = kappa2[i] - kappa2_bar[i];
     energy += 0.5 * prop.EI2() * delta * delta / V_bar[i];
@@ -473,47 +475,41 @@ void AddBendingEnergyJacobian(const DerStructuralProperty<T>& prop,
   auto& m2 = state.get_material_frame_m2();
   ASSERT_NUM_COLS(l, t, m1, m2, state.num_edges());
 
-  T grad_E_kappa1i;                     // ∂Eₙ/∂κ₁ᵢ
-  T grad_E_kappa2i;                     // ∂Eₙ/∂κ₂ᵢ
-  T chi_inv;                            // 1/χ
-  Eigen::Vector3<T> tilde_t;            // t̃
-  Eigen::Vector3<T> tilde_m1;           // m̃₁
-  Eigen::Vector3<T> tilde_m2;           // m̃₂
-  Eigen::Vector3<T> grad_kappa1i_ei;    // ∂κ₁ᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_kappa2i_ei;    // ∂κ₂ᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_kappa1i_eip1;  // ∂κ₁ᵢ/∂eⁱ⁺¹
-  Eigen::Vector3<T> grad_kappa2i_eip1;  // ∂κ₂ᵢ/∂eⁱ⁺¹
-  Eigen::Vector3<T> grad_E_ei;          // ∂Eₙ/∂eⁱ
-  Eigen::Vector3<T> grad_E_eip1;        // ∂Eₙ/∂eⁱ⁺¹
-  T grad_kappa1i_gammai;                // ∂κ₁ᵢ/∂γⁱ
-  T grad_kappa2i_gammai;                // ∂κ₂ᵢ/∂γⁱ
-  T grad_kappa1i_gammaip1;              // ∂κ₁ᵢ/∂γⁱ⁺¹
-  T grad_kappa2i_gammaip1;              // ∂κ₂ᵢ/∂γⁱ⁺¹
-  T grad_E_gammai;                      // ∂Eₙ/∂γⁱ
-  T grad_E_gammaip1;                    // ∂Eₙ/∂γⁱ⁺¹
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % state.num_edges();
 
-    grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
-    grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
+    // ∂Eₙ/∂κ₁ᵢ
+    T grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
+    // ∂Eₙ/∂κ₂ᵢ
+    T grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
 
-    chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
-    tilde_t = (t.col(i) + t.col(ip1)) * chi_inv;
-    tilde_m1 = (m1.col(i) + m1.col(ip1)) * chi_inv;
-    tilde_m2 = (m2.col(i) + m2.col(ip1)) * chi_inv;
+    // 1/χ
+    T chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
+    // t̃
+    Vector3<T> tilde_t = (t.col(i) + t.col(ip1)) * chi_inv;
+    // m̃₁
+    Vector3<T> tilde_m1 = (m1.col(i) + m1.col(ip1)) * chi_inv;
+    // m̃₂
+    Vector3<T> tilde_m2 = (m2.col(i) + m2.col(ip1)) * chi_inv;
 
-    grad_kappa1i_ei =
+    // ∂κ₁ᵢ/∂eⁱ
+    Vector3<T> grad_kappa1i_ei =
         (-kappa1[i] * tilde_t + t.col(ip1).cross(tilde_m2)) / l[i];
-    grad_kappa2i_ei =
+    // ∂κ₂ᵢ/∂eⁱ
+    Vector3<T> grad_kappa2i_ei =
         (-kappa2[i] * tilde_t - t.col(ip1).cross(tilde_m1)) / l[i];
-    grad_kappa1i_eip1 =
+    // ∂κ₁ᵢ/∂eⁱ⁺¹
+    Vector3<T> grad_kappa1i_eip1 =
         (-kappa1[i] * tilde_t - t.col(i).cross(tilde_m2)) / l[ip1];
-    grad_kappa2i_eip1 =
+    // ∂κ₂ᵢ/∂eⁱ⁺¹
+    Vector3<T> grad_kappa2i_eip1 =
         (-kappa2[i] * tilde_t + t.col(i).cross(tilde_m1)) / l[ip1];
 
-    grad_E_ei =
+    // ∂Eₙ/∂eⁱ
+    Vector3<T> grad_E_ei =
         grad_E_kappa1i * grad_kappa1i_ei + grad_E_kappa2i * grad_kappa2i_ei;
-    grad_E_eip1 =
+    // ∂Eₙ/∂eⁱ⁺¹
+    Vector3<T> grad_E_eip1 =
         grad_E_kappa1i * grad_kappa1i_eip1 + grad_E_kappa2i * grad_kappa2i_eip1;
 
     const int node_i = 4 * i;
@@ -524,15 +520,21 @@ void AddBendingEnergyJacobian(const DerStructuralProperty<T>& prop,
     jacobian->template segment<3>(node_ip1) -= grad_E_eip1;
     jacobian->template segment<3>(node_ip2) += grad_E_eip1;
 
-    grad_kappa1i_gammai = -0.5 * m1.col(i).dot(curvature.col(i));
-    grad_kappa2i_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
-    grad_kappa1i_gammaip1 = -0.5 * m1.col(ip1).dot(curvature.col(i));
-    grad_kappa2i_gammaip1 = -0.5 * m2.col(ip1).dot(curvature.col(i));
+    // ∂κ₁ᵢ/∂γⁱ
+    T grad_kappa1i_gammai = -0.5 * m1.col(i).dot(curvature.col(i));
+    // ∂κ₂ᵢ/∂γⁱ
+    T grad_kappa2i_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
+    // ∂κ₁ᵢ/∂γⁱ⁺¹
+    T grad_kappa1i_gammaip1 = -0.5 * m1.col(ip1).dot(curvature.col(i));
+    // ∂κ₂ᵢ/∂γⁱ⁺¹
+    T grad_kappa2i_gammaip1 = -0.5 * m2.col(ip1).dot(curvature.col(i));
 
-    grad_E_gammai = grad_E_kappa1i * grad_kappa1i_gammai +
-                    grad_E_kappa2i * grad_kappa2i_gammai;
-    grad_E_gammaip1 = grad_E_kappa1i * grad_kappa1i_gammaip1 +
-                      grad_E_kappa2i * grad_kappa2i_gammaip1;
+    // ∂Eₙ/∂γⁱ
+    T grad_E_gammai = grad_E_kappa1i * grad_kappa1i_gammai +
+                      grad_E_kappa2i * grad_kappa2i_gammai;
+    // ∂Eₙ/∂γⁱ⁺¹
+    T grad_E_gammaip1 = grad_E_kappa1i * grad_kappa1i_gammaip1 +
+                        grad_E_kappa2i * grad_kappa2i_gammaip1;
 
     const int edge_i = 4 * i + 3;
     const int edge_ip1 = 4 * ((i + 1) % state.num_edges()) + 3;
@@ -563,100 +565,70 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
   auto& m2 = state.get_material_frame_m2();
   ASSERT_NUM_COLS(l, t, m1, m2, state.num_edges());
 
-  T grad_E_kappa1i;                               // ∂Eₙ/∂κ₁ᵢ
-  T grad_E_kappa2i;                               // ∂Eₙ/∂κ₂ᵢ
-  T grad2_E_kappa1i_kappa1i;                      // ∂²Eₙ/∂(κ₁ᵢ)²
-  T grad2_E_kappa2i_kappa2i;                      // ∂²Eₙ/∂(κ₂ᵢ)²
-  T chi_inv;                                      // 1/χ
-  Eigen::Vector3<T> tilde_t;                      // t̃
-  Eigen::Vector3<T> tilde_m1;                     // m̃₁
-  Eigen::Vector3<T> tilde_m2;                     // m̃₂
-  Eigen::Vector3<T> grad_chi_ei;                  // ∂χ/∂eⁱ
-  Eigen::Vector3<T> grad_chi_eip1;                // ∂χ/∂eⁱ⁺¹
-  Eigen::Matrix3<T> grad_tildet_ei;               // ∂t̃/∂eⁱ
-  Eigen::Matrix3<T> grad_tildet_eip1;             // ∂t̃/∂eⁱ⁺¹
-  Eigen::Vector3<T> grad_kappa1i_ei;              // ∂κ₁ᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_kappa2i_ei;              // ∂κ₂ᵢ/∂eⁱ
-  Eigen::Vector3<T> grad_kappa1i_eip1;            // ∂κ₁ᵢ/∂eⁱ⁺¹
-  Eigen::Vector3<T> grad_kappa2i_eip1;            // ∂κ₂ᵢ/∂eⁱ⁺¹
-  Eigen::Matrix3<T> grad2_kappa1i_ei_ei;          // ∂²κ₁ᵢ/∂(eⁱ)²
-  Eigen::Matrix3<T> grad2_kappa2i_ei_ei;          // ∂²κ₂ᵢ/∂(eⁱ)²
-  Eigen::Matrix3<T> grad2_kappa1i_eip1_eip1;      // ∂²κ₁ᵢ/∂(eⁱ⁺¹)²
-  Eigen::Matrix3<T> grad2_kappa2i_eip1_eip1;      // ∂²κ₂ᵢ/∂(eⁱ⁺¹)²
-  Eigen::Matrix3<T> grad2_kappa1i_ei_eip1;        // ∂²κ₁ᵢ/∂(eⁱ)(eⁱ⁺¹)
-  Eigen::Matrix3<T> grad2_kappa2i_ei_eip1;        // ∂²κ₂ᵢ/∂(eⁱ)(eⁱ⁺¹)
-  Eigen::Matrix3<T> grad2_E_ei_ei;                // ∂²Eₙ/∂(eⁱ)²
-  Eigen::Matrix3<T> grad2_E_eip1_eip1;            // ∂²Eₙ/∂(eⁱ⁺¹)²
-  Eigen::Matrix3<T> grad2_E_ei_eip1;              // ∂²Eₙ/∂(eⁱ)(eⁱ⁺¹)
-  T grad_kappa1i_gammai;                          // ∂κ₁ᵢ/∂γⁱ
-  T grad_kappa2i_gammai;                          // ∂κ₂ᵢ/∂γⁱ
-  T grad_kappa1i_gammaip1;                        // ∂κ₁ᵢ/∂γⁱ⁺¹
-  T grad_kappa2i_gammaip1;                        // ∂κ₂ᵢ/∂γⁱ⁺¹
-  T grad2_kappa1i_gammai_gammai;                  // ∂²κ₁ᵢ/∂(γⁱ)²
-  T grad2_kappa2i_gammai_gammai;                  // ∂²κ₂ᵢ/∂(γⁱ)²
-  T grad2_kappa1i_gammaip1_gammaip1;              // ∂²κ₁ᵢ/∂(γⁱ⁺¹)²
-  T grad2_kappa2i_gammaip1_gammaip1;              // ∂²κ₂ᵢ/∂(γⁱ⁺¹)²
-  T grad2_E_gammai_gammai;                        // ∂²Eₙ/∂(γⁱ)²
-  T grad2_E_gammaip1_gammaip1;                    // ∂²Eₙ/∂(γⁱ⁺¹)²
-  T grad2_E_gammai_gammaip1;                      // ∂²Eₙ/∂(γⁱ)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_kappa1i_ei_gammai;      // ∂²κ₁ᵢ/∂(eⁱ)(γⁱ)
-  Eigen::Vector3<T> grad2_kappa2i_ei_gammai;      // ∂²κ₂ᵢ/∂(eⁱ)(γⁱ)
-  Eigen::Vector3<T> grad2_kappa1i_ei_gammaip1;    // ∂²κ₁ᵢ/∂(eⁱ)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_kappa2i_ei_gammaip1;    // ∂²κ₂ᵢ/∂(eⁱ)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_kappa1i_eip1_gammai;    // ∂²κ₁ᵢ/∂(eⁱ⁺¹)(γⁱ)
-  Eigen::Vector3<T> grad2_kappa2i_eip1_gammai;    // ∂²κ₂ᵢ/∂(eⁱ⁺¹)(γⁱ)
-  Eigen::Vector3<T> grad2_kappa1i_eip1_gammaip1;  // ∂²κ₁ᵢ/∂(eⁱ⁺¹)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_kappa2i_eip1_gammaip1;  // ∂²κ₂ᵢ/∂(eⁱ⁺¹)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_E_ei_gammai;            // ∂²Eₙ/∂(eⁱ)(γⁱ)
-  Eigen::Vector3<T> grad2_E_ei_gammaip1;          // ∂²Eₙ/∂(eⁱ)(γⁱ⁺¹)
-  Eigen::Vector3<T> grad2_E_eip1_gammai;          // ∂²Eₙ/∂(eⁱ⁺¹)(γⁱ)
-  Eigen::Vector3<T> grad2_E_eip1_gammaip1;        // ∂²Eₙ/∂(eⁱ⁺¹)(γⁱ⁺¹)
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % state.num_edges();
 
-    grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
-    grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
-    grad2_E_kappa1i_kappa1i = prop.EI1() / V_bar[i];
-    grad2_E_kappa2i_kappa2i = prop.EI2() / V_bar[i];
+    // ∂Eₙ/∂κ₁ᵢ
+    T grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
+    // ∂Eₙ/∂κ₂ᵢ
+    T grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
+    // ∂²Eₙ/∂(κ₁ᵢ)²
+    T grad2_E_kappa1i_kappa1i = prop.EI1() / V_bar[i];
+    // ∂²Eₙ/∂(κ₂ᵢ)²
+    T grad2_E_kappa2i_kappa2i = prop.EI2() / V_bar[i];
 
-    chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
-    tilde_t = (t.col(i) + t.col(ip1)) * chi_inv;
-    tilde_m1 = (m1.col(i) + m1.col(ip1)) * chi_inv;
-    tilde_m2 = (m2.col(i) + m2.col(ip1)) * chi_inv;
+    // 1/χ
+    T chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
+    // t̃
+    Vector3<T> tilde_t = (t.col(i) + t.col(ip1)) * chi_inv;
+    // m̃₁
+    Vector3<T> tilde_m1 = (m1.col(i) + m1.col(ip1)) * chi_inv;
+    // m̃₂
+    Vector3<T> tilde_m2 = (m2.col(i) + m2.col(ip1)) * chi_inv;
 
-    grad_kappa1i_ei =
-        (-kappa1[i] * tilde_t + t.col(ip1).cross(tilde_m2)) / l[i];
-    grad_kappa2i_ei =
-        (-kappa2[i] * tilde_t - t.col(ip1).cross(tilde_m1)) / l[i];
-    grad_kappa1i_eip1 =
-        (-kappa1[i] * tilde_t - t.col(i).cross(tilde_m2)) / l[ip1];
-    grad_kappa2i_eip1 =
-        (-kappa2[i] * tilde_t + t.col(i).cross(tilde_m1)) / l[ip1];
-
-    grad_chi_ei =  //
+    // ∂χ/∂eⁱ
+    Vector3<T> grad_chi_ei =
         (eye<T>() - outer<T>(t.col(i), t.col(i))) * t.col(ip1) / l[i];
-    grad_chi_eip1 =
+    // ∂χ/∂eⁱ⁺¹
+    Vector3<T> grad_chi_eip1 =
         (eye<T>() - outer<T>(t.col(ip1), t.col(ip1))) * t.col(i) / l[ip1];
 
-    grad_tildet_ei =
+    // ∂t̃/∂eⁱ
+    Matrix3<T> grad_tildet_ei =
         ((eye<T>() - outer<T>(t.col(i), t.col(i))) -
          outer<T>(tilde_t,
                   (eye<T>() - outer<T>(t.col(i), t.col(i))) * t.col(ip1))) *
         chi_inv / l[i];
-    grad_tildet_eip1 =
+    // ∂t̃/∂eⁱ⁺¹
+    Matrix3<T> grad_tildet_eip1 =
         ((eye<T>() - outer<T>(t.col(ip1), t.col(ip1))) -
          outer<T>(tilde_t,
                   (eye<T>() - outer<T>(t.col(ip1), t.col(ip1))) * t.col(i))) *
         chi_inv / l[ip1];
 
-    grad2_kappa1i_ei_ei =
+    // ∂κ₁ᵢ/∂eⁱ
+    Vector3<T> grad_kappa1i_ei =
+        (-kappa1[i] * tilde_t + t.col(ip1).cross(tilde_m2)) / l[i];
+    // ∂κ₂ᵢ/∂eⁱ
+    Vector3<T> grad_kappa2i_ei =
+        (-kappa2[i] * tilde_t - t.col(ip1).cross(tilde_m1)) / l[i];
+    // ∂κ₁ᵢ/∂eⁱ⁺¹
+    Vector3<T> grad_kappa1i_eip1 =
+        (-kappa1[i] * tilde_t - t.col(i).cross(tilde_m2)) / l[ip1];
+    // ∂κ₂ᵢ/∂eⁱ⁺¹
+    Vector3<T> grad_kappa2i_eip1 =
+        (-kappa2[i] * tilde_t + t.col(i).cross(tilde_m1)) / l[ip1];
+
+    // ∂²κ₁ᵢ/∂(eⁱ)²
+    Matrix3<T> grad2_kappa1i_ei_ei =
         -1 / (l[i] * l[i]) *
             outer<T>(-kappa1[i] * tilde_t + t.col(ip1).cross(tilde_m2),
                      t.col(i)) +
         -1 / l[i] *
             (outer<T>(tilde_t, grad_kappa1i_ei) + kappa1[i] * grad_tildet_ei +
              chi_inv * outer<T>(t.col(ip1).cross(tilde_m2), grad_chi_ei));
-    grad2_kappa2i_ei_ei =
+    // ∂²κ₂ᵢ/∂(eⁱ)²
+    Matrix3<T> grad2_kappa2i_ei_ei =
         -1 / (l[i] * l[i]) *
             outer<T>(-kappa2[i] * tilde_t - t.col(ip1).cross(tilde_m1),
                      t.col(i)) +
@@ -664,7 +636,8 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
             (outer<T>(tilde_t, grad_kappa2i_ei) + kappa2[i] * grad_tildet_ei -
              chi_inv * outer<T>(t.col(ip1).cross(tilde_m1), grad_chi_ei));
 
-    grad2_kappa1i_eip1_eip1 =
+    // ∂²κ₁ᵢ/∂(eⁱ⁺¹)²
+    Matrix3<T> grad2_kappa1i_eip1_eip1 =
         -1 / (l[ip1] * l[ip1]) *
             outer<T>(-kappa1[i] * tilde_t - t.col(i).cross(tilde_m2),
                      t.col(ip1)) +
@@ -672,7 +645,8 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
             (outer<T>(tilde_t, grad_kappa1i_eip1) +
              kappa1[i] * grad_tildet_eip1 -
              chi_inv * outer<T>(t.col(i).cross(tilde_m2), grad_chi_eip1));
-    grad2_kappa2i_eip1_eip1 =
+    // ∂²κ₂ᵢ/∂(eⁱ⁺¹)²
+    Matrix3<T> grad2_kappa2i_eip1_eip1 =
         -1 / (l[ip1] * l[ip1]) *
             outer<T>(-kappa2[i] * tilde_t + t.col(i).cross(tilde_m1),
                      t.col(ip1)) +
@@ -681,14 +655,16 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
              kappa2[i] * grad_tildet_eip1 +
              chi_inv * outer<T>(t.col(i).cross(tilde_m1), grad_chi_eip1));
 
-    grad2_kappa1i_ei_eip1 =
+    // ∂²κ₁ᵢ/∂(eⁱ)(eⁱ⁺¹)
+    Matrix3<T> grad2_kappa1i_ei_eip1 =
         -1 / l[i] *
         (outer<T>(tilde_t, grad_kappa1i_eip1) + kappa1[i] * grad_tildet_eip1 +
          chi_inv * outer<T>(t.col(ip1).cross(tilde_m2), grad_chi_eip1) +
          1 / l[ip1] *
              (outer<T>(t.col(ip1).cross(tilde_m2), t.col(ip1)) +
               skew<T>(tilde_m2)));
-    grad2_kappa2i_ei_eip1 =
+    // ∂²κ₂ᵢ/∂(eⁱ)(eⁱ⁺¹)
+    Matrix3<T> grad2_kappa2i_ei_eip1 =
         -1 / l[i] *
         (outer<T>(tilde_t, grad_kappa2i_eip1) + kappa2[i] * grad_tildet_eip1 -
          chi_inv * outer<T>(t.col(ip1).cross(tilde_m1), grad_chi_eip1) -
@@ -696,18 +672,22 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
              (outer<T>(t.col(ip1).cross(tilde_m1), t.col(ip1)) +
               skew<T>(tilde_m1)));
 
-    grad2_E_ei_ei =
+    // ∂²Eₙ/∂(eⁱ)²
+    Matrix3<T> grad2_E_ei_ei =
         grad2_E_kappa1i_kappa1i * outer<T>(grad_kappa1i_ei, grad_kappa1i_ei) +
         grad_E_kappa1i * grad2_kappa1i_ei_ei +
         grad2_E_kappa2i_kappa2i * outer<T>(grad_kappa2i_ei, grad_kappa2i_ei) +
         grad_E_kappa2i * grad2_kappa2i_ei_ei;
-    grad2_E_eip1_eip1 = grad2_E_kappa1i_kappa1i *
-                            outer<T>(grad_kappa1i_eip1, grad_kappa1i_eip1) +
-                        grad_E_kappa1i * grad2_kappa1i_eip1_eip1 +
-                        grad2_E_kappa2i_kappa2i *
-                            outer<T>(grad_kappa2i_eip1, grad_kappa2i_eip1) +
-                        grad_E_kappa2i * grad2_kappa2i_eip1_eip1;
-    grad2_E_ei_eip1 =
+    // ∂²Eₙ/∂(eⁱ⁺¹)²
+    Matrix3<T> grad2_E_eip1_eip1 =
+        grad2_E_kappa1i_kappa1i *
+            outer<T>(grad_kappa1i_eip1, grad_kappa1i_eip1) +
+        grad_E_kappa1i * grad2_kappa1i_eip1_eip1 +
+        grad2_E_kappa2i_kappa2i *
+            outer<T>(grad_kappa2i_eip1, grad_kappa2i_eip1) +
+        grad_E_kappa2i * grad2_kappa2i_eip1_eip1;
+    // ∂²Eₙ/∂(eⁱ)(eⁱ⁺¹)
+    Matrix3<T> grad2_E_ei_eip1 =
         grad2_E_kappa1i_kappa1i * outer<T>(grad_kappa1i_ei, grad_kappa1i_eip1) +
         grad_E_kappa1i * grad2_kappa1i_ei_eip1 +
         grad2_E_kappa2i_kappa2i * outer<T>(grad_kappa2i_ei, grad_kappa2i_eip1) +
@@ -730,29 +710,42 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
     AddTo<T>(hessian, node_ip1, node_ip1,
              -grad2_E_ei_eip1 - grad2_E_ei_eip1.transpose());
 
-    grad_kappa1i_gammai = -0.5 * m1.col(i).dot(curvature.col(i));
-    grad_kappa2i_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
-    grad_kappa1i_gammaip1 = -0.5 * m1.col(ip1).dot(curvature.col(i));
-    grad_kappa2i_gammaip1 = -0.5 * m2.col(ip1).dot(curvature.col(i));
+    // ∂κ₁ᵢ/∂γⁱ
+    T grad_kappa1i_gammai = -0.5 * m1.col(i).dot(curvature.col(i));
+    // ∂κ₂ᵢ/∂γⁱ
+    T grad_kappa2i_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
+    // ∂κ₁ᵢ/∂γⁱ⁺¹
+    T grad_kappa1i_gammaip1 = -0.5 * m1.col(ip1).dot(curvature.col(i));
+    // ∂κ₂ᵢ/∂γⁱ⁺¹
+    T grad_kappa2i_gammaip1 = -0.5 * m2.col(ip1).dot(curvature.col(i));
 
-    grad2_kappa1i_gammai_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
-    grad2_kappa2i_gammai_gammai = +0.5 * m1.col(i).dot(curvature.col(i));
-    grad2_kappa1i_gammaip1_gammaip1 = -0.5 * m2.col(ip1).dot(curvature.col(i));
-    grad2_kappa2i_gammaip1_gammaip1 = +0.5 * m1.col(ip1).dot(curvature.col(i));
+    // ∂²κ₁ᵢ/∂(γⁱ)²
+    T grad2_kappa1i_gammai_gammai = -0.5 * m2.col(i).dot(curvature.col(i));
+    // ∂²κ₂ᵢ/∂(γⁱ)²
+    T grad2_kappa2i_gammai_gammai = +0.5 * m1.col(i).dot(curvature.col(i));
+    // ∂²κ₁ᵢ/∂(γⁱ⁺¹)²
+    T grad2_kappa1i_gammaip1_gammaip1 =
+        -0.5 * m2.col(ip1).dot(curvature.col(i));
+    // ∂²κ₂ᵢ/∂(γⁱ⁺¹)²
+    T grad2_kappa2i_gammaip1_gammaip1 =
+        +0.5 * m1.col(ip1).dot(curvature.col(i));
 
-    grad2_E_gammai_gammai =
+    // ∂²Eₙ/∂(γⁱ)²
+    T grad2_E_gammai_gammai =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_gammai * grad_kappa1i_gammai +
         grad_E_kappa1i * grad2_kappa1i_gammai_gammai +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_gammai * grad_kappa2i_gammai +
         grad_E_kappa2i * grad2_kappa2i_gammai_gammai;
-    grad2_E_gammaip1_gammaip1 =
+    // ∂²Eₙ/∂(γⁱ⁺¹)²
+    T grad2_E_gammaip1_gammaip1 =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_gammaip1 *
             grad_kappa1i_gammaip1 +
         grad_E_kappa1i * grad2_kappa1i_gammaip1_gammaip1 +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_gammaip1 *
             grad_kappa2i_gammaip1 +
         grad_E_kappa2i * grad2_kappa2i_gammaip1_gammaip1;
-    grad2_E_gammai_gammaip1 =
+    // ∂²Eₙ/∂(γⁱ)(γⁱ⁺¹)
+    T grad2_E_gammai_gammaip1 =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_gammai * grad_kappa1i_gammaip1 +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_gammai * grad_kappa2i_gammaip1;
 
@@ -762,47 +755,67 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
     AddTo<T>(hessian, edge_ip1, edge_ip1, grad2_E_gammaip1_gammaip1);
     AddTo<T>(hessian, edge_i, edge_ip1, grad2_E_gammai_gammaip1);
 
-    grad2_kappa1i_ei_gammai = (-grad_kappa1i_gammai * tilde_t +
-                               chi_inv * t.col(ip1).cross(-m1.col(i))) /
-                              l[i];
-    grad2_kappa2i_ei_gammai = (-grad_kappa2i_gammai * tilde_t -
-                               chi_inv * t.col(ip1).cross(m2.col(i))) /
-                              l[i];
-    grad2_kappa1i_ei_gammaip1 = (-grad_kappa1i_gammaip1 * tilde_t +
-                                 chi_inv * t.col(ip1).cross(-m1.col(ip1))) /
-                                l[i];
-    grad2_kappa2i_ei_gammaip1 = (-grad_kappa2i_gammaip1 * tilde_t -
-                                 chi_inv * t.col(ip1).cross(m2.col(ip1))) /
-                                l[i];
-    grad2_kappa1i_eip1_gammai = (-grad_kappa1i_gammai * tilde_t -
-                                 chi_inv * t.col(i).cross(-m1.col(i))) /
-                                l[ip1];
-    grad2_kappa2i_eip1_gammai = (-grad_kappa2i_gammai * tilde_t +  //
-                                 chi_inv * t.col(i).cross(m2.col(i))) /
-                                l[ip1];
-    grad2_kappa1i_eip1_gammaip1 = (-grad_kappa1i_gammaip1 * tilde_t -
-                                   chi_inv * t.col(i).cross(-m1.col(ip1))) /
-                                  l[ip1];
-    grad2_kappa2i_eip1_gammaip1 = (-grad_kappa2i_gammaip1 * tilde_t +
-                                   chi_inv * t.col(i).cross(m2.col(ip1))) /
-                                  l[ip1];
+    // ∂²κ₁ᵢ/∂(eⁱ)(γⁱ)
+    Vector3<T> grad2_kappa1i_ei_gammai =
+        (-grad_kappa1i_gammai * tilde_t +
+         chi_inv * t.col(ip1).cross(-m1.col(i))) /
+        l[i];
+    // ∂²κ₂ᵢ/∂(eⁱ)(γⁱ)
+    Vector3<T> grad2_kappa2i_ei_gammai =
+        (-grad_kappa2i_gammai * tilde_t -
+         chi_inv * t.col(ip1).cross(m2.col(i))) /
+        l[i];
+    // ∂²κ₁ᵢ/∂(eⁱ)(γⁱ⁺¹)
+    Vector3<T> grad2_kappa1i_ei_gammaip1 =
+        (-grad_kappa1i_gammaip1 * tilde_t +
+         chi_inv * t.col(ip1).cross(-m1.col(ip1))) /
+        l[i];
+    // ∂²κ₂ᵢ/∂(eⁱ)(γⁱ⁺¹)
+    Vector3<T> grad2_kappa2i_ei_gammaip1 =
+        (-grad_kappa2i_gammaip1 * tilde_t -
+         chi_inv * t.col(ip1).cross(m2.col(ip1))) /
+        l[i];
+    // ∂²κ₁ᵢ/∂(eⁱ⁺¹)(γⁱ)
+    Vector3<T> grad2_kappa1i_eip1_gammai =
+        (-grad_kappa1i_gammai * tilde_t -
+         chi_inv * t.col(i).cross(-m1.col(i))) /
+        l[ip1];
+    // ∂²κ₂ᵢ/∂(eⁱ⁺¹)(γⁱ)
+    Vector3<T> grad2_kappa2i_eip1_gammai =
+        (-grad_kappa2i_gammai * tilde_t +  //
+         chi_inv * t.col(i).cross(m2.col(i))) /
+        l[ip1];
+    // ∂²κ₁ᵢ/∂(eⁱ⁺¹)(γⁱ⁺¹)
+    Vector3<T> grad2_kappa1i_eip1_gammaip1 =
+        (-grad_kappa1i_gammaip1 * tilde_t -
+         chi_inv * t.col(i).cross(-m1.col(ip1))) /
+        l[ip1];
+    // ∂²κ₂ᵢ/∂(eⁱ⁺¹)(γⁱ⁺¹)
+    Vector3<T> grad2_kappa2i_eip1_gammaip1 =
+        (-grad_kappa2i_gammaip1 * tilde_t +
+         chi_inv * t.col(i).cross(m2.col(ip1))) /
+        l[ip1];
 
-    grad2_E_ei_gammai =
+    // ∂²Eₙ/∂(eⁱ)(γⁱ)
+    Vector3<T> grad2_E_ei_gammai =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_ei * grad_kappa1i_gammai +
         grad_E_kappa1i * grad2_kappa1i_ei_gammai +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_ei * grad_kappa2i_gammai +
         grad_E_kappa2i * grad2_kappa2i_ei_gammai;
-    grad2_E_ei_gammaip1 =
+    // ∂²Eₙ/∂(eⁱ)(γⁱ⁺¹)
+    Vector3<T> grad2_E_ei_gammaip1 =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_ei * grad_kappa1i_gammaip1 +
         grad_E_kappa1i * grad2_kappa1i_ei_gammaip1 +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_ei * grad_kappa2i_gammaip1 +
         grad_E_kappa2i * grad2_kappa2i_ei_gammaip1;
-    grad2_E_eip1_gammai =
+    // ∂²Eₙ/∂(eⁱ⁺¹)(γⁱ)
+    Vector3<T> grad2_E_eip1_gammai =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_eip1 * grad_kappa1i_gammai +
         grad_E_kappa1i * grad2_kappa1i_eip1_gammai +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_eip1 * grad_kappa2i_gammai +
         grad_E_kappa2i * grad2_kappa2i_eip1_gammai;
-    grad2_E_eip1_gammaip1 =
+    // ∂²Eₙ/∂(eⁱ⁺¹)(γⁱ⁺¹)
+    Vector3<T> grad2_E_eip1_gammaip1 =
         grad2_E_kappa1i_kappa1i * grad_kappa1i_eip1 * grad_kappa1i_gammaip1 +
         grad_E_kappa1i * grad2_kappa1i_eip1_gammaip1 +
         grad2_E_kappa2i_kappa2i * grad_kappa2i_eip1 * grad_kappa2i_gammaip1 +
