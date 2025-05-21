@@ -18,12 +18,13 @@ struct QuadraturePair {
 };
 
 const std::array<QuadraturePair, 5>& GaussQuadrature() {
+  /* Use Gauss–Lobatto quadrature so that end points are included.  */
   static constexpr std::array<QuadraturePair, 5> quadrature_pairs = {
-      QuadraturePair{-0.9061798459386640, 0.2369268850561891},
-      QuadraturePair{-0.5384693101056831, 0.4786286704993665},
-      QuadraturePair{0.0000000000000000, 0.5688888888888889},
-      QuadraturePair{0.5384693101056831, 0.4786286704993665},
-      QuadraturePair{0.9061798459386640, 0.2369268850561891}};
+      QuadraturePair{0.0, 32 / 45.0},
+      QuadraturePair{-0.654653670707977, 49 / 90.0},
+      QuadraturePair{+0.654653670707977, 49 / 90.0},
+      QuadraturePair{-1.0, 1 / 10.0},  //
+      QuadraturePair{+1.0, 1 / 10.0}};
   return quadrature_pairs;
 }
 
