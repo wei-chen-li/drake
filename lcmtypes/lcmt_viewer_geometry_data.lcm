@@ -10,6 +10,7 @@ struct lcmt_viewer_geometry_data {
   const int8_t MESH         = 4;
   const int8_t CAPSULE      = 5;
   const int8_t ELLIPSOID    = 6;
+  const int8_t FILAMENT     = 7;
 
 
   float position[3];  // x, y, z

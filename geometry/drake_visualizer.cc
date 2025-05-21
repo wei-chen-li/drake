@@ -262,6 +262,41 @@ lcmt_viewer_geometry_data MakeDeformableSurfaceMesh(
   return geometry_data;
 }
 
+/* Create an lcm message for a deformable filament representation of the
+ geometry described by the input parameters. The geometry data message is marked
+ as a FILAMENT.
+
+ @param[in] name            The name of the geometry.
+ @param[in] node_positions  The positions of the nodes in the world frame.
+ @param[in] color           The diffuse color of the geometry. */
+template <typename T>
+lcmt_viewer_geometry_data MakeDeformableFilament(
+    const std::string& name, const VectorX<T>& node_positions,
+    const Rgba& color) {
+  lcmt_viewer_geometry_data geometry_data;
+  geometry_data.type = geometry_data.FILAMENT;
+
+  // The pose is unused and set to identity.
+  geometry_data.quaternion[0] = 1;
+  geometry_data.quaternion[1] = 0;
+  geometry_data.quaternion[2] = 0;
+  geometry_data.quaternion[3] = 0;
+  geometry_data.position[0] = 0;
+  geometry_data.position[1] = 0;
+  geometry_data.position[2] = 0;
+
+  EigenMapView(geometry_data.color) = color.rgba().cast<float>();
+
+  geometry_data.string_data = name;
+
+  geometry_data.num_float_data = node_positions.size();
+  geometry_data.float_data.resize(node_positions.size());
+  for (int i = 0; i < node_positions.size(); ++i) {
+    geometry_data.float_data[i] = ExtractDoubleOrThrow(node_positions[i]);
+  }
+  return geometry_data;
+}
+
 // Simple class for converting shape specifications into LCM-compatible shapes.
 class ShapeToLcm : public ShapeReifier {
  public:
@@ -752,8 +787,17 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
             inspector.GetName(g_id), vertex_positions[j], render_meshes[j],
             params.default_color));
       }
-    } else {  // DER mesh.
-      // TODO(wei-chen): Implement this.
+    } else {  // DER filament.
+      const VectorX<T>& node_positions =
+          query_object.GetConfigurationsInWorld(g_id);
+      DRAKE_DEMAND(node_positions.size() % 3 == 0);
+      const GeometryProperties* props =
+          inspector.GetProperties(g_id, params.role);
+      DRAKE_DEMAND(props != nullptr);
+      Rgba color =
+          props->GetPropertyOrDefault("phong", "diffuse", params.default_color);
+      message.geom.emplace_back(MakeDeformableFilament(inspector.GetName(g_id),
+                                                       node_positions, color));
     }
   }
   message.num_geom = message.geom.size();
