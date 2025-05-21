@@ -1298,7 +1298,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
   // If the geometry is deformable, we need to register its driven meshes. We
   // always blindly throw out the old driven mesh data and replace it with a new
   // driven mesh data.
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kProximity);
   }
 }
@@ -1321,7 +1321,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
 
   geometry.SetRole(std::move(properties));
 
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kPerception);
   }
 
@@ -1374,7 +1374,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
 
   geometry.SetRole(std::move(properties));
 
-  if (geometry.is_deformable()) {
+  if (geometry.is_deformable() && geometry.reference_mesh()) {
     RegisterDrivenMesh(geometry_id, Role::kIllustration);
   }
 }
