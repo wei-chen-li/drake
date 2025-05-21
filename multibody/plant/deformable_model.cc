@@ -734,12 +734,15 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
               .head(num_dofs);
       output_value.set_value(geometry_id, std::move(vertex_positions));
     } else if (IsDerModel(body_id)) {
-      const int num_dofs = GetDerModel(body_id).num_dofs();
-      const auto& discrete_state_index = GetDiscreteStateIndex(body_id);
-      VectorX<T> positions = context.get_discrete_state(discrete_state_index)
-                                 .value()
-                                 .head(num_dofs);
-      output_value.set_value(geometry_id, std::move(positions));
+      const int num_nodes = GetDerModel(body_id).num_nodes();
+      const VectorX<T>& discrete_state =
+          context.get_discrete_state(GetDiscreteStateIndex(body_id)).value();
+      VectorX<T> node_positions(num_nodes * 3);
+      for (int i = 0; i < num_nodes; ++i) {
+        node_positions.template segment<3>(3 * i) =
+            discrete_state.template segment<3>(4 * i);
+      }
+      output_value.set_value(geometry_id, std::move(node_positions));
     } else {
       DRAKE_UNREACHABLE();
     }
