@@ -397,10 +397,18 @@ class _ViewerApplet:
         for i, geom in enumerate(message.geom):
             geom_name = geom.string_data
             geom_path = f"{link_path}/{geom_name}"
-            vertices, faces, rgba, pose = self._convert_deformable_geom(geom)
-            self._meshcat.SetTriangleMesh(
-                path=geom_path, vertices=vertices, faces=faces, rgba=rgba)
-            self._meshcat.SetTransform(path=link_path, X_ParentPath=pose)
+            if geom.type == lcmt_viewer_geometry_data.MESH:
+                vertices, faces, rgba, pose = self._convert_deformable_geom(
+                    geom)
+                self._meshcat.SetTriangleMesh(
+                    path=geom_path, vertices=vertices, faces=faces, rgba=rgba)
+                self._meshcat.SetTransform(path=link_path, X_ParentPath=pose)
+            elif geom.type == lcmt_viewer_geometry_data.FILAMENT:
+                nodes = np.array(geom.float_data).reshape((3, -1), order='F')
+                rgba = Rgba(*geom.color)
+                self._meshcat.SetLineSegments(
+                    path=geom_path, start=nodes[:, 0:-1], end=nodes[:, 1:],
+                    rgba=rgba)
         if self._waiting_for_first_draw_message:
             self._waiting_for_first_draw_message = False
             self._set_visible(True)
@@ -703,6 +711,7 @@ class _PointCloudApplet:
 
 class _DrawFrameApplet:
     """Applet to visualize triads in meshcat"""
+
     def __init__(self, *, meshcat):
         """Constructs an applet."""
         self._meshcat = meshcat
