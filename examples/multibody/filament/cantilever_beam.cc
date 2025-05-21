@@ -34,16 +34,19 @@ namespace drake {
 namespace examples {
 namespace {
 
+using drake::geometry::SceneGraph;
 using drake::multibody::AddMultibodyPlant;
 using drake::multibody::DeformableModel;
+using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::der::DerEdgeIndex;
 using drake::multibody::der::DerModel;
 using drake::multibody::der::DerNodeIndex;
 using drake::systems::Context;
 using Eigen::Vector3d;
+using Eigen::Vector4d;
 
-void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
+void RegisterCantileverBeam(MultibodyPlant<double>* plant) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
   DerModel<double>::Builder builder;
   const Vector3d d1_0 = Vector3d(0, 1, 0);
@@ -59,10 +62,19 @@ void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
   builder.SetMaterialProperties(FLAGS_E, FLAGS_G, FLAGS_rho);
   builder.SetCircularCrossSection(FLAGS_radius);
   builder.SetDampingCoefficients(0.0, 0.0);
-
   std::unique_ptr<DerModel<double>> der_model = builder.Build();
-  deformable_model->RegisterDeformableBody(std::move(der_model),
-                                           "cantilever beam");
+
+  DeformableModel<double>& deformable_model = plant->mutable_deformable_model();
+  multibody::DeformableBodyId body_id = deformable_model.RegisterDeformableBody(
+      std::move(der_model), "cantilever beam");
+  geometry::GeometryId geometry_id = deformable_model.GetGeometryId(body_id);
+
+  SceneGraph<double>& scene_graph = *plant->GetMutableSceneGraphPreFinalize();
+  geometry::SourceId source_id = *plant->get_source_id();
+  geometry::IllustrationProperties illustration_props;
+  illustration_props.AddProperty("phong", "diffuse",
+                                 Vector4d(0.7, 0.5, 0.4, 0.8));
+  scene_graph.AssignRole(source_id, geometry_id, std::move(illustration_props));
 }
 
 int do_main() {
@@ -74,8 +86,7 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
 
-  DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
-  RegisterCantileverBeam(&deformable_model);
+  RegisterCantileverBeam(&plant);
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();

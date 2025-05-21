@@ -741,15 +741,19 @@ void DrakeVisualizer<T>::SendDeformableGeometriesMessage(
     if (inspector.GetProperties(g_id, params.role) == nullptr) {
       continue;
     }
-    const std::vector<internal::RenderMesh>& render_meshes =
-        inspector.GetDrivenRenderMeshes(g_id, params.role);
-    const std::vector<VectorX<T>> vertex_positions =
-        query_object.GetDrivenMeshConfigurationsInWorld(g_id, params.role);
-    DRAKE_DEMAND(ssize(vertex_positions) == ssize(render_meshes));
-    for (int j = 0; j < ssize(vertex_positions); ++j) {
-      message.geom.emplace_back(MakeDeformableSurfaceMesh(
-          inspector.GetName(g_id), vertex_positions[j], render_meshes[j],
-          params.default_color));
+    if (inspector.GetReferenceMesh(g_id)) {  // FEM mesh.
+      const std::vector<internal::RenderMesh>& render_meshes =
+          inspector.GetDrivenRenderMeshes(g_id, params.role);
+      const std::vector<VectorX<T>> vertex_positions =
+          query_object.GetDrivenMeshConfigurationsInWorld(g_id, params.role);
+      DRAKE_DEMAND(ssize(vertex_positions) == ssize(render_meshes));
+      for (int j = 0; j < ssize(vertex_positions); ++j) {
+        message.geom.emplace_back(MakeDeformableSurfaceMesh(
+            inspector.GetName(g_id), vertex_positions[j], render_meshes[j],
+            params.default_color));
+      }
+    } else {  // DER mesh.
+      // TODO(wei-chen): Implement this.
     }
   }
   message.num_geom = message.geom.size();

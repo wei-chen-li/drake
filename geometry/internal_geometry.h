@@ -131,7 +131,9 @@ class InternalGeometry {
    contact usually have mesh representations, but those meshes are only used for
    proximity query purposes and do not affect whether the geometry is
    deformable. */
-  bool is_deformable() const { return reference_mesh_ != nullptr; }
+  bool is_deformable() const {
+    return reference_mesh_ != nullptr || reference_filament_nodes_.has_value();
+  }
 
   /* Returns true if the geometry can move with respect to the World frame. That
    includes any deformable geometry, and any rigid geometry attached to a frame
