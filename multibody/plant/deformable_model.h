@@ -470,7 +470,9 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
    @throws exception if an DER model corresponding to `id` already exists. */
   template <typename T1 = T>
   typename std::enable_if_t<std::is_same_v<T1, double>, void>
-  BuildFilamentDerModel(DeformableBodyId id, const geometry::Filament& filament,
+  BuildFilamentDerModel(DeformableBodyId id,
+                        const math::RigidTransform<double>& X_WG,
+                        const geometry::Filament& filament_G,
                         const fem::DeformableBodyConfig<T>& config);
 
   /* Copies the vertex positions of all deformable bodies to the output port
