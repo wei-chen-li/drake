@@ -116,7 +116,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
         reference_position.template segment<3>(3 * i) = X_WG * node_G.col(i);
       }
       /* Build DER model for the deformable body. */
-      // TODO(wei-chen): Implement this.
+      BuildFilamentDerModel(body_id, *filament_G, config);
     }
 
     /* Do the book-keeping. */
@@ -573,6 +573,55 @@ DeformableModel<T>::BuildLinearVolumetricModelHelper(
   fem_model->set_parallelism(parallelism_);
 
   fem_models_.emplace(id, std::move(fem_model));
+}
+
+template <typename T>
+template <typename T1>
+typename std::enable_if_t<std::is_same_v<T1, double>, void>
+DeformableModel<T>::BuildFilamentDerModel(
+    DeformableBodyId id, const geometry::Filament& filament,
+    const fem::DeformableBodyConfig<T>& config) {
+  if (der_models_.find(id) != der_models_.end()) {
+    throw std::logic_error("A DER model with id: " + to_string(id) +
+                           " already exists.");
+  }
+  if (filament.frames_m1().cols() != 1) {
+    throw std::logic_error(
+        "BuildFilamentDerModel() does not yet support m1 directors in multiple "
+        "frames.");
+    // TODO(wei-chen): Implement the above mentioned case.
+  }
+  typename der::DerModel<T>::Builder builder;
+
+  const Eigen::Matrix3Xd& node_positions = filament.node_positions();
+  DRAKE_THROW_UNLESS(node_positions.cols() >= 2);
+  builder.AddFirstEdge(node_positions.col(0), 0.0, node_positions.col(1),
+                       filament.frames_m1().col(0));
+  for (int i = 2; i < node_positions.cols(); ++i)
+    builder.AddEdge(0.0, node_positions.col(i));
+
+  builder.SetUndeformedStateToInitialState();
+
+  const T E = config.youngs_modulus();
+  const T G = E / (2 * (1 + config.poissons_ratio()));
+  const T rho = config.mass_density();
+  builder.SetMaterialProperties(E, G, rho);
+  builder.SetDampingCoefficients(config.mass_damping_coefficient(),
+                                 config.stiffness_damping_coefficient());
+
+  const geometry::Filament::CrossSection& cs = filament.cross_section();
+  if (cs.type == geometry::Filament::CrossSectionType::kRectangular) {
+    builder.SetRectangularCrossSection(cs.width, cs.height);
+  } else if (cs.type == geometry::Filament::CrossSectionType::kElliptical) {
+    builder.SetEllipticalCrossSection(cs.width / 2, cs.height / 2);
+  } else {
+    throw std::logic_error(
+        "BuildFilamentDerModel() does not yet support cross-section type other "
+        "than kRectangular and kElliptical.");
+  }
+
+  std::unique_ptr<der::DerModel<T>> der_model = builder.Build();
+  der_models_.emplace(id, std::move(der_model));
 }
 
 template <typename T>

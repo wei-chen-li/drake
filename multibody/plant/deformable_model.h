@@ -464,6 +464,16 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
                                    const geometry::VolumeMesh<double>& mesh,
                                    const fem::DeformableBodyConfig<T>& config);
 
+  /* Builds a DER model for the body with `id` with linear tetrahedral elements
+   and a single quadrature point. The reference node positions as well as the
+   corss-section info are given by `filament`, and physical properties such as
+   the material model of the body are given by `config`.
+   @throws exception if an DER model corresponding to `id` already exists. */
+  template <typename T1 = T>
+  typename std::enable_if_t<std::is_same_v<T1, double>, void>
+  BuildFilamentDerModel(DeformableBodyId id, const geometry::Filament& filament,
+                        const fem::DeformableBodyConfig<T>& config);
+
   /* Copies the vertex positions of all deformable bodies to the output port
    value which is guaranteed to be of type GeometryConfigurationVector. */
   void CopyVertexPositions(const systems::Context<T>& context,
