@@ -4,6 +4,9 @@
 #include <utility>
 
 #include "drake/geometry/proximity/volume_mesh.h"
+#include "drake/math/axis_angle.h"
+#include "drake/math/frame_transport.h"
+#include "drake/math/unit_vector.h"
 #include "drake/multibody/der/velocity_newmark_scheme.h"
 #include "drake/multibody/fem/corotated_model.h"
 #include "drake/multibody/fem/fem_state.h"
@@ -116,7 +119,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
         reference_position.template segment<3>(3 * i) = X_WG * node_G.col(i);
       }
       /* Build DER model for the deformable body. */
-      BuildFilamentDerModel(body_id, *filament_G, config);
+      BuildFilamentDerModel(body_id, X_WG, *filament_G, config);
     }
 
     /* Do the book-keeping. */
@@ -579,26 +582,39 @@ template <typename T>
 template <typename T1>
 typename std::enable_if_t<std::is_same_v<T1, double>, void>
 DeformableModel<T>::BuildFilamentDerModel(
-    DeformableBodyId id, const geometry::Filament& filament,
+    DeformableBodyId id, const math::RigidTransform<double>& X_WG,
+    const geometry::Filament& filament_G,
     const fem::DeformableBodyConfig<T>& config) {
   if (der_models_.find(id) != der_models_.end()) {
     throw std::logic_error("A DER model with id: " + to_string(id) +
                            " already exists.");
   }
-  if (filament.frames_m1().cols() != 1) {
-    throw std::logic_error(
-        "BuildFilamentDerModel() does not yet support m1 directors in multiple "
-        "frames.");
-    // TODO(wei-chen): Implement the above mentioned case.
+  const Eigen::Matrix3Xd& node_positions = X_WG * filament_G.node_positions();
+  const Eigen::Matrix3Xd& frames_m1 = X_WG.rotation() * filament_G.frames_m1();
+  const int num_nodes = node_positions.cols();
+  const int num_edges = frames_m1.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  DRAKE_THROW_UNLESS(
+      num_edges == (filament_G.has_closed_ends() ? num_nodes : num_nodes - 1));
+  Eigen::Matrix3Xd frames_t(3, num_edges);
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    frames_t.col(i) = math::internal::NormalizeOrThrow<T>(
+        node_positions.col(ip1) - node_positions.col(i), __func__);
   }
-  typename der::DerModel<T>::Builder builder;
+  Eigen::Matrix3Xd frames_d1(3, num_edges);
+  math::SpaceParallelFrameTransport<T>(frames_t, frames_m1.col(0), &frames_d1);
 
-  const Eigen::Matrix3Xd& node_positions = filament.node_positions();
-  DRAKE_THROW_UNLESS(node_positions.cols() >= 2);
-  builder.AddFirstEdge(node_positions.col(0), 0.0, node_positions.col(1),
-                       filament.frames_m1().col(0));
-  for (int i = 2; i < node_positions.cols(); ++i)
-    builder.AddEdge(0.0, node_positions.col(i));
+  typename der::DerModel<T>::Builder builder;
+  const double gamma_0 = 0.0;
+  builder.AddFirstEdge(node_positions.col(0), gamma_0, node_positions.col(1),
+                       frames_m1.col(0));
+  for (int i = 1; i < num_edges; ++i) {
+    const double gamma_i = math::SignedAngleAroundAxis<T>(
+        frames_d1.col(i), frames_m1.col(i), frames_t.col(i));
+    const int ip1 = (i + 1) % num_nodes;
+    builder.AddEdge(gamma_i, node_positions.col(ip1));
+  }
 
   builder.SetUndeformedStateToInitialState();
 
@@ -609,7 +625,7 @@ DeformableModel<T>::BuildFilamentDerModel(
   builder.SetDampingCoefficients(config.mass_damping_coefficient(),
                                  config.stiffness_damping_coefficient());
 
-  const geometry::Filament::CrossSection& cs = filament.cross_section();
+  const geometry::Filament::CrossSection& cs = filament_G.cross_section();
   if (cs.type == geometry::Filament::CrossSectionType::kRectangular) {
     builder.SetRectangularCrossSection(cs.width, cs.height);
   } else if (cs.type == geometry::Filament::CrossSectionType::kElliptical) {
