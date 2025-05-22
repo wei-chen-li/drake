@@ -3,7 +3,6 @@
 #include <gflags/gflags.h>
 
 #include "drake/geometry/drake_visualizer.h"
-#include "drake/multibody/der/der_model.h"
 #include "drake/multibody/plant/deformable_model.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
@@ -15,7 +14,7 @@ DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 1e9, "Young's modulus of the deformable bodies [Pa].");
-DEFINE_double(G, 0.3e9, "Shear modulus of the deformable bodies [Pa].");
+DEFINE_double(G, 0.4e9, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
 DEFINE_double(radius, 0.15, "Radius of the cantilever beam [m].");
@@ -34,47 +33,49 @@ namespace drake {
 namespace examples {
 namespace {
 
+using drake::geometry::Filament;
 using drake::geometry::SceneGraph;
 using drake::multibody::AddMultibodyPlant;
 using drake::multibody::DeformableModel;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
-using drake::multibody::der::DerEdgeIndex;
-using drake::multibody::der::DerModel;
-using drake::multibody::der::DerNodeIndex;
+using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
 
-void RegisterCantileverBeam(MultibodyPlant<double>* plant) {
+multibody::DeformableBodyId RegisterCantileverBeam(
+    DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
-  DerModel<double>::Builder builder;
-  const Vector3d d1_0 = Vector3d(0, 1, 0);
-  const double dx = FLAGS_length / FLAGS_num_edges;
-  builder.AddFirstEdge(Vector3d(0, 0, 0), 0, Vector3d(dx, 0, 0), d1_0);
-  builder.FixNode(DerNodeIndex(0));
-  builder.FixEdge(DerEdgeIndex(0));
-  builder.FixNode(DerNodeIndex(1));
-  for (int i = 2; i < FLAGS_num_edges + 1; ++i) {
-    builder.AddEdge(0, Vector3d(dx * i, 0, 0));
-  }
-  builder.SetZeroUndeformedCurvatureAndTwist();
-  builder.SetMaterialProperties(FLAGS_E, FLAGS_G, FLAGS_rho);
-  builder.SetCircularCrossSection(FLAGS_radius);
-  builder.SetDampingCoefficients(0.0, 0.0);
-  std::unique_ptr<DerModel<double>> der_model = builder.Build();
 
-  DeformableModel<double>& deformable_model = plant->mutable_deformable_model();
-  multibody::DeformableBodyId body_id = deformable_model.RegisterDeformableBody(
-      std::move(der_model), "cantilever beam");
-  geometry::GeometryId geometry_id = deformable_model.GetGeometryId(body_id);
+  const bool has_closed_ends = false;
+  Eigen::Matrix3Xd node_positions(3, 2);
+  node_positions.col(0) = Vector3d(0, 0, 0);
+  node_positions.col(1) = Vector3d(FLAGS_length, 0, 0);
+  const double resolution_hint = FLAGS_length / FLAGS_num_edges;
+  Vector3d m1 = Vector3d(0, 1, 0);
+  Filament filament(
+      has_closed_ends, node_positions, m1,
+      Filament::CrossSection{.type = Filament::CrossSectionType::kElliptical,
+                             .width = FLAGS_radius * 2,
+                             .height = FLAGS_radius * 2});
 
-  SceneGraph<double>& scene_graph = *plant->GetMutableSceneGraphPreFinalize();
-  geometry::SourceId source_id = *plant->get_source_id();
-  geometry::IllustrationProperties illustration_props;
-  illustration_props.AddProperty("phong", "diffuse",
-                                 Vector4d(0.7, 0.5, 0.4, 0.8));
-  scene_graph.AssignRole(source_id, geometry_id, std::move(illustration_props));
+  auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
+      math::RigidTransform<double>::Identity(), filament, "cantilever beam");
+
+  geometry::IllustrationProperties illus_props;
+  illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 0.8));
+  geometry_instance->set_illustration_properties(std::move(illus_props));
+
+  DeformableBodyConfig<double> config;
+  config.set_youngs_modulus(FLAGS_E);
+  config.set_poissons_ratio(0.5 * FLAGS_E / FLAGS_G - 1);
+  config.set_mass_density(FLAGS_rho);
+
+  return deformable_model->RegisterDeformableBody(std::move(geometry_instance),
+                                                  config, resolution_hint);
+
+  // TODO(wei-chen): Add wall boundary condition.
 }
 
 int do_main() {
@@ -85,8 +86,9 @@ int do_main() {
   plant_config.discrete_contact_approximation = FLAGS_contact_approximation;
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
+  DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
 
-  RegisterCantileverBeam(&plant);
+  RegisterCantileverBeam(&deformable_model);
 
   /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();

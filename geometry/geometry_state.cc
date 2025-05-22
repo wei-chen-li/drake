@@ -736,6 +736,16 @@ const VolumeMesh<double>* GeometryState<T>::GetReferenceMesh(
 }
 
 template <typename T>
+const Filament* GeometryState<T>::GetReferenceFilament(GeometryId id) const {
+  const InternalGeometry* geometry = GetGeometry(id);
+  if (geometry == nullptr) {
+    throw std::logic_error(
+        fmt::format("Referenced geometry {} has not been registered", id));
+  }
+  return geometry->reference_filament();
+}
+
+template <typename T>
 const std::vector<RenderMesh>& GeometryState<T>::GetDrivenRenderMeshes(
     GeometryId id, Role role) const {
   const InternalGeometry* geometry = GetGeometry(id);
@@ -1069,10 +1079,8 @@ GeometryId GeometryState<T>::RegisterDeformableGeometry(
                                      geometry->pose(), resolution_hint);
   // The reference mesh is defined in the frame F.
   const VolumeMesh<double>* reference_mesh = internal_geometry.reference_mesh();
-  const Eigen::Matrix<double, 3, Eigen::Dynamic>* reference_filament_nodes =
-      internal_geometry.reference_filament_nodes();
-  DRAKE_DEMAND(reference_mesh != nullptr ||
-               reference_filament_nodes != nullptr);
+  const Filament* reference_filament = internal_geometry.reference_filament();
+  DRAKE_DEMAND(reference_mesh != nullptr || reference_filament != nullptr);
   const InternalFrame& frame = frames_[frame_id];
   const RigidTransform<T> X_WG =
       kinematics_data_.X_WFs[frame.index()] * geometry->pose().cast<T>();
@@ -1084,10 +1092,12 @@ GeometryId GeometryState<T>::RegisterDeformableGeometry(
     }
     kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   } else {
-    VectorX<T> q_WG(reference_filament_nodes->size());
-    for (int i = 0; i < reference_filament_nodes->cols(); ++i) {
+    const Eigen::Matrix3Xd& node_positions =
+        reference_filament->node_positions();
+    VectorX<T> q_WG(node_positions.size());
+    for (int i = 0; i < node_positions.cols(); ++i) {
       q_WG.template segment<3>(3 * i) =
-          X_WG * Vector3<T>(reference_filament_nodes->col(i));
+          X_WG * Vector3<T>(node_positions.col(i));
     }
     kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   }

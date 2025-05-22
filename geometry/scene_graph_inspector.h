@@ -396,6 +396,18 @@ class SceneGraphInspector {
            geometry.  */
   const VolumeMesh<double>* GetReferenceMesh(GeometryId geometry_id) const;
 
+  /** Returns the reference filament of the geometry with the given
+   `geometry_id`, measured and expressed in the geometry's frame, G.
+   @param geometry_id   The identifier for the queried geometry.
+   @return A pointer to the reference filament of the geometry if the geometry
+           is a filament, or `nullptr` otherwise.
+   @note GetPoseInFrame() provides the transform necessary to measure and
+         express the reference filament's node positions in the geometry's
+         registered frame F.
+   @throws std::exception if `geometry_id` does not map to a registered
+           geometry. */
+  const Filament* GetReferenceFilament(GeometryId geometry_id) const;
+
   // TODO(xuchenhan-tri): This should cross reference the concept of driven
   // meshes when it is nicely written up somewhere (e.g., in the SceneGraph
   // documentation).

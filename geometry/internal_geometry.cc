@@ -37,8 +37,9 @@ InternalGeometry::InternalGeometry(SourceId source_id,
       frame_id_(frame_id),
       X_FG_(std::move(X_FG)) {
   shape_spec_->Visit(
-      overloaded{[this](const Filament& filament) {
-                   this->reference_filament_nodes_ = filament.nodes();
+      overloaded{[this, resolution_hint](const Filament& filament) {
+                   this->reference_filament_ =
+                       MakeFinerFilament(filament, resolution_hint);
                  },
                  [this, resolution_hint](const auto& other_shape) {
                    // The function creates the mesh in frame G.
