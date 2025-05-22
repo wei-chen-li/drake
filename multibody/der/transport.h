@@ -43,9 +43,9 @@ void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
  @tparam_default_scalar */
 template <typename T>
 void ComputeSpaceParallelTransport(
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
     const std::optional<Eigen::Vector3<T>>& d1_0,
-    EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d1);
+    EigenPtr<Eigen::Matrix3X<T>> d1);
 
 /* For k = 0,1,..., transform d₁ᵏ(𝑡) to d₁ᵏ(𝑡+𝛥𝑡) using the transport operator
  that maps tᵏ(𝑡) to tᵏ(𝑡+𝛥𝑡).
@@ -60,10 +60,10 @@ void ComputeSpaceParallelTransport(
  @tparam_default_scalar */
 template <typename T>
 void ComputeTimeParallelTransport(
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& d1,
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t_next,
-    EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d1_next);
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& d1,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t_next,
+    EigenPtr<Eigen::Matrix3X<T>> d1_next);
 
 }  // namespace internal
 }  // namespace der
