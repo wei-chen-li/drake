@@ -464,23 +464,25 @@ class Filament final : public Shape {
     double height;
   };
 
-  /* Constructs a filament by specifying the position of nodes and the m₁
+  /** Constructs a filament by specifying the position of nodes and the m₁
    director in the first frame. The m₁ directors in the remaining frames are
    implicitly defined so that the filament is twist free.
    @pre `‖first_frame_m1‖ ≈ 1`.
    @pre `first_frame_m1` is perpendicular to the first edge vector.
    @pre `cross_section.width > 0`.
-   @pre `cross_section.height > 0`. */
+   @pre `cross_section.height > 0`.
+   @pydrake_mkdoc_identifier{first_m1} */
   Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
            const Eigen::Vector3d& first_frame_m1,
            const CrossSection& cross_section);
 
-  /* Constructs a filament by specifying the position of nodes and the m₁
+  /** Constructs a filament by specifying the position of nodes and the m₁
    directors of all frame.
    @pre Every column of `frames_m1` is perpendicular to the corresponding
         edge vector.
    @pre `cross_section.width > 0`.
-   @pre `cross_section.height > 0`. */
+   @pre `cross_section.height > 0`.
+   @pydrake_mkdoc_identifier{all_m1} */
   Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
            Eigen::Matrix3Xd frames_m1, const CrossSection& cross_section);
 
