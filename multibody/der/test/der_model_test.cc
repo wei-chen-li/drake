@@ -77,7 +77,7 @@ using test::LimitMalloc;
 
 enum RodConfigurationTests { kOpenEnds, kClosedEnds };
 enum UndeformedStateTests { kZeroCurvatureTwist, kSameAsInitialState };
-enum CrossSectionTests { kCircular, kRectangular, kEllipsoidal };
+enum CrossSectionTests { kCircular, kRectangular, kElliptical };
 enum DampingCoefficientTests { kZeroDamping, kNonZeroDamping };
 
 class DerModelBuilderTest
@@ -241,9 +241,9 @@ class DerModelBuilderTest
     } else if (opt == kRectangular) {
       const auto [width, height] = std::make_tuple(1.38e-3, 6e-3);
       builder_->SetRectangularCrossSection(width, height);
-    } else if (opt == kEllipsoidal) {
+    } else if (opt == kElliptical) {
       const auto [a, b] = std::make_tuple(2.0e-3, 1.5e-3);
-      builder_->SetEllipsoidalCrossSection(a, b);
+      builder_->SetEllipticalCrossSection(a, b);
     }
 
     const auto [E, G, rho] = std::make_tuple(3e9, 0.8e9, 910);
@@ -266,9 +266,9 @@ class DerModelBuilderTest
       expected =
           internal::DerStructuralProperty<double>::FromRectangularCrossSection(
               1.38e-3, 6e-3, E, G, rho);
-    } else if (opt == kEllipsoidal) {
+    } else if (opt == kElliptical) {
       expected =
-          internal::DerStructuralProperty<double>::FromEllipsoidalCrossSection(
+          internal::DerStructuralProperty<double>::FromEllipticalCrossSection(
               2.0e-3, 1.5e-3, E, G, rho);
     }
     EXPECT_EQ(der_structural_property.EA(), expected->EA());
@@ -316,7 +316,7 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Combine(::testing::Values(kOpenEnds, kClosedEnds),
                        ::testing::Values(kZeroCurvatureTwist,
                                          kSameAsInitialState),
-                       ::testing::Values(kCircular, kRectangular, kEllipsoidal),
+                       ::testing::Values(kCircular, kRectangular, kElliptical),
                        ::testing::Values(kZeroDamping, kNonZeroDamping)));
 
 template <typename T>

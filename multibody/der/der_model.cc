@@ -151,12 +151,12 @@ void DerModel<T>::Builder::SetRectangularCrossSection(const T& width,
 }
 
 template <typename T>
-void DerModel<T>::Builder::SetEllipsoidalCrossSection(const T& a, const T& b) {
+void DerModel<T>::Builder::SetEllipticalCrossSection(const T& a, const T& b) {
   if (is_built_) throw std::logic_error("The DER model is already build.");
   if (cross_section_)
     throw std::logic_error("The cross section is already set.");
 
-  cross_section_ = std::make_pair(kEllipsoidal, std::vector<T>{a, b});
+  cross_section_ = std::make_pair(kElliptical, std::vector<T>{a, b});
 }
 
 template <typename T>
@@ -200,10 +200,10 @@ std::unique_ptr<DerModel<T>> DerModel<T>::Builder::Build() {
     der_structural_property =
         DerStructuralProperty<T>::FromRectangularCrossSection(par[0], par[1], E,
                                                               G, rho);
-  } else if (cross_section_->first == kEllipsoidal) {
+  } else if (cross_section_->first == kElliptical) {
     der_structural_property =
-        DerStructuralProperty<T>::FromEllipsoidalCrossSection(par[0], par[1], E,
-                                                              G, rho);
+        DerStructuralProperty<T>::FromEllipticalCrossSection(par[0], par[1], E,
+                                                             G, rho);
   }
   DRAKE_ASSERT(der_structural_property.has_value());
 
