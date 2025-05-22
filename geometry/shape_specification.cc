@@ -220,14 +220,6 @@ Ellipsoid::Ellipsoid(const Vector3<double>& measures)
 std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
-
-Filament::CrossSection::CrossSection(Filament::CrossSectionType type_in,
-                                     double width_in, double height_in)
-    : type(type_in), width(width_in), height(height_in) {
-  DRAKE_THROW_UNLESS(width > 0);
-  DRAKE_THROW_UNLESS(height > 0);
-}
-
 Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
                    const Eigen::Vector3d& first_frame_m1,
                    const CrossSection& cross_section)
