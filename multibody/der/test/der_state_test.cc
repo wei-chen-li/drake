@@ -7,7 +7,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
-#include "drake/multibody/der/transport.h"
+#include "drake/math/frame_transport.h"
 
 namespace drake {
 namespace multibody {
@@ -313,8 +313,8 @@ TEST_F(DerStateAdvancePositionToNextStepTest, ReferenceFrame) {
       CompareMatrices(d1.col(1), Vector3d(-1, 1, 0).normalized(), kTol));
 
   Vector3d d1_1_expected;
-  ComputeTransport<double>(Vector3d(1, 0, 0), Vector3d(0, 1, 0),
-                           Vector3d(1, 1, e_).normalized(), d1_1_expected);
+  math::FrameTransport<double>(Vector3d(1, 0, 0), Vector3d(0, 1, 0),
+                               Vector3d(1, 1, e_).normalized(), d1_1_expected);
   EXPECT_TRUE(CompareMatrices(d1.col(1), d1_1_expected, kTol));
   EXPECT_TRUE(CompareMatrices(
       d2.col(1), Vector3d(1, 1, e_).cross(d1_1_expected).normalized(), kTol));

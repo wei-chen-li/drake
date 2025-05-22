@@ -28,7 +28,6 @@ drake_cc_package_library(
         ":elastic_energy",
         ":energy_hessian_matrix_util",
         ":external_force_field",
-        ":transport",
         ":velocity_newmark_scheme",
     ],
 )
@@ -104,7 +103,7 @@ drake_cc_library(
     srcs = ["der_state_system.cc"],
     hdrs = ["der_state_system.h"],
     deps = [
-        ":transport",
+        "//math:frame_transport",
         "//systems/framework:leaf_system",
     ],
 )
@@ -180,15 +179,6 @@ drake_cc_library(
         ":der_structural_property",
         ":der_undeformed_state",
         "//multibody/plant:force_density_field",
-    ],
-)
-
-drake_cc_library(
-    name = "transport",
-    srcs = ["transport.cc"],
-    hdrs = ["transport.h"],
-    deps = [
-        "//common:default_scalars",
     ],
 )
 
@@ -313,14 +303,6 @@ drake_cc_googletest(
         ":external_force_field",
         "//common/test_utilities:eigen_matrix_compare",
         "//common/test_utilities:limit_malloc",
-    ],
-)
-
-drake_cc_googletest(
-    name = "transport_test",
-    deps = [
-        ":transport",
-        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
 
