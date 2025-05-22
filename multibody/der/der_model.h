@@ -158,7 +158,7 @@ class DerModel {
     /** Sets the cross section to be a rectangle. One semi-axis with length `a`
      is aligned with the material frame m₁ director; another semi-axis with
      length `b` is aligned with the material frame m₂ director. */
-    void SetEllipsoidalCrossSection(const T& a, const T& b);
+    void SetEllipticalCrossSection(const T& a, const T& b);
     // @}
 
     /** @{
@@ -182,7 +182,7 @@ class DerModel {
     DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(Builder);
 
    private:
-    enum CrossSectionType { kCircular, kRectangular, kEllipsoidal };
+    enum CrossSectionType { kCircular, kRectangular, kElliptical };
 
     bool is_first_edge_added_{false};
     bool is_configuration_finalized_{false};

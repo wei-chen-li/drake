@@ -21,7 +21,7 @@ DerStructuralProperty<T> DerStructuralProperty<T>::FromRectangularCrossSection(
 }
 
 template <typename T>
-DerStructuralProperty<T> DerStructuralProperty<T>::FromEllipsoidalCrossSection(
+DerStructuralProperty<T> DerStructuralProperty<T>::FromEllipticalCrossSection(
     const T& a, const T& b, const T& youngs_modulus, const T& shear_modulus,
     const T& mass_density) {
   const T A = M_PI * a * b;
@@ -35,7 +35,7 @@ template <typename T>
 DerStructuralProperty<T> DerStructuralProperty<T>::FromCircularCrossSection(
     const T& r, const T& youngs_modulus, const T& shear_modulus,
     const T& mass_density) {
-  return DerStructuralProperty<T>::FromEllipsoidalCrossSection(
+  return DerStructuralProperty<T>::FromEllipticalCrossSection(
       r, r, youngs_modulus, shear_modulus, mass_density);
 }
 

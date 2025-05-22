@@ -37,7 +37,7 @@ class DerStructuralProperty {
       const T& width, const T& height, const T& youngs_modulus,
       const T& shear_modulus, const T& mass_density);
 
-  /* Create a @p DerStructuralProperty corresponding to an ellipsoidal cross
+  /* Create a @p DerStructuralProperty corresponding to an elliptical cross
    section shown in the following figure.
    @verbatim
                   m₂
@@ -50,7 +50,7 @@ class DerStructuralProperty {
    @endverbatim
    m₁ and m₂ are the orthonormal material frame directors perpendicular to the
    tangent. */
-  static DerStructuralProperty<T> FromEllipsoidalCrossSection(
+  static DerStructuralProperty<T> FromEllipticalCrossSection(
       const T& a, const T& b, const T& youngs_modulus, const T& shear_modulus,
       const T& mass_density);
 

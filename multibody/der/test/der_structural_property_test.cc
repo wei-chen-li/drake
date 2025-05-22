@@ -40,10 +40,10 @@ TEST_F(DerStructuralPropertyTest, RectangularCrossSection) {
   EXPECT_NEAR(prop.rhoJ(), rho_ * J, kTol);
 }
 
-TEST_F(DerStructuralPropertyTest, EllipsoidalCrossSection) {
+TEST_F(DerStructuralPropertyTest, EllipticalCrossSection) {
   const double a = 1.0e-3;
   const double b = 2.5e-3;
-  const auto prop = DerStructuralProperty<double>::FromEllipsoidalCrossSection(
+  const auto prop = DerStructuralProperty<double>::FromEllipticalCrossSection(
       a, b, E_, G_, rho_);
 
   const double pi = M_PI;
