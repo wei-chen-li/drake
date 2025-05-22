@@ -462,11 +462,17 @@ class Filament final : public Shape {
     double width;
     /** Size of the cross-section in the m₂ direction. */
     double height;
+
+    CrossSection(CrossSectionType type_in, double width_in, double height_in);
   };
 
-  /* Constructs a filament shape from by specifying the position of nodes and
-   the m₁ director in the first frame. The m₁ directors in the remaining frames
-   are implicitly defined so that the filament is twist free. */
+  /* Constructs a filament by specifying the position of nodes and the m₁
+   director in the first frame. The m₁ directors in the remaining frames are
+   implicitly defined so that the filament is twist free.
+   @pre `‖first_frame_m1‖ ≈ 1`.
+   @pre `first_frame_m1` is perpendicular to the first edge vector.
+   @pre `cross_section.width > 0`.
+   @pre `cross_section.height > 0`. */
   Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
            const Eigen::Vector3d& first_frame_m1,
            const CrossSection& cross_section);
