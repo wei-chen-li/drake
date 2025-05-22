@@ -5,11 +5,9 @@
 #include "drake/common/eigen_types.h"
 
 namespace drake {
-namespace multibody {
-namespace der {
-namespace internal {
+namespace math {
 
-/* The transport operator maps tᵏ to tᵏ⁺¹ by rotating it φ degrees about the
+/** The transport operator maps tᵏ to tᵏ⁺¹ by rotating it φ degrees about the
  axis tᵏ × tᵏ⁺¹. Compute d₁ᵏ⁺¹ as the vector rotating d₁ᵏ by φ degrees about the
  same axis tᵏ × tᵏ⁺¹.
 
@@ -24,12 +22,12 @@ namespace internal {
  @pre `t_0.dot(d1_0) ≈ 0`.
  @tparam_default_scalar */
 template <typename T>
-void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
-                      const Eigen::Ref<const Eigen::Vector3<T>>& d1_0,
-                      const Eigen::Ref<const Eigen::Vector3<T>>& t_1,
-                      Eigen::Ref<Eigen::Vector3<T>> d1_1);
+void FrameTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
+                    const Eigen::Ref<const Eigen::Vector3<T>>& d1_0,
+                    const Eigen::Ref<const Eigen::Vector3<T>>& t_1,
+                    Eigen::Ref<Eigen::Vector3<T>> d1_1);
 
-/* For k = 0,1,..., transform d₁ᵏ to d₁ᵏ⁺¹ using the transport operator that
+/** For k = 0,1,..., transform d₁ᵏ to d₁ᵏ⁺¹ using the transport operator that
  maps tᵏ to tᵏ⁺¹.
 
  @param[in] t The tangent directors in all frames.
@@ -42,12 +40,11 @@ void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
  @pre `!d1_0 || d1_0.dot(t.col(0)) ≈ 0`.
  @tparam_default_scalar */
 template <typename T>
-void ComputeSpaceParallelTransport(
-    const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
-    const std::optional<Eigen::Vector3<T>>& d1_0,
-    EigenPtr<Eigen::Matrix3X<T>> d1);
+void SpaceParallelFrameTransport(const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
+                                 const std::optional<Eigen::Vector3<T>>& d1_0,
+                                 EigenPtr<Eigen::Matrix3X<T>> d1);
 
-/* For k = 0,1,..., transform d₁ᵏ(𝑡) to d₁ᵏ(𝑡+𝛥𝑡) using the transport operator
+/** For k = 0,1,..., transform d₁ᵏ(𝑡) to d₁ᵏ(𝑡+𝛥𝑡) using the transport operator
  that maps tᵏ(𝑡) to tᵏ(𝑡+𝛥𝑡).
 
  @param[in] t The tangent directors at time 𝑡.
@@ -59,13 +56,11 @@ void ComputeSpaceParallelTransport(
  @pre Number of columns of `t`, `d1`, `t_next`, `d1_next` are the same.
  @tparam_default_scalar */
 template <typename T>
-void ComputeTimeParallelTransport(
+void TimeParallelFrameTransport(
     const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
     const Eigen::Ref<const Eigen::Matrix3X<T>>& d1,
     const Eigen::Ref<const Eigen::Matrix3X<T>>& t_next,
     EigenPtr<Eigen::Matrix3X<T>> d1_next);
 
-}  // namespace internal
-}  // namespace der
-}  // namespace multibody
+}  // namespace math
 }  // namespace drake

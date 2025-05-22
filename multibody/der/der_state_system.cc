@@ -2,7 +2,7 @@
 
 #include <fmt/format.h>
 
-#include "drake/multibody/der/transport.h"
+#include "drake/math/frame_transport.h"
 
 namespace drake {
 namespace multibody {
@@ -108,7 +108,7 @@ void CompleteFrames(
   }
 }
 
-/* Computes the rotation of `vec` around the specified `axis` by `angle`. */
+/* Rersutns the rotation of `vec` around the specified `axis` by `angle`. */
 template <typename T>
 Eigen::Vector3<T> RotateAxisAngle(
     const Eigen::Ref<const Eigen::Vector3<T>>& vec,
@@ -173,8 +173,8 @@ DerStateSystem<T>::DerStateSystem(
   prev_step.tangent =
       ComputeTangentOrThrow(has_closed_ends, initial_node_positions_);
   prev_step.reference_frame_d1.resize(3, num_edges());
-  ComputeSpaceParallelTransport<T>(prev_step.tangent, initial_d1_0_,
-                                   &prev_step.reference_frame_d1);
+  math::SpaceParallelFrameTransport<T>(prev_step.tangent, initial_d1_0_,
+                                       &prev_step.reference_frame_d1);
   prev_step.reference_twist =
       Eigen::Matrix<T, 1, Eigen::Dynamic>::Zero(num_internal_nodes());
   prev_step_index_ = this->DeclareAbstractState(Value(prev_step));
@@ -350,7 +350,7 @@ void DerStateSystem<T>::CalcReferenceFrameD1(
   const auto& prev_tangent = get_prev_step(context).tangent;
   const auto& prev_d1 = get_prev_step(context).reference_frame_d1;
   auto& tangent = get_tangent(context);
-  ComputeTimeParallelTransport<T>(prev_tangent, prev_d1, tangent, d1);
+  math::TimeParallelFrameTransport<T>(prev_tangent, prev_d1, tangent, d1);
 }
 
 template <typename T>
@@ -476,7 +476,7 @@ void DerStateSystem<T>::CalcReferenceTwist(
     const int ip1 = (i + 1) % num_edges();
     /* We transform d₁ⁱ using the transport operator that maps tⁱ to tⁱ⁺¹ and
      write the result to `vec`. */
-    ComputeTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
+    math::FrameTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
     /* The angle between `vec` and d₁ⁱ⁺¹ is the reference twist. However,
      instead of directly calculating the angle, we first rotate `vec` by the
      previous reference twist. Then we calculate the delta angle and add it
@@ -498,7 +498,7 @@ static void FixReferenceFrame_CalcReferenceTwist(
   Eigen::Vector3<T> vec;
   for (int i = 0; i < self->num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % self->num_edges();
-    ComputeTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
+    math::FrameTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
     vec = RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
     (*ref_twist)[i] =
         prev_ref_twist[i] + ComputeSignedAngle<T>(vec, d1.col(ip1), t.col(ip1));
