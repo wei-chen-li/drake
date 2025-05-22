@@ -442,16 +442,44 @@ class Ellipsoid final : public Shape {
   Vector3<double> radii_;
 };
 
+/** Definition of a general filament.
+
+ A filament describes a slender, thread-like shape defined by a sequence of
+ nodes connected by edges. Each edge is associated with a material frame,
+ consisting of a unit tangent vector (t) and two orthogonal material directions
+ (m₁ and m₂), which span the plane of the cross-section. The filament can either
+ be open-ended or form a closed loop. */
 class Filament final : public Shape {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Filament);
 
-  explicit Filament(
-      const Eigen::Ref<Eigen::Matrix<double, 3, Eigen::Dynamic>>& nodes);
+  enum CrossSectionType { kRectangular, kElliptical };
+
+  struct CrossSection {
+    /** Type of the cross-section, can be kRectangular or kElliptical. */
+    CrossSectionType type;
+    /** Size of the cross-section in the m₁ direction. */
+    double width;
+    /** Size of the cross-section in the m₂ direction. */
+    double height;
+  };
+
+  /* Constructs a filament shape from by specifying the position of nodes and
+   the m₁ director in the first frame. The m₁ directors in the remaining frames
+   are implicitly defined so that the filament is twist free. */
+  Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
+           const Eigen::Vector3d& first_frame_m1,
+           const CrossSection& cross_section);
 
   ~Filament() final;
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> nodes() const { return nodes_; }
+  bool has_closed_ends() const { return has_closed_ends_; }
+
+  const Eigen::Matrix3Xd& node_positions() const { return node_positions_; }
+
+  const Eigen::Matrix3Xd& frames_m1() const { return frames_m1_; }
+
+  const CrossSection& cross_section() const { return cross_section_; }
 
  private:
   void DoReify(ShapeReifier*, void*) const final;
@@ -460,7 +488,10 @@ class Filament final : public Shape {
   std::string do_to_string() const final;
   VariantShapeConstPtr get_variant_this() const final;
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> nodes_;
+  bool has_closed_ends_{};
+  Eigen::Matrix3Xd node_positions_;
+  Eigen::Matrix3Xd frames_m1_;
+  CrossSection cross_section_;
 };
 
 /** Definition of a half space. In its canonical frame, the plane defining the
