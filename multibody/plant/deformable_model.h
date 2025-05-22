@@ -476,10 +476,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
                         const geometry::Filament& filament_G,
                         const fem::DeformableBodyConfig<T>& config);
 
-  /* Copies the vertex positions of all deformable bodies to the output port
-   value which is guaranteed to be of type GeometryConfigurationVector. */
-  void CopyVertexPositions(const systems::Context<T>& context,
-                           AbstractValue* output) const;
+  /* Copies the configuration vectors of all deformable bodies to the output
+   port value which is guaranteed to be of type GeometryConfigurationVector. */
+  void CopyConfigurationVectors(const systems::Context<T>& context,
+                                AbstractValue* output) const;
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    * doesn't exist. */

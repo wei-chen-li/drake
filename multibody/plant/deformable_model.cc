@@ -731,15 +731,15 @@ void DeformableModel<T>::DoDeclareSceneGraphPorts() {
               },
               [this](const systems::Context<T>& context,
                      AbstractValue* output) {
-                this->CopyVertexPositions(context, output);
+                this->CopyConfigurationVectors(context, output);
               },
               {systems::System<double>::xd_ticket()})
           .get_index();
 }
 
 template <typename T>
-void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
-                                             AbstractValue* output) const {
+void DeformableModel<T>::CopyConfigurationVectors(
+    const systems::Context<T>& context, AbstractValue* output) const {
   auto& output_value =
       output->get_mutable_value<geometry::GeometryConfigurationVector<T>>();
   output_value.clear();
@@ -753,15 +753,23 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
               .head(num_dofs);
       output_value.set_value(geometry_id, std::move(vertex_positions));
     } else if (IsDerModel(body_id)) {
-      const int num_nodes = GetDerModel(body_id).num_nodes();
-      const VectorX<T>& discrete_state =
-          context.get_discrete_state(GetDiscreteStateIndex(body_id)).value();
-      VectorX<T> node_positions(num_nodes * 3);
-      for (int i = 0; i < num_nodes; ++i) {
-        node_positions.template segment<3>(3 * i) =
-            discrete_state.template segment<3>(4 * i);
+      auto der_state = GetDerModel(body_id).CreateDerState();
+      der_state->Deserialize(
+          context.get_discrete_state(GetDiscreteStateIndex(body_id)).value());
+      /* The configuration vector contains the position of all nodes and m₁ of
+       all frames. */
+      VectorX<T> configuration(der_state->num_nodes() * 3 +
+                               der_state->num_edges() * 3);
+      for (int i = 0; i < der_state->num_nodes(); ++i) {
+        configuration.template segment<3>(3 * i) =
+            der_state->get_position().template segment<3>(4 * i);
       }
-      output_value.set_value(geometry_id, std::move(node_positions));
+      const int offset = der_state->num_nodes() * 3;
+      for (int i = 0; i < der_state->num_edges(); ++i) {
+        configuration.template segment<3>(3 * i + offset) =
+            der_state->get_material_frame_m1().col(i);
+      }
+      output_value.set_value(geometry_id, std::move(configuration));
     } else {
       DRAKE_UNREACHABLE();
     }
