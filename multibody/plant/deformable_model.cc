@@ -148,7 +148,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
     /* Crerate the geometry. */
     std::unique_ptr<multibody::der::internal::DerState<T>> state =
         der_body->CreateDerState();
-    Eigen::Matrix<T, 3, Eigen::Dynamic> node_positions(3, state->num_nodes());
+    Eigen::Matrix3X<T> node_positions(3, state->num_nodes());
     for (int i = 0; i < state->num_nodes(); ++i) {
       node_positions.col(i) = state->get_position().template segment<3>(4 * i);
     }

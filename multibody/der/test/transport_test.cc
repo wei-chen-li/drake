@@ -29,11 +29,11 @@ GTEST_TEST(ComputeTransportTest, test) {
 
 GTEST_TEST(ComputeSpaceParallelTransportTest, DidntSpecifyFirstDirector) {
   auto [sin30, cos30] = std::make_pair(1.0 / 2, sqrt(3) / 2);
-  Eigen::Matrix<double, 3, Eigen::Dynamic> t(3, 2);
+  Eigen::Matrix3Xd t(3, 2);
   t.col(0) = Vector3d(1, 0, 0);
   t.col(1) = Vector3d(cos30, sin30, 0);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> d1(3, 2);
+  Eigen::Matrix3Xd d1(3, 2);
   ComputeSpaceParallelTransport<double>(t, std::nullopt, &d1);
 
   EXPECT_LT(abs(t.col(0).dot(d1.col(0))), kTol);
@@ -50,12 +50,12 @@ GTEST_TEST(ComputeSpaceParallelTransportTest, SpecifyFirstDirector) {
   const double a = sqrt(2) / 2;
   auto [sin30, cos30] = std::make_pair(1.0 / 2, sqrt(3) / 2);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> t(3, 2);
+  Eigen::Matrix3Xd t(3, 2);
   t.col(0) = Vector3d(1, 0, 0);
   t.col(1) = Vector3d(cos30, sin30, 0);
 
   Vector3d d1_0(0, a, a);
-  Eigen::Matrix<double, 3, Eigen::Dynamic> d1(3, 2);
+  Eigen::Matrix3Xd d1(3, 2);
   ComputeSpaceParallelTransport<double>(t, d1_0, &d1);
 
   EXPECT_TRUE(CompareMatrices(d1.col(0), d1_0, kTol));
@@ -67,20 +67,20 @@ GTEST_TEST(ComputTimeParallelTransport, test) {
   const double a = sqrt(2) / 2;
   auto [sin30, cos30] = std::make_pair(1.0 / 2, sqrt(3) / 2);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> t(3, 2), d1(3, 2);
+  Eigen::Matrix3Xd t(3, 2), d1(3, 2);
   t.col(0) = Vector3d(1, 0, 0);
   t.col(1) = Vector3d(cos30, sin30, 0);
   d1.col(0) = Vector3d(0, a, a);
   ComputeSpaceParallelTransport<double>(t, d1.col(0), &d1);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> t_next(3, 2);
+  Eigen::Matrix3Xd t_next(3, 2);
   t_next.col(0) = Vector3d(cos30, 0, sin30);
   t_next.col(1) = Vector3d(cos30 * cos30, sin30 * cos30, sin30);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> d1_next(3, 2);
+  Eigen::Matrix3Xd d1_next(3, 2);
   ComputeTimeParallelTransport<double>(t, d1, t_next, &d1_next);
 
-  Eigen::Matrix<double, 3, Eigen::Dynamic> d1_next_expected(3, 2);
+  Eigen::Matrix3Xd d1_next_expected(3, 2);
   d1_next_expected.col(0) = Vector3d(a * -sin30, a, a * cos30);
   ComputeTransport<double>(t.col(1), Vector3d(a * -sin30, a * cos30, a),
                            t_next.col(1), d1_next_expected.col(1));

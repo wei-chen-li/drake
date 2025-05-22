@@ -38,9 +38,9 @@ void ComputeTransport(const Eigen::Ref<const Eigen::Vector3<T>>& t_0,
 
 template <typename T>
 void ComputeSpaceParallelTransport(
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
     const std::optional<Eigen::Vector3<T>>& d1_0_in,
-    EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d1) {
+    EigenPtr<Eigen::Matrix3X<T>> d1) {
   DRAKE_THROW_UNLESS(d1 != nullptr);
   DRAKE_THROW_UNLESS(d1->cols() == t.cols());
 
@@ -71,10 +71,10 @@ void ComputeSpaceParallelTransport(
 
 template <typename T>
 void ComputeTimeParallelTransport(
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& d1,
-    const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t_next,
-    EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d1_next) {
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& d1,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& t_next,
+    EigenPtr<Eigen::Matrix3X<T>> d1_next) {
   DRAKE_THROW_UNLESS(d1_next != nullptr);
   DRAKE_THROW_UNLESS(t.cols() == d1.cols() && t.cols() == t_next.cols() &&
                      t.cols() == d1_next->cols());
