@@ -219,12 +219,18 @@ std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
 
-Filament::Filament(
-    const Eigen::Ref<Eigen::Matrix<double, 3, Eigen::Dynamic>>& nodes)
-    : nodes_(nodes) {}
+Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
+                   const Eigen::Vector3d& first_frame_m1,
+                   const CrossSection& cross_section)
+    : has_closed_ends_(has_closed_ends),
+      node_positions_(std::move(node_positions)),
+      frames_m1_(first_frame_m1),
+      cross_section_(cross_section) {
+  // TODO(wei-chen): Complete the computation of frames_m1_.
+}
 
 std::string Filament::do_to_string() const {
-  return "Filament";
+  return "Filament()";
 }
 
 HalfSpace::HalfSpace() = default;
@@ -400,6 +406,30 @@ double CalcMeshVolume(const Mesh& mesh) {
   return internal::CalcEnclosedVolume(surface_mesh);
 }
 
+double CalcFilamentVolume(const Filament& filament) {
+  double area = 0;
+  const Filament::CrossSection& cs = filament.cross_section();
+  if (cs.type == Filament::CrossSectionType::kRectangular) {
+    area = cs.width * cs.height;
+  } else if (cs.type == Filament::CrossSectionType::kElliptical) {
+    area = cs.width * cs.height * M_PI / 4;
+  } else {
+    throw std::logic_error(
+        "CalcVolume() does not yet support filament with cross-section type "
+        "other than kRectangular and kElliptical.");
+  }
+
+  const Eigen::Matrix3Xd& node_positions = filament.node_positions();
+  const int num_nodes = node_positions.cols();
+  const int num_edges = filament.has_closed_ends() ? num_nodes : num_nodes - 1;
+  double length = 0;
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) * num_nodes;
+    length += (node_positions.col(ip1) - node_positions.col(i)).norm();
+  }
+  return area * length;
+}
+
 }  // namespace
 
 double CalcVolume(const Shape& shape) {
@@ -421,8 +451,8 @@ double CalcVolume(const Shape& shape) {
       [](const Ellipsoid& ellipsoid) {
         return 4.0 / 3.0 * M_PI * ellipsoid.a() * ellipsoid.b() * ellipsoid.c();
       },
-      [](const Filament&) {
-        return 0.0;
+      [](const Filament& filament) {
+        return CalcFilamentVolume(filament);
       },
       [](const HalfSpace&) {
         return std::numeric_limits<double>::infinity();
