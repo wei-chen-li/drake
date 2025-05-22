@@ -16,6 +16,11 @@ namespace internal {
 std::unique_ptr<VolumeMesh<double>> MakeMeshForDeformable(
     const Shape& shape, double resolution_hint);
 
+/* Returns a finer spatially discretized filament from the input filament.
+ @pre resolution_hint > 0. */
+std::unique_ptr<Filament> MakeFinerFilament(const Filament& filament,
+                                            double resolution_hint);
+
 }  // namespace internal
 }  // namespace geometry
 }  // namespace drake

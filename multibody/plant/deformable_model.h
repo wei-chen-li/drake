@@ -100,29 +100,6 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
       std::unique_ptr<geometry::GeometryInstance> geometry_instance,
       const fem::DeformableBodyConfig<T>& config, double resolution_hint);
 
-  /** Registers a discrete elastic rod (DER) body in `this` DeformableModel with
-   the given `der_body`. The DER is represented in the world frame. Returns a
-   unique identifier for the added body.
-   @param[in] der_body The DER body to be added to this deformable model.
-   @param[in] model_instance The model instance index which this body is part
-   of.
-   @param[in] name The name of the geometry coresponding to the added body.
-   @throws std::exception if `this` %DeformableModel is not of scalar type
-   double.
-   @throws std::exception if the model instance does not exist.
-   @throws std::exception if Finalize() has been called on the multibody plant
-   owning this deformable model.
-   @pydrake_mkdoc_identifier{der_3args} */
-  DeformableBodyId RegisterDeformableBody(
-      std::unique_ptr<der::DerModel<T>> der_body,
-      ModelInstanceIndex model_instance, std::string_view name);
-
-  /** Registers a discrete elastic rod (DER) in `this` DeformableModel with the
-   default model instance.
-   @pydrake_mkdoc_identifier{der_2args} */
-  DeformableBodyId RegisterDeformableBody(
-      std::unique_ptr<der::DerModel<T>> der_body, std::string_view name);
-
   // TODO(xuchenhan-tri): Consider pulling PosedHalfSpace out of internal
   // namespace and use it here.
   /** Sets wall boundary conditions for the body with the given `id`. All

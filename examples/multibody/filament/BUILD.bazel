@@ -19,7 +19,6 @@ drake_cc_binary(
     deps = [
         "//geometry:drake_visualizer",
         "//geometry:scene_graph",
-        "//multibody/der",
         "//multibody/plant",
         "//systems/analysis:simulator",
         "//systems/framework:diagram",

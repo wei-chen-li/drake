@@ -270,6 +270,13 @@ const VolumeMesh<double>* SceneGraphInspector<T>::GetReferenceMesh(
 }
 
 template <typename T>
+const Filament* SceneGraphInspector<T>::GetReferenceFilament(
+    GeometryId geometry_id) const {
+  DRAKE_DEMAND(state_ != nullptr);
+  return state_->GetReferenceFilament(geometry_id);
+}
+
+template <typename T>
 const std::vector<internal::RenderMesh>&
 SceneGraphInspector<T>::GetDrivenRenderMeshes(GeometryId geometry_id,
                                               Role role) const {

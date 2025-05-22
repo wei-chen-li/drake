@@ -91,19 +91,33 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
         scene_graph.model_inspector();
     const geometry::VolumeMesh<double>* mesh_G =
         inspector.GetReferenceMesh(geometry_id);
-    DRAKE_DEMAND(mesh_G != nullptr);
+    const geometry::Filament* filament_G =
+        inspector.GetReferenceFilament(geometry_id);
+    DRAKE_DEMAND(mesh_G != nullptr || filament_G != nullptr);
+
     const math::RigidTransform<double>& X_WG =
         inspector.GetPoseInFrame(geometry_id);
-    geometry::VolumeMesh<double> mesh_W = *mesh_G;
-    mesh_W.TransformVertices(X_WG);
-    VectorX<T> reference_position(3 * mesh_W.num_vertices());
-    for (int v = 0; v < mesh_W.num_vertices(); ++v) {
-      reference_position.template segment<3>(3 * v) = mesh_W.vertex(v);
-    }
-
     const DeformableBodyId body_id = DeformableBodyId::get_new_id();
-    /* Build FEM model for the deformable body. */
-    BuildLinearVolumetricModel(body_id, mesh_W, config);
+
+    VectorX<T> reference_position;
+    if (mesh_G != nullptr) {
+      geometry::VolumeMesh<double> mesh_W = *mesh_G;
+      mesh_W.TransformVertices(X_WG);
+      reference_position.resize(3 * mesh_W.num_vertices());
+      for (int v = 0; v < mesh_W.num_vertices(); ++v) {
+        reference_position.template segment<3>(3 * v) = mesh_W.vertex(v);
+      }
+      /* Build FEM model for the deformable body. */
+      BuildLinearVolumetricModel(body_id, mesh_W, config);
+    } else {
+      const Eigen::Matrix3Xd& node_G = filament_G->node_positions();
+      reference_position.resize(node_G.size());
+      for (int i = 0; i < node_G.cols(); ++i) {
+        reference_position.template segment<3>(3 * i) = X_WG * node_G.col(i);
+      }
+      /* Build DER model for the deformable body. */
+      // TODO(wei-chen): Implement this.
+    }
 
     /* Do the book-keeping. */
     reference_positions_.emplace(body_id, std::move(reference_position));
@@ -125,70 +139,6 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
   return RegisterDeformableBody(std::move(geometry_instance),
                                 default_model_instance(), config,
                                 resolution_hint);
-}
-
-template <typename T>
-DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
-    std::unique_ptr<der::DerModel<T>> der_body,
-    ModelInstanceIndex model_instance, std::string_view name) {
-  this->ThrowIfSystemResourcesDeclared(__func__);
-  ThrowIfNotDouble(__func__);
-  if (!(model_instance < this->plant().num_model_instances())) {
-    throw std::logic_error(
-        "Invalid model instance specified. A valid model instance can be "
-        "obtained by calling MultibodyPlant::AddModelInstance().");
-  }
-  if constexpr (std::is_same_v<T, double>) {
-    if (name_to_body_id_.contains(name)) {
-      throw std::logic_error(fmt::format(
-          "A deformable body with the name {} has already been registered.",
-          name));
-    }
-
-    /* Crerate the geometry. */
-    std::unique_ptr<multibody::der::internal::DerState<T>> state =
-        der_body->CreateDerState();
-    Eigen::Matrix3X<T> node_positions(3, state->num_nodes());
-    for (int i = 0; i < state->num_nodes(); ++i) {
-      node_positions.col(i) = state->get_position().template segment<3>(4 * i);
-    }
-    std::unique_ptr<geometry::Shape> filament =
-        std::make_unique<geometry::Filament>(node_positions);
-    std::unique_ptr<GeometryInstance> geometry_instance =
-        std::make_unique<GeometryInstance>(
-            math::RigidTransform<double>::Identity(), std::move(filament),
-            std::string(name));
-
-    /* Register the geometry with SceneGraph. */
-    SceneGraph<T>& scene_graph = this->mutable_scene_graph();
-    SourceId source_id = this->plant().get_source_id().value();
-    const FrameId world_frame_id = scene_graph.world_frame_id();
-    const double dummy_resolution_hint = 0.0;
-    GeometryId geometry_id = scene_graph.RegisterDeformableGeometry(
-        source_id, world_frame_id, std::move(geometry_instance),
-        dummy_resolution_hint);
-
-    const DeformableBodyId body_id = DeformableBodyId::get_new_id();
-    /* Do the book-keeping. */
-    reference_positions_.emplace(body_id, state->get_position());
-    body_id_to_geometry_id_.emplace(body_id, geometry_id);
-    geometry_id_to_body_id_.emplace(geometry_id, body_id);
-    body_ids_.emplace_back(body_id);
-    body_id_to_density_prefinalize_.emplace(
-        body_id, der_body->structural_property().rho());
-    name_to_body_id_.emplace(name, body_id);
-    model_instance_to_body_ids_[model_instance].push_back(body_id);
-    der_models_.emplace(body_id, std::move(der_body));
-    return body_id;
-  }
-  DRAKE_UNREACHABLE();
-}
-
-template <typename T>
-DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
-    std::unique_ptr<der::DerModel<T>> der_body, std::string_view name) {
-  return RegisterDeformableBody(std::move(der_body), default_model_instance(),
-                                name);
 }
 
 template <typename T>
