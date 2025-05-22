@@ -17,6 +17,8 @@
 #include "drake/geometry/proximity/obj_to_surface_mesh.h"
 #include "drake/geometry/proximity/polygon_to_triangle_mesh.h"
 #include "drake/geometry/proximity/triangle_surface_mesh.h"
+#include "drake/math/frame_transport.h"
+#include "drake/math/unit_vector.h"
 
 namespace {
 std::string PointsToObjString(const Eigen::Matrix3X<double>& points) {
@@ -219,14 +221,35 @@ std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
 
+Filament::CrossSection::CrossSection(Filament::CrossSectionType type_in,
+                                     double width_in, double height_in)
+    : type(type_in), width(width_in), height(height_in) {
+  DRAKE_THROW_UNLESS(width > 0);
+  DRAKE_THROW_UNLESS(height > 0);
+}
+
 Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
                    const Eigen::Vector3d& first_frame_m1,
                    const CrossSection& cross_section)
     : has_closed_ends_(has_closed_ends),
       node_positions_(std::move(node_positions)),
-      frames_m1_(first_frame_m1),
       cross_section_(cross_section) {
-  // TODO(wei-chen): Complete the computation of frames_m1_.
+  DRAKE_THROW_UNLESS(cross_section.width > 0);
+  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  const int num_nodes = node_positions_.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
+  Eigen::Matrix3Xd frames_t(3, num_edges);
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    frames_t.col(i) = math::internal::NormalizeOrThrow<double>(
+        node_positions_.col(ip1) - node_positions_.col(i), __func__);
+  }
+  math::internal::ThrowIfNotOrthonormal<double>(frames_t.col(0), first_frame_m1,
+                                                __func__);
+  frames_m1_.resize(3, num_edges);
+  math::SpaceParallelFrameTransport<double>(frames_t, first_frame_m1,
+                                            &frames_m1_);
 }
 
 std::string Filament::do_to_string() const {
