@@ -475,6 +475,15 @@ class Filament final : public Shape {
            const Eigen::Vector3d& first_frame_m1,
            const CrossSection& cross_section);
 
+  /* Constructs a filament by specifying the position of nodes and the m₁
+   directors of all frame.
+   @pre Every column of `frames_m1` is perpendicular to the corresponding
+        edge vector.
+   @pre `cross_section.width > 0`.
+   @pre `cross_section.height > 0`. */
+  Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
+           Eigen::Matrix3Xd frames_m1, const CrossSection& cross_section);
+
   ~Filament() final;
 
   bool has_closed_ends() const { return has_closed_ends_; }

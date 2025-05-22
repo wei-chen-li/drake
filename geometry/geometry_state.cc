@@ -1094,10 +1094,15 @@ GeometryId GeometryState<T>::RegisterDeformableGeometry(
   } else {
     const Eigen::Matrix3Xd& node_positions =
         reference_filament->node_positions();
-    VectorX<T> q_WG(node_positions.size());
+    const Eigen::Matrix3Xd& frames_m1 = reference_filament->frames_m1();
+    VectorX<T> q_WG(node_positions.size() + frames_m1.size());
     for (int i = 0; i < node_positions.cols(); ++i) {
       q_WG.template segment<3>(3 * i) =
           X_WG * Vector3<T>(node_positions.col(i));
+    }
+    for (int i = 0; i < frames_m1.cols(); ++i) {
+      q_WG.template segment<3>(node_positions.size() + 3 * i) =
+          X_WG.rotation() * Vector3<T>(frames_m1.col(i));
     }
     kinematics_data_.q_WGs[geometry_id] = std::move(q_WG);
   }
