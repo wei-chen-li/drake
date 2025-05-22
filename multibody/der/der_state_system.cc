@@ -40,26 +40,16 @@ Eigen::VectorX<T> AssembleQVector(
 /* Computes tangent vectors from `initial_node_positions_`. Throws an error if
  any consecutive pair of nodes are too close. */
 template <typename T>
-Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeTangentOrThrow(
+Eigen::Matrix<T, 3, Eigen::Dynamic> ComputeUnitTangents(
     bool has_closed_ends,
-    const std::vector<Eigen::Vector3<T>>& initial_node_positions_,
-    const double edge_length_lb = 1e-8) {
+    const std::vector<Eigen::Vector3<T>>& initial_node_positions_) {
   const int num_nodes = initial_node_positions_.size();
   const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
-  Eigen::Matrix<T, 3, Eigen::Dynamic> tangent(3, num_edges);
-
-  Eigen::Vector3<T> edge_vector;
-  T edge_length;
+  Eigen::Matrix3X<T> tangent(3, num_edges);
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
-    edge_vector = initial_node_positions_[ip1] - initial_node_positions_[i];
-    edge_length = edge_vector.norm();
-    if (ExtractDoubleOrThrow(edge_length) < edge_length_lb) {
-      throw std::logic_error(fmt::format(
-          "The initial distance between node {} and node {} is too short.", i,
-          ip1));
-    }
-    tangent.col(i) = edge_vector / edge_length;
+    tangent.col(i) = math::internal::NormalizeOrThrow<T>(
+        initial_node_positions_[ip1] - initial_node_positions_[i], __func__);
   }
   return tangent;
 }
@@ -139,7 +129,7 @@ DerStateSystem<T>::DerStateSystem(
 
   PrevStep<T> prev_step;
   prev_step.tangent =
-      ComputeTangentOrThrow(has_closed_ends, initial_node_positions_);
+      ComputeUnitTangents(has_closed_ends, initial_node_positions_);
   prev_step.reference_frame_d1.resize(3, num_edges());
   math::SpaceParallelFrameTransport<T>(prev_step.tangent, initial_d1_0_,
                                        &prev_step.reference_frame_d1);

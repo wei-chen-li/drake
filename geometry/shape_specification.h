@@ -462,8 +462,6 @@ class Filament final : public Shape {
     double width;
     /** Size of the cross-section in the m₂ direction. */
     double height;
-
-    CrossSection(CrossSectionType type_in, double width_in, double height_in);
   };
 
   /* Constructs a filament by specifying the position of nodes and the m₁
