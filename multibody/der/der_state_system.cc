@@ -2,18 +2,15 @@
 
 #include <fmt/format.h>
 
+#include "drake/math/axis_angle.h"
 #include "drake/math/frame_transport.h"
+#include "drake/math/unit_vector.h"
 
 namespace drake {
 namespace multibody {
 namespace der {
 namespace internal {
 namespace {
-
-/* Tolerance for ‖unit_vector‖ is 1e-14 (≈ 5.5 bits) of 1.0.
-   Tolerance for v1.dot(v2) if v1 ⊥ v2 is 1e-14 of 0.0.
- Note: 1e-14 ≈ 2^5.5 * std::numeric_limits<double>::epsilon(); */
-constexpr double kTol = 1e-14;
 
 /* Returns a zero matrix with size `num_rows` × `num_cols`.  */
 template <typename T, int num_rows>
@@ -99,39 +96,10 @@ void CompleteFrames(
   DRAKE_ASSERT(d2 != nullptr);
   DRAKE_ASSERT(t.cols() == d1.cols() && d1.cols() == d2->cols());
   for (int i = 0; i < t.cols(); ++i) {
-    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(t.col(i).norm()) - 1) < kTol);
-    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(d1.col(i).norm()) - 1) < kTol);
-    DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(t.col(i).dot(d1.col(i)))) <
-                 kTol);
+    math::internal::ThrowIfNotOrthonormal<T>(t.col(i), d1.col(i), __func__);
     d2->col(i) = t.col(i).cross(d1.col(i));
     d2->col(i) /= d2->col(i).norm();
   }
-}
-
-/* Rersutns the rotation of `vec` around the specified `axis` by `angle`. */
-template <typename T>
-Eigen::Vector3<T> RotateAxisAngle(
-    const Eigen::Ref<const Eigen::Vector3<T>>& vec,
-    const Eigen::Ref<const Eigen::Vector3<T>>& axis, const T& angle) {
-  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.norm()) - 1) < kTol);
-  T cos_ang = cos(angle);
-  T sin_ang = sin(angle);
-  return cos_ang * vec + sin_ang * axis.cross(vec) +
-         axis.dot(vec) * (1.0 - cos_ang) * axis;
-}
-
-/* Computes the signed angle of rotation from `vec1` to `vec2` around a given
- `axis`. The returned angle is in the range (−π, π]. The angle is positive if
- the rotation follows the right-hand rule with `axis` as the thumb direction. */
-template <typename T>
-T ComputeSignedAngle(const Eigen::Ref<const Eigen::Vector3<T>>& vec1,
-                     const Eigen::Ref<const Eigen::Vector3<T>>& vec2,
-                     const Eigen::Ref<const Eigen::Vector3<T>>& axis) {
-  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.norm()) - 1) < kTol);
-  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.dot(vec1))) < kTol);
-  DRAKE_ASSERT(std::abs(ExtractDoubleOrThrow(axis.dot(vec2))) < kTol);
-  T angle = atan2(vec1.cross(vec2).dot(axis), vec1.dot(vec2));
-  return angle;
 }
 
 /* Remove the derivatives for all entries in the AutoDiffXd matrix. */
@@ -376,7 +344,7 @@ void DerStateSystem<T>::CalcMaterialFrameM1(
   auto& d1 = get_reference_frame_d1(context);
   auto& q = get_position(context);
   for (int i = 0; i < num_edges(); ++i) {
-    m1->col(i) = RotateAxisAngle<T>(d1.col(i), t.col(i), q(4 * i + 3));
+    m1->col(i) = math::RotateAxisAngle<T>(d1.col(i), t.col(i), q(4 * i + 3));
   }
 }
 
@@ -389,7 +357,8 @@ static void FixReferenceFrame_CalcMaterialFrameM1(
   RemoveDerivatives(&d1);
   auto& q = self->get_position(context);
   for (int i = 0; i < self->num_edges(); ++i) {
-    m1->col(i) = RotateAxisAngle<AutoDiffXd>(d1.col(i), t.col(i), q(4 * i + 3));
+    m1->col(i) =
+        math::RotateAxisAngle<AutoDiffXd>(d1.col(i), t.col(i), q(4 * i + 3));
   }
 }
 
@@ -481,9 +450,9 @@ void DerStateSystem<T>::CalcReferenceTwist(
      instead of directly calculating the angle, we first rotate `vec` by the
      previous reference twist. Then we calculate the delta angle and add it
      to the previous reference twist. This avoids incorrect angle wrapping. */
-    vec = RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
-    (*ref_twist)[i] =
-        prev_ref_twist[i] + ComputeSignedAngle<T>(vec, d1.col(ip1), t.col(ip1));
+    vec = math::RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
+    (*ref_twist)[i] = prev_ref_twist[i] + math::SignedAngleAroundAxis<T>(
+                                              vec, d1.col(ip1), t.col(ip1));
   }
 }
 
@@ -499,9 +468,9 @@ static void FixReferenceFrame_CalcReferenceTwist(
   for (int i = 0; i < self->num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % self->num_edges();
     math::FrameTransport<T>(t.col(i), d1.col(i), t.col(ip1), vec);
-    vec = RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
-    (*ref_twist)[i] =
-        prev_ref_twist[i] + ComputeSignedAngle<T>(vec, d1.col(ip1), t.col(ip1));
+    vec = math::RotateAxisAngle<T>(vec, t.col(ip1), prev_ref_twist[i]);
+    (*ref_twist)[i] = prev_ref_twist[i] + math::SignedAngleAroundAxis<T>(
+                                              vec, d1.col(ip1), t.col(ip1));
   }
 }
 

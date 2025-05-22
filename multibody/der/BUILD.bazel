@@ -103,6 +103,7 @@ drake_cc_library(
     srcs = ["der_state_system.cc"],
     hdrs = ["der_state_system.h"],
     deps = [
+        "//math:axis_angle",
         "//math:frame_transport",
         "//systems/framework:leaf_system",
     ],

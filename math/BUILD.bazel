@@ -13,6 +13,7 @@ drake_cc_package_library(
     visibility = ["//visibility:public"],
     deps = [
         ":autodiff",
+        ":axis_angle",
         ":barycentric",
         ":binomial_coefficient",
         ":bspline_basis",
@@ -46,6 +47,15 @@ drake_cc_library(
         "//common:autodiff",
         "//common:essential",
         "//common:unused",
+    ],
+)
+
+drake_cc_library(
+    name = "axis_angle",
+    srcs = ["axis_angle.cc"],
+    hdrs = ["axis_angle.h"],
+    deps = [
+        ":vector3_util",
     ],
 )
 
