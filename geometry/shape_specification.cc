@@ -244,8 +244,25 @@ Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
                                             &frames_m1_);
 }
 
+Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
+                   Eigen::Matrix3Xd frames_m1,
+                   const CrossSection& cross_section)
+    : has_closed_ends_(has_closed_ends),
+      node_positions_(std::move(node_positions)),
+      frames_m1_(frames_m1),
+      cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(cross_section.width > 0);
+  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  const int num_nodes = node_positions_.cols();
+  const int num_edges = frames_m1.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  DRAKE_THROW_UNLESS(num_edges ==
+                     (has_closed_ends ? num_nodes : num_nodes - 1));
+}
+
 std::string Filament::do_to_string() const {
-  return "Filament()";
+  return fmt::format("Filament(has_closed_ends={}, num_nodes={})",
+                     has_closed_ends_, node_positions_.cols());
 }
 
 HalfSpace::HalfSpace() = default;
