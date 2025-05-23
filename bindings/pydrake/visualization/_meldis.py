@@ -33,6 +33,7 @@ from pydrake.geometry import (
     Capsule,
     Cylinder,
     Ellipsoid,
+    Filament,
     InMemoryMesh,
     Mesh,
     Meshcat,
@@ -404,7 +405,9 @@ class _ViewerApplet:
                     path=geom_path, vertices=vertices, faces=faces, rgba=rgba)
                 self._meshcat.SetTransform(path=link_path, X_ParentPath=pose)
             elif geom.type == lcmt_viewer_geometry_data.FILAMENT:
-                nodes, m1s, rgba = self._convert_filament_geom(geom)
+                filament = self._convert_filament_geom(geom)
+                rgba = Rgba(*geom.color)
+                nodes = filament.node_positions()
                 self._meshcat.SetLineSegments(
                     path=geom_path, start=nodes[:, 0:-1], end=nodes[:, 1:],
                     rgba=rgba)
@@ -436,24 +439,28 @@ class _ViewerApplet:
         return (vertices, faces, rgba, pose)
 
     def _convert_filament_geom(self, geom):
-        """Given an lcmt_viewer_geometry_data, parses it into a tuple of
-        (nodes, m1s, Rgba) if the geometry type is a FILAMENT.
+        """Given an lcmt_viewer_geometry_data, parses it into a
+        Filament object if the geometry type is a FILAMENT.
         """
         assert geom.type == lcmt_viewer_geometry_data.FILAMENT
         has_closed_ends = int(geom.float_data[0])
         num_nodes = int(geom.float_data[1])
         num_edges = int(geom.float_data[2])
-        cross_section_type = int(geom.float_data[3])
-        cross_section_width = geom.float_data[4]
-        cross_section_height = geom.float_data[5]
+        cross_section = Filament.CrossSection(
+            type=Filament.CrossSectionType(int(geom.float_data[3])),
+            width=geom.float_data[4],
+            height=geom.float_data[5])
         start_index = 6
         nodes = np.array(geom.float_data[start_index:start_index+3*num_nodes])
         nodes = np.reshape(nodes, (3, num_nodes), order='F')
         start_index += 3 * num_nodes
         m1s = np.array(geom.float_data[start_index:start_index+3*num_edges])
         m1s = np.reshape(m1s, (3, num_edges), order='F')
-        rgba = Rgba(*geom.color)
-        return nodes, m1s, rgba
+        return Filament(
+            has_closed_ends=has_closed_ends,
+            node_positions=nodes,
+            frames_m1=m1s,
+            cross_section=cross_section)
 
     def _convert_geom(self, geom):
         """Given an lcmt_viewer_geometry_data, parses it into a tuple of
