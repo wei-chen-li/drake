@@ -228,6 +228,13 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    @pre `std::is_same_v<T, AutoDiffXd>` */
   void FixReferenceFrameDuringAutoDiff(Context<T>* context) const;
 
+  const std::vector<Eigen::Vector3<T>>& initial_node_positions() const {
+    return initial_node_positions_;
+  }
+  const std::vector<T>& initial_edge_angles() const {
+    return initial_edge_angles_;
+  }
+
  private:
   /* All DerStateSystem of different template type can access other's data. */
   template <typename U>

@@ -96,9 +96,6 @@ class DirichletBoundaryCondition {
   DirichletBoundaryCondition<U> ToScalarType() const;
 
  private:
-  /* Friend class to facilitate testing. */
-  friend class DirichletBoundaryConditionTester;
-
   /* Throws an exception if any DoF subject to `this` BC is greater
    than or equal to `num_dofs`. */
   void VerifyIndices(int num_dofs) const;
