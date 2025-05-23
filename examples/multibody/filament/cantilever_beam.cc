@@ -17,7 +17,8 @@ DEFINE_double(E, 1e9, "Young's modulus of the deformable bodies [Pa].");
 DEFINE_double(G, 0.4e9, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
-DEFINE_double(radius, 0.15, "Radius of the cantilever beam [m].");
+DEFINE_double(width, 0.02, "Width of the cantilever beam [m].");
+DEFINE_double(height, 0.015, "Height of the cantilever beam [m].");
 DEFINE_int32(num_edges, 300,
              "Number of edges the cantilever beam is spatially discretized.");
 DEFINE_string(contact_approximation, "lagged",
@@ -55,22 +56,21 @@ multibody::DeformableBodyId RegisterCantileverBeam(
   Eigen::Matrix3Xd node_pos(3, 2);
   node_pos.col(0) = Vector3d(0, 0, 0);
   node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
-  const double resolution_hint = FLAGS_length / FLAGS_num_edges;
   const Vector3d first_edge_m1 = Vector3d(0, 1, 0);
   Filament filament(closed, node_pos, first_edge_m1,
-                    Filament::CrossSection{.type = Filament::kElliptical,
-                                           .width = FLAGS_radius * 2,
-                                           .height = FLAGS_radius * 2});
+                    Filament::CrossSection{.type = Filament::kRectangular,
+                                           .width = FLAGS_width,
+                                           .height = FLAGS_height});
 
-  /* Create the geometry instance from the shape shifted z = +0.5. */
+  /* Create the geometry instance from the shape shifted by z = +0.5. */
   const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
                                     Vector3d(0, 0, 0.5));
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
       X_WG, filament, "cantilever beam");
 
-  /* Add a minimal innustration property for visualization. */
+  /* Add a minimal illustration property for visualization. */
   geometry::IllustrationProperties illus_props;
-  illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 0.8));
+  illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 1.0));
   geometry_instance->set_illustration_properties(std::move(illus_props));
 
   DeformableBodyConfig<double> config;
@@ -78,8 +78,11 @@ multibody::DeformableBodyId RegisterCantileverBeam(
   config.set_poissons_ratio(0.5 * FLAGS_E / FLAGS_G - 1);
   config.set_mass_density(FLAGS_rho);
 
-  return deformable_model->RegisterDeformableBody(std::move(geometry_instance),
-                                                  config, resolution_hint);
+  const double edge_length = FLAGS_length / FLAGS_num_edges;
+  multibody::DeformableBodyId body_id =
+      deformable_model->RegisterDeformableBody(
+          std::move(geometry_instance), config,
+          /* resolution_hint= */ edge_length);
 
   // TODO(wei-chen): Add wall boundary condition.
 }
