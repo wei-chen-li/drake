@@ -226,6 +226,9 @@ Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
     : has_closed_ends_(has_closed_ends),
       node_positions_(std::move(node_positions)),
       cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(
+      cross_section.type == Filament::CrossSectionType::kRectangular ||
+      cross_section.type == Filament::CrossSectionType::kElliptical);
   DRAKE_THROW_UNLESS(cross_section.width > 0);
   DRAKE_THROW_UNLESS(cross_section.height > 0);
   const int num_nodes = node_positions_.cols();
@@ -251,6 +254,9 @@ Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
       node_positions_(std::move(node_positions)),
       frames_m1_(frames_m1),
       cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(
+      cross_section.type == Filament::CrossSectionType::kRectangular ||
+      cross_section.type == Filament::CrossSectionType::kElliptical);
   DRAKE_THROW_UNLESS(cross_section.width > 0);
   DRAKE_THROW_UNLESS(cross_section.height > 0);
   const int num_nodes = node_positions_.cols();
