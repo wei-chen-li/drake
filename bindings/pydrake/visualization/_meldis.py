@@ -407,7 +407,7 @@ class _ViewerApplet:
             elif geom.type == lcmt_viewer_geometry_data.FILAMENT:
                 filament = self._convert_filament_geom(geom)
                 rgba = Rgba(*geom.color)
-                nodes = filament.node_positions()
+                nodes = filament.node_pos()
                 self._meshcat.SetLineSegments(
                     path=geom_path, start=nodes[:, 0:-1], end=nodes[:, 1:],
                     rgba=rgba)
@@ -443,24 +443,21 @@ class _ViewerApplet:
         Filament object if the geometry type is a FILAMENT.
         """
         assert geom.type == lcmt_viewer_geometry_data.FILAMENT
-        has_closed_ends = int(geom.float_data[0])
+        closed = int(geom.float_data[0])
         num_nodes = int(geom.float_data[1])
         num_edges = int(geom.float_data[2])
         cross_section = Filament.CrossSection(
             type=Filament.CrossSectionType(int(geom.float_data[3])),
             width=geom.float_data[4],
             height=geom.float_data[5])
-        start_index = 6
-        nodes = np.array(geom.float_data[start_index:start_index+3*num_nodes])
-        nodes = np.reshape(nodes, (3, num_nodes), order='F')
-        start_index += 3 * num_nodes
-        m1s = np.array(geom.float_data[start_index:start_index+3*num_edges])
-        m1s = np.reshape(m1s, (3, num_edges), order='F')
-        return Filament(
-            has_closed_ends=has_closed_ends,
-            node_positions=nodes,
-            frames_m1=m1s,
-            cross_section=cross_section)
+        index = 6
+        node_pos = np.array(geom.float_data[index:index+3*num_nodes])
+        node_pos = np.reshape(node_pos, (3, num_nodes), order='F')
+        index += 3 * num_nodes
+        edge_m1 = np.array(geom.float_data[index:index+3*num_edges])
+        edge_m1 = np.reshape(edge_m1, (3, num_edges), order='F')
+        return Filament(closed=closed, node_pos=node_pos, edge_m1=edge_m1,
+                        cross_section=cross_section)
 
     def _convert_geom(self, geom):
         """Given an lcmt_viewer_geometry_data, parses it into a tuple of

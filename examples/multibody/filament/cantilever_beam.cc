@@ -43,26 +43,32 @@ using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
+using math::RigidTransform;
+using math::RotationMatrix;
 
 multibody::DeformableBodyId RegisterCantileverBeam(
     DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
-  const bool has_closed_ends = false;
-  Eigen::Matrix3Xd node_positions(3, 2);
-  node_positions.col(0) = Vector3d(0, 0, 0);
-  node_positions.col(1) = Vector3d(FLAGS_length, 0, 0);
+  /* The beam is a filament shape from (0,0,0) to (length,0,0). */
+  const bool closed = false;
+  Eigen::Matrix3Xd node_pos(3, 2);
+  node_pos.col(0) = Vector3d(0, 0, 0);
+  node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
   const double resolution_hint = FLAGS_length / FLAGS_num_edges;
-  Vector3d m1 = Vector3d(0, 1, 0);
-  Filament filament(
-      has_closed_ends, node_positions, m1,
-      Filament::CrossSection{.type = Filament::CrossSectionType::kElliptical,
-                             .width = FLAGS_radius * 2,
-                             .height = FLAGS_radius * 2});
+  const Vector3d first_edge_m1 = Vector3d(0, 1, 0);
+  Filament filament(closed, node_pos, first_edge_m1,
+                    Filament::CrossSection{.type = Filament::kElliptical,
+                                           .width = FLAGS_radius * 2,
+                                           .height = FLAGS_radius * 2});
 
+  /* Create the geometry instance from the shape shifted z = +0.5. */
+  const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
+                                    Vector3d(0, 0, 0.5));
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
-      math::RigidTransform<double>::Identity(), filament, "cantilever beam");
+      X_WG, filament, "cantilever beam");
 
+  /* Add a minimal innustration property for visualization. */
   geometry::IllustrationProperties illus_props;
   illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 0.8));
   geometry_instance->set_illustration_properties(std::move(illus_props));

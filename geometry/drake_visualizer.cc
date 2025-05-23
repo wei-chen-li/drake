@@ -290,15 +290,15 @@ lcmt_viewer_geometry_data MakeDeformableFilament(
   EigenMapView(geometry_data.color) = color.rgba().cast<float>();
   geometry_data.string_data = name;
 
-  const bool closed = reference_filament.has_closed_ends();
-  const int num_nodes = reference_filament.node_positions().cols();
-  const int num_edges = reference_filament.frames_m1().cols();
+  const bool closed = reference_filament.closed();
+  const int num_nodes = reference_filament.node_pos().cols();
+  const int num_edges = reference_filament.edge_m1().cols();
   const Filament::CrossSection& cs = reference_filament.cross_section();
   DRAKE_DEMAND(configuration.size() == num_nodes * 3 + num_edges * 3);
 
   // We can define the filament in the float data as:
-  // | closed | num_nodes | num_edges | cs.type | cs.width | cs.height |
-  //   x₀ | x₁ | ... | m₁⁰ | m₁¹ | ... |
+  // | closed | num_nodes | num_edges | type | width | height | x₀ | x₁ | ... |
+  //   m₁⁰ | m₁¹ | ... |
   geometry_data.float_data.clear();
   geometry_data.float_data.emplace_back(closed);
   geometry_data.float_data.emplace_back(num_nodes);

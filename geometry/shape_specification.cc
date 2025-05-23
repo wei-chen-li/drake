@@ -220,55 +220,54 @@ Ellipsoid::Ellipsoid(const Vector3<double>& measures)
 std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
-Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
-                   const Eigen::Vector3d& first_frame_m1,
+Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
+                   const Eigen::Vector3d& first_edge_m1,
                    const CrossSection& cross_section)
-    : has_closed_ends_(has_closed_ends),
-      node_positions_(std::move(node_positions)),
+    : closed_(closed),
+      node_pos_(std::move(node_pos)),
       cross_section_(cross_section) {
   DRAKE_THROW_UNLESS(
       cross_section.type == Filament::CrossSectionType::kRectangular ||
       cross_section.type == Filament::CrossSectionType::kElliptical);
   DRAKE_THROW_UNLESS(cross_section.width > 0);
   DRAKE_THROW_UNLESS(cross_section.height > 0);
-  const int num_nodes = node_positions_.cols();
-  DRAKE_THROW_UNLESS(num_nodes >= 2);
-  const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
-  Eigen::Matrix3Xd frames_t(3, num_edges);
+  DRAKE_THROW_UNLESS(node_pos_.cols() >= 2);
+  const int num_nodes = node_pos_.cols();
+  const int num_edges = closed ? num_nodes : num_nodes - 1;
+  Eigen::Matrix3Xd edge_t(3, num_edges);
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
-    frames_t.col(i) = math::internal::NormalizeOrThrow<double>(
-        node_positions_.col(ip1) - node_positions_.col(i), __func__);
+    edge_t.col(i) = math::internal::NormalizeOrThrow<double>(
+        node_pos_.col(ip1) - node_pos_.col(i), __func__);
   }
-  math::internal::ThrowIfNotOrthonormal<double>(frames_t.col(0), first_frame_m1,
+  math::internal::ThrowIfNotOrthonormal<double>(edge_t.col(0), first_edge_m1,
                                                 __func__);
-  frames_m1_.resize(3, num_edges);
-  math::SpaceParallelFrameTransport<double>(frames_t, first_frame_m1,
-                                            &frames_m1_);
+  edge_m1_.resize(3, num_edges);
+  math::SpaceParallelFrameTransport<double>(edge_t, first_edge_m1, &edge_m1_);
 }
 
-Filament::Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
-                   Eigen::Matrix3Xd frames_m1,
-                   const CrossSection& cross_section)
-    : has_closed_ends_(has_closed_ends),
-      node_positions_(std::move(node_positions)),
-      frames_m1_(frames_m1),
+Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
+                   Eigen::Matrix3Xd edge_m1, const CrossSection& cross_section)
+    : closed_(closed),
+      node_pos_(std::move(node_pos)),
+      edge_m1_(std::move(edge_m1)),
       cross_section_(cross_section) {
   DRAKE_THROW_UNLESS(
       cross_section.type == Filament::CrossSectionType::kRectangular ||
       cross_section.type == Filament::CrossSectionType::kElliptical);
   DRAKE_THROW_UNLESS(cross_section.width > 0);
   DRAKE_THROW_UNLESS(cross_section.height > 0);
-  const int num_nodes = node_positions_.cols();
-  const int num_edges = frames_m1.cols();
+  const int num_nodes = node_pos_.cols();
+  const int num_edges = edge_m1_.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
-  DRAKE_THROW_UNLESS(num_edges ==
-                     (has_closed_ends ? num_nodes : num_nodes - 1));
+  DRAKE_THROW_UNLESS(num_edges == (closed ? num_nodes : num_nodes - 1));
 }
 
 std::string Filament::do_to_string() const {
-  return fmt::format("Filament(has_closed_ends={}, num_nodes={})",
-                     has_closed_ends_, node_positions_.cols());
+  return fmt::format("Filament(closed={}, num_nodes={})", closed_,
+                     node_pos_.cols());
+  // TODO(wei-chen): Make this string more descreptive, then add unit tests for
+  // the python binding.
 }
 
 HalfSpace::HalfSpace() = default;
@@ -457,13 +456,13 @@ double CalcFilamentVolume(const Filament& filament) {
         "other than kRectangular and kElliptical.");
   }
 
-  const Eigen::Matrix3Xd& node_positions = filament.node_positions();
-  const int num_nodes = node_positions.cols();
-  const int num_edges = filament.has_closed_ends() ? num_nodes : num_nodes - 1;
+  const Eigen::Matrix3Xd& node_pos = filament.node_pos();
+  const int num_nodes = node_pos.cols();
+  const int num_edges = filament.closed() ? num_nodes : num_nodes - 1;
   double length = 0;
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) * num_nodes;
-    length += (node_positions.col(ip1) - node_positions.col(i)).norm();
+    length += (node_pos.col(ip1) - node_pos.col(i)).norm();
   }
   return area * length;
 }
