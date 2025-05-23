@@ -42,16 +42,16 @@ using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
+using drake::systems::Simulator;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
 using math::RigidTransform;
 using math::RotationMatrix;
 
-multibody::DeformableBodyId RegisterCantileverBeam(
-    DeformableModel<double>* deformable_model) {
+void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
-  /* The beam is a filament shape from (0,0,0) to (length,0,0). */
+  /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
   const bool closed = false;
   Eigen::Matrix3Xd node_pos(3, 2);
   node_pos.col(0) = Vector3d(0, 0, 0);
@@ -73,18 +73,23 @@ multibody::DeformableBodyId RegisterCantileverBeam(
   illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 1.0));
   geometry_instance->set_illustration_properties(std::move(illus_props));
 
+  /* Set the material properties. Notice G = E / 2(1+𝜈). */
   DeformableBodyConfig<double> config;
   config.set_youngs_modulus(FLAGS_E);
   config.set_poissons_ratio(0.5 * FLAGS_E / FLAGS_G - 1);
   config.set_mass_density(FLAGS_rho);
 
+  /* Add the geometry instance to the deformable model. The filament geometry is
+   further discretized based on resolution_hint. */
   const double edge_length = FLAGS_length / FLAGS_num_edges;
   multibody::DeformableBodyId body_id =
       deformable_model->RegisterDeformableBody(
           std::move(geometry_instance), config,
-          /* resolution_hint= */ edge_length);
+          /* resolution_hint = */ edge_length);
 
-  // TODO(wei-chen): Add wall boundary condition.
+  /* Fix the first two nodes effectively makes the beam have a clamped end. */
+  deformable_model->SetWallBoundaryCondition(
+      body_id, Vector3d(edge_length * 1.001, 0, 0), Vector3d(1, 0, 0));
 }
 
 int do_main() {
@@ -98,8 +103,6 @@ int do_main() {
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
 
   RegisterCantileverBeam(&deformable_model);
-
-  /* All rigid and deformable models have been added. Finalize the plant. */
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */
@@ -109,7 +112,7 @@ int do_main() {
 
   auto diagram = builder.Build();
 
-  systems::Simulator<double> simulator(*diagram);
+  Simulator<double> simulator(*diagram);
 
   Context<double>& mutable_root_context = simulator.get_mutable_context();
   Context<double>& plant_context =
