@@ -2,6 +2,7 @@
 
 using drake::geometry::Filament;
 using drake::geometry::Meshcat;
+using drake::geometry::Rgba;
 using Eigen::Matrix3Xd;
 using Eigen::Vector3d;
 using Eigen::VectorXd;
