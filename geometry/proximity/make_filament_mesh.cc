@@ -108,9 +108,7 @@ TriangleSurfaceMesh<T> MakeFilamentSurfaceMesh(const Filament& filament) {
     cs_vertices.row(1) = b * sin(theta);
     cs_vertices.row(2) = VectorX<T>::Zero(kN);
   } else {
-    throw std::logic_error(
-        "MakeFilamentSurfaceMesh() does not yet support filament with "
-        "cross-section type other than kRectangular and kElliptical");
+    DRAKE_UNREACHABLE();
   }
 
   /* Find the tangent and m1 vector of the edge frames. */

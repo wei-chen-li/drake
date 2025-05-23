@@ -451,9 +451,7 @@ double CalcFilamentVolume(const Filament& filament) {
   } else if (cs.type == Filament::CrossSectionType::kElliptical) {
     area = cs.width * cs.height * M_PI / 4;
   } else {
-    throw std::logic_error(
-        "CalcVolume() does not yet support filament with cross-section type "
-        "other than kRectangular and kElliptical.");
+    DRAKE_UNREACHABLE();
   }
 
   const Eigen::Matrix3Xd& node_pos = filament.node_pos();

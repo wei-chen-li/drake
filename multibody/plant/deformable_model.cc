@@ -149,26 +149,49 @@ void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
   DRAKE_DEMAND(n_W.norm() > 1e-10);
   const Vector3<T>& nhat_W = n_W.normalized();
 
-  fem::FemModel<T>& fem_model = *fem_models_.at(id);
-  const int num_nodes = fem_model.num_nodes();
   constexpr int kDim = 3;
   auto is_inside_wall = [&p_WQ, &nhat_W](const Vector3<T>& p_WV) {
     T distance_to_wall = (p_WV - p_WQ).dot(nhat_W);
     return distance_to_wall < 0;
   };
 
-  const VectorX<T>& p_WVs = GetReferencePositions(id);
-  fem::internal::DirichletBoundaryCondition<T> bc;
-  for (int n = 0; n < num_nodes; ++n) {
-    const int dof_index = kDim * n;
-    const auto p_WV = p_WVs.template segment<kDim>(dof_index);
-    if (is_inside_wall(p_WV)) {
-      /* Set this node to be subject to zero Dirichlet BC. */
-      bc.AddBoundaryCondition(fem::FemNodeIndex(n),
-                              {p_WV, Vector3<T>::Zero(), Vector3<T>::Zero()});
+  if (IsFemModel(id)) {
+    fem::FemModel<T>& fem_model = *fem_models_.at(id);
+    const int num_nodes = fem_model.num_nodes();
+    const VectorX<T>& p_WVs = GetReferencePositions(id);
+    fem::internal::DirichletBoundaryCondition<T> bc;
+    for (int n = 0; n < num_nodes; ++n) {
+      const int dof_index = kDim * n;
+      const auto p_WV = p_WVs.template segment<kDim>(dof_index);
+      if (is_inside_wall(p_WV)) {
+        /* Set this node to be subject to zero Dirichlet BC. */
+        bc.AddBoundaryCondition(fem::FemNodeIndex(n),
+                                {p_WV, Vector3<T>::Zero(), Vector3<T>::Zero()});
+      }
     }
+    fem_model.SetDirichletBoundaryCondition(bc);
+  } else if (IsDerModel(id)) {
+    der::DerModel<T>& der_model = *der_models_.at(id);
+    const VectorX<T>& p_WVs = GetReferencePositions(id);
+    DRAKE_DEMAND(p_WVs.size() == kDim * der_model.num_nodes());
+    std::set<int> fixed_nodes;
+    for (int i = 0; i < der_model.num_nodes(); ++i) {
+      const auto p_WV = p_WVs.template segment<kDim>(kDim * i);
+      if (is_inside_wall(p_WV)) {
+        der_model.FixPositionOrAngle(der::DerNodeIndex(i));
+        fixed_nodes.insert(i);
+      }
+    }
+    for (const int i : fixed_nodes) {
+      int ip1 = i + 1;
+      if (der_model.has_closed_ends()) ip1 %= der_model.num_nodes();
+      if (fixed_nodes.find(ip1) != fixed_nodes.end()) {
+        der_model.FixPositionOrAngle(der::DerEdgeIndex(i));
+      }
+    }
+  } else {
+    DRAKE_UNREACHABLE();
   }
-  fem_model.SetDirichletBoundaryCondition(bc);
 }
 
 template <typename T>
@@ -442,12 +465,12 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
     DRAKE_DEMAND(this->is_empty());
   } else {
     /* Here we step through every member field one by one, in the exact order
-     they are declared in the header, so that a reader could mindlessly compare
-     this function to the private fields, and check that every single field got
-     a mention.
-     For each field, this function will either:
+     they are declared in the header, so that a reader could mindlessly
+     compare this function to the private fields, and check that every single
+     field got a mention. For each field, this function will either:
      1. Copy the field directly.
-     2. Place a disclaimer comment why that field does not need to be copied. */
+     2. Place a disclaimer comment why that field does not need to be copied.
+   */
 
     result->reference_positions_ = reference_positions_;
     result->discrete_state_indexes_ = discrete_state_indexes_;
@@ -474,9 +497,10 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
     result->body_id_to_index_ = body_id_to_index_;
     result->body_ids_ = body_ids_;
     result->fixed_constraint_specs_ = fixed_constraint_specs_;
-    /* `configuration_output_port_index_` is set in `DeclareSceneGraphPorts()`;
-     because callers to `PhysicalModel::CloneToScalar` are required to
-     subsequently call `DeclareSceneGraphPorts`. */
+    /* `configuration_output_port_index_` is set in
+     `DeclareSceneGraphPorts()`; because callers to
+     `PhysicalModel::CloneToScalar` are required to subsequently call
+     `DeclareSceneGraphPorts`. */
     result->parallelism_ = parallelism_;
     result->fem_integrator_ = fem_integrator_->Clone();
     result->der_integrator_ = der_integrator_->Clone();
@@ -625,9 +649,7 @@ DeformableModel<T>::BuildFilamentDerModel(
   } else if (cs.type == geometry::Filament::CrossSectionType::kElliptical) {
     builder.SetEllipticalCrossSection(cs.width / 2, cs.height / 2);
   } else {
-    throw std::logic_error(
-        "BuildFilamentDerModel() does not yet support cross-section type other "
-        "than kRectangular and kElliptical.");
+    DRAKE_UNREACHABLE();
   }
 
   std::unique_ptr<der::DerModel<T>> der_model = builder.Build();
@@ -641,8 +663,10 @@ void DeformableModel<T>::DoDeclareSystemResources() {
         DiscreteContactSolver::kSap) {
       throw std::runtime_error(
           "DeformableModel is only supported by the SAP contact solver. "
-          "Please use `kSap`, `kLagged`, or `kSimilar` as the discrete contact "
-          "approximation for the MultibodyPlant containing deformable bodies.");
+          "Please use `kSap`, `kLagged`, or `kSimilar` as the discrete "
+          "contact "
+          "approximation for the MultibodyPlant containing deformable "
+          "bodies.");
     }
     if (!this->plant().is_discrete()) {
       throw std::runtime_error(
@@ -714,8 +738,8 @@ void DeformableModel<T>::DoDeclareSystemResources() {
 template <typename T>
 void DeformableModel<T>::DoDeclareSceneGraphPorts() {
   /* Declare the deformable body configuration output port. This port copies
-   the discrete states of all deformable body configurations and puts them into
-   a format that's easier for downstream parsing. */
+   the discrete states of all deformable body configurations and puts them
+   into a format that's easier for downstream parsing. */
   configuration_output_port_index_ =
       this->DeclareAbstractOutputPort(
               "deformable_body_configuration",
