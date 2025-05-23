@@ -5,6 +5,7 @@
 #include <optional>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "drake/common/identifier.h"
@@ -105,19 +106,6 @@ class DerModel {
     // @}
 
     /** @{
-     @name Setting the Boundary Condition
-     These methods are used to specify the boundary condition of the DER. */
-
-    /** Fixes the node position indexed by `node_index`.
-     @pre The node indexed by `node_index` is already added to this builder. */
-    void FixNode(DerNodeIndex node_index);
-
-    /** Fixes the edge angle indexed by `edge_index`.
-     @pre The edge indexed by `edge_index` is already added to this builder. */
-    void FixEdge(DerEdgeIndex edge_index);
-    // @}
-
-    /** @{
      @name Setting the Undeformed State
      @anchor set_undeformed_state
      These methods are used to specify the undeformed (rest) state of the DER,
@@ -171,6 +159,21 @@ class DerModel {
     // @}
 
     /** @{
+     @name Adding Boundary Condition
+     These methods are used to specify the boundary condition of the DER. */
+
+    /** Add boundary condition for the node indexed by `node_index`.
+     @pre The node indexed by `node_index` is already added to this builder. */
+    void AddBoundaryCondition(DerNodeIndex node_index,
+                              const internal::NodeState<T>& boundary_state);
+
+    /** Add boundary condition for the edge indexed by `edge_index`.
+     @pre The edge indexed by `edge_index` is already added to this builder. */
+    void AddBoundaryCondition(DerEdgeIndex edge_index,
+                              const internal::EdgeState<T>& boundary_state);
+    // @}
+
+    /** @{
      @name Building the DER Model
      This method is used to build the DER model. */
 
@@ -197,7 +200,6 @@ class DerModel {
     std::optional<std::pair<CrossSectionType, std::vector<T>>> cross_section_;
     std::optional<internal::DerUndeformedState<T>> der_undeformed_state_;
     std::optional<internal::DampingModel<T>> damping_model_;
-
     internal::DirichletBoundaryCondition<T> boundary_condition_;
   };  // class Builder
 
@@ -212,6 +214,10 @@ class DerModel {
 
   /** Returns the number of degrees of freedom in this DER. */
   int num_dofs() const { return der_state_system_->num_dofs(); }
+
+  /** Fixes the node position or the edge angle indexed by `index`.
+   @pre `index` is within the node index or edge index range. */
+  void FixPositionOrAngle(std::variant<DerNodeIndex, DerEdgeIndex> index);
 
   /** Creates a default DerState compatible with this DER model. */
   std::unique_ptr<internal::DerState<T>> CreateDerState() const;
@@ -321,7 +327,7 @@ class DerModel {
   const internal::DerStructuralProperty<T> der_structural_property_;
   const internal::DerUndeformedState<T> der_undeformed_state_;
   const internal::DampingModel<T> damping_model_;
-  const internal::DirichletBoundaryCondition<T> boundary_condition_;
+  internal::DirichletBoundaryCondition<T> boundary_condition_;
 };
 
 }  // namespace der

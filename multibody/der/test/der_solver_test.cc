@@ -74,7 +74,6 @@ class DerSolverTest : public ::testing::TestWithParam<bool> {
       builder.AddEdge(0.1, Vector3d(l, l, l * 1.5));
       builder.AddEdge(0.2, Vector3d(0, l, l * 3.0));
     }
-    builder.FixNode(DerNodeIndex(0));
 
     builder.SetZeroUndeformedCurvatureAndTwist();
     const auto [E, G, rho] = std::make_tuple(3e9, 0.8e9, 910);
@@ -182,11 +181,6 @@ class DerSolverCantileverBeamTest : public ::testing::TestWithParam<int> {
     const Vector3d d1_0 = Vector3d(0, 1, 0);
     const double dx = kLength / (kNumNodes - 1);
     builder.AddFirstEdge(Vector3d(0, 0, 0), 0, Vector3d(dx, 0, 0), d1_0);
-    builder.FixNode(DerNodeIndex(0));
-    if (clamp_end) {
-      builder.FixEdge(DerEdgeIndex(0));
-      builder.FixNode(DerNodeIndex(1));
-    }
     for (int i = 2; i < kNumNodes; ++i) {
       builder.AddEdge(0, Vector3d(dx * i, 0, 0));
     }
@@ -194,7 +188,14 @@ class DerSolverCantileverBeamTest : public ::testing::TestWithParam<int> {
     builder.SetMaterialProperties(kE, kG, kRho);
     builder.SetRectangularCrossSection(kWidth, kHeight);
     builder.SetDampingCoefficients(0.0, 0.0);
-    return builder.Build();
+    std::unique_ptr<DerModel<double>> model = builder.Build();
+
+    model->FixPositionOrAngle(DerNodeIndex(0));
+    if (clamp_end) {
+      model->FixPositionOrAngle(DerEdgeIndex(0));
+      model->FixPositionOrAngle(DerNodeIndex(1));
+    }
+    return model;
   }
 
   void TestStaticBending();

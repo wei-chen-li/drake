@@ -3,8 +3,7 @@
 #include <exception>
 #include <tuple>
 
-#include "common/pointer_cast.h"
-
+#include "drake/common/pointer_cast.h"
 #include "drake/multibody/der/elastic_energy.h"
 #include "drake/multibody/der/energy_hessian_matrix_util.h"
 
@@ -65,24 +64,6 @@ std::tuple<DerEdgeIndex, DerNodeIndex> DerModel<T>::Builder::AddEdge(
   }
   return {DerEdgeIndex(edge_angles_.size() - 1),
           DerNodeIndex(node_positions_.size() - 1)};
-}
-
-template <typename T>
-void DerModel<T>::Builder::FixNode(DerNodeIndex node_index) {
-  DRAKE_THROW_UNLESS(0 <= node_index && node_index < ssize(node_positions_));
-  boundary_condition_.AddBoundaryCondition(
-      node_index, internal::NodeState<T>{.x = node_positions_[node_index],
-                                         .x_dot = Eigen::Vector3<T>::Zero(),
-                                         .x_ddot = Eigen::Vector3<T>::Zero()});
-}
-
-template <typename T>
-void DerModel<T>::Builder::FixEdge(DerEdgeIndex edge_index) {
-  DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < ssize(edge_angles_));
-  boundary_condition_.AddBoundaryCondition(
-      edge_index, internal::EdgeState<T>{.gamma = edge_angles_[edge_index],
-                                         .gamma_dot = 0.0,
-                                         .gamma_ddot = 0.0});
 }
 
 template <typename T>
@@ -171,6 +152,20 @@ void DerModel<T>::Builder::SetDampingCoefficients(
 }
 
 template <typename T>
+void DerModel<T>::Builder::AddBoundaryCondition(
+    DerNodeIndex node_index, const internal::NodeState<T>& boundary_state) {
+  DRAKE_THROW_UNLESS(0 <= node_index && node_index < ssize(node_positions_));
+  boundary_condition_.AddBoundaryCondition(node_index, boundary_state);
+}
+
+template <typename T>
+void DerModel<T>::Builder::AddBoundaryCondition(
+    DerEdgeIndex edge_index, const internal::EdgeState<T>& boundary_state) {
+  DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < ssize(edge_angles_));
+  boundary_condition_.AddBoundaryCondition(edge_index, boundary_state);
+}
+
+template <typename T>
 std::unique_ptr<DerModel<T>> DerModel<T>::Builder::Build() {
   using internal::DerStructuralProperty;
 
@@ -231,6 +226,30 @@ DerModel<T>::DerModel(
                      der_undeformed_state_.has_closed_ends());
   DRAKE_THROW_UNLESS(der_state_system_->num_nodes() ==
                      der_undeformed_state_.num_nodes());
+}
+
+template <typename T>
+void DerModel<T>::FixPositionOrAngle(
+    std::variant<DerNodeIndex, DerEdgeIndex> index) {
+  if (std::holds_alternative<DerNodeIndex>(index)) {
+    DerNodeIndex node_index = std::get<DerNodeIndex>(index);
+    DRAKE_THROW_UNLESS(0 <= node_index && node_index < num_nodes());
+    boundary_condition_.AddBoundaryCondition(
+        node_index,
+        internal::NodeState<T>{
+            .x = der_state_system_->initial_node_positions()[node_index],
+            .x_dot = Eigen::Vector3<T>::Zero(),
+            .x_ddot = Eigen::Vector3<T>::Zero()});
+  } else {
+    DerEdgeIndex edge_index = std::get<DerEdgeIndex>(index);
+    DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < num_edges());
+    boundary_condition_.AddBoundaryCondition(
+        edge_index,
+        internal::EdgeState<T>{
+            .gamma = der_state_system_->initial_edge_angles()[edge_index],
+            .gamma_dot = 0.0,
+            .gamma_ddot = 0.0});
+  }
 }
 
 template <typename T>

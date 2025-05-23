@@ -10,27 +10,7 @@ namespace drake {
 namespace multibody {
 namespace der {
 
-namespace internal {
-// Friend class for accessing DirichletBoundaryCondition private members.
-class DirichletBoundaryConditionTester {
- public:
-  DirichletBoundaryConditionTester() = delete;
-
-  template <typename T>
-  static const std::map<DerNodeIndex, NodeState<T>>& get_node_to_boundary_state(
-      const DirichletBoundaryCondition<T>& bc) {
-    return bc.node_to_boundary_state_;
-  }
-
-  template <typename T>
-  static const std::map<DerEdgeIndex, EdgeState<T>>& get_edge_to_boundary_state(
-      const DirichletBoundaryCondition<T>& bc) {
-    return bc.edge_to_boundary_state_;
-  }
-};
-}  // namespace internal
-
-// Friend class for accessing DerModel private members.
+/* Friend class for accessing DerModel private members. */
 class DerModelTester {
  public:
   DerModelTester() = delete;
@@ -51,20 +31,6 @@ class DerModelTester {
   static const internal::DampingModel<T>& get_damping_model(
       const DerModel<T>& der_model) {
     return der_model.damping_model_;
-  }
-
-  template <typename T>
-  static const std::map<DerNodeIndex, internal::NodeState<T>>&
-  get_node_boundary_condition(const DerModel<T>& der_model) {
-    return internal::DirichletBoundaryConditionTester::
-        get_node_to_boundary_state(der_model.boundary_condition_);
-  }
-
-  template <typename T>
-  static const std::map<DerEdgeIndex, internal::EdgeState<T>>&
-  get_edge_boundary_condition(const DerModel<T>& der_model) {
-    return internal::DirichletBoundaryConditionTester::
-        get_edge_to_boundary_state(der_model.boundary_condition_);
   }
 };
 
@@ -112,9 +78,6 @@ class DerModelBuilderTest
                                           DerEdgeIndex(0), DerNodeIndex(1)));
       EXPECT_EQ(indexes2, std::make_tuple(DerEdgeIndex(1), DerNodeIndex(2)));
       EXPECT_EQ(indexes3, std::make_tuple(DerEdgeIndex(2), DerNodeIndex(3)));
-
-      builder_->FixNode(DerNodeIndex(1));
-      builder_->FixEdge(DerEdgeIndex(1));
     } else if (opt == kClosedEnds) {
       const double l = 0.01;
       Vector3d d1_0(0, 1, 0);
@@ -129,9 +92,6 @@ class DerModelBuilderTest
       EXPECT_EQ(indexes2, std::make_tuple(DerEdgeIndex(1), DerNodeIndex(2)));
       EXPECT_EQ(indexes3, std::make_tuple(DerEdgeIndex(2), DerNodeIndex(3)));
       EXPECT_EQ(indexes4, std::make_tuple(DerEdgeIndex(3), DerNodeIndex(0)));
-
-      builder_->FixNode(DerNodeIndex(1));
-      builder_->FixEdge(DerEdgeIndex(1));
     }
   }
 
@@ -140,13 +100,6 @@ class DerModelBuilderTest
         model_->CreateDerState();
     auto& q = state->get_position();
     auto& d1 = state->get_reference_frame_d1();
-
-    auto& node_bc = DerModelTester::get_node_boundary_condition(*model_);
-    auto& edge_bc = DerModelTester::get_edge_boundary_condition(*model_);
-    EXPECT_EQ(node_bc.size(), 1);
-    EXPECT_EQ(edge_bc.size(), 1);
-    EXPECT_EQ(node_bc.begin()->first, DerNodeIndex(1));
-    EXPECT_EQ(edge_bc.begin()->first, DerEdgeIndex(1));
 
     RodConfigurationTests opt = std::get<0>(GetParam());
     if (opt == kOpenEnds) {
@@ -165,13 +118,6 @@ class DerModelBuilderTest
       EXPECT_EQ(q[4 * 1 + 3], 0.1);
       EXPECT_EQ(q[4 * 2 + 3], 0.2);
       EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0)));
-
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x, Vector3d(l, 0, l));
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x_dot, Vector3d::Zero());
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x_ddot, Vector3d::Zero());
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma, 0.1);
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma_dot, 0.0);
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma_ddot, 0.0);
     } else if (opt == kClosedEnds) {
       const double l = 0.01;
       EXPECT_TRUE(state->has_closed_ends());
@@ -189,13 +135,6 @@ class DerModelBuilderTest
       EXPECT_EQ(q[4 * 2 + 3], 0.2);
       EXPECT_EQ(q[4 * 3 + 3], 0.1);
       EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0)));
-
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x, Vector3d(l, 0, l));
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x_dot, Vector3d::Zero());
-      EXPECT_EQ(node_bc.at(DerNodeIndex(1)).x_ddot, Vector3d::Zero());
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma, 0.1);
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma_dot, 0.0);
-      EXPECT_EQ(edge_bc.at(DerEdgeIndex(1)).gamma_ddot, 0.0);
     }
   }
 
@@ -345,12 +284,6 @@ class DerModelTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
       builder.AddEdge(0.1, Vector3d(l, l, l * 1.5));
       builder.AddEdge(0.2, Vector3d(0, l, l * 3.0));
     }
-    if (have_bc) {
-      fixed_nodes_ = {DerNodeIndex(0), DerNodeIndex(2)};
-      fixed_edges_ = {DerEdgeIndex(0)};
-      for (DerNodeIndex index : fixed_nodes_) builder.FixNode(index);
-      for (DerEdgeIndex index : fixed_edges_) builder.FixEdge(index);
-    }
     builder.SetZeroUndeformedCurvatureAndTwist();
     const auto [E, G, rho] = std::make_tuple(3e9, 0.8e9, 910);
     builder.SetMaterialProperties(E, G, rho);
@@ -358,6 +291,15 @@ class DerModelTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
     builder.SetRectangularCrossSection(width, height);
     builder.SetDampingCoefficients(0.1, 0.2);
     der_model_ = builder.Build();
+
+    if (have_bc) {
+      fixed_nodes_ = {DerNodeIndex(0), DerNodeIndex(2)};
+      fixed_edges_ = {DerEdgeIndex(0)};
+      for (DerNodeIndex index : fixed_nodes_)
+        der_model_->FixPositionOrAngle(index);
+      for (DerEdgeIndex index : fixed_edges_)
+        der_model_->FixPositionOrAngle(index);
+    }
 
     const double g = 9.81;
     force_density_field_ =
