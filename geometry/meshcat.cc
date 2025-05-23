@@ -665,11 +665,8 @@ class MeshcatShapeReifier : public ShapeReifier {
     DRAKE_DEMAND(data != nullptr);
     auto& output = *static_cast<Output*>(data);
 
-    const double resolution_hint =
-        5.0 * std::max(filament.cross_section().width,
-                       filament.cross_section().height);
     const TriangleSurfaceMesh<double> tri =
-        internal::MakeFilamentSurfaceMesh<double>(filament, resolution_hint);
+        internal::MakeFilamentSurfaceMesh<double>(filament);
 
     Eigen::Matrix3Xd vertices(3, tri.num_vertices());
     for (int i = 0; i < tri.num_vertices(); ++i) {
@@ -684,7 +681,7 @@ class MeshcatShapeReifier : public ShapeReifier {
     }
     SetLumpedObjectFromTriangleMesh(&output.lumped, vertices, faces, rgba_,
                                     /* wireframe =*/false, 1.0,
-                                    Meshcat::SideOfFaceToRender::kFrontSide,
+                                    Meshcat::SideOfFaceToRender::kDoubleSide,
                                     &uuid_generator_);
   }
 

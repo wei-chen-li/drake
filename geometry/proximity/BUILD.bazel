@@ -653,6 +653,7 @@ drake_cc_library(
     deps = [
         ":triangle_surface_mesh",
         "//geometry:shape_specification",
+        "//math:frame_transport",
     ],
 )
 
