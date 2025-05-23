@@ -407,10 +407,8 @@ class _ViewerApplet:
             elif geom.type == lcmt_viewer_geometry_data.FILAMENT:
                 filament = self._convert_filament_geom(geom)
                 rgba = Rgba(*geom.color)
-                nodes = filament.node_pos()
-                self._meshcat.SetLineSegments(
-                    path=geom_path, start=nodes[:, 0:-1], end=nodes[:, 1:],
-                    rgba=rgba)
+                self._meshcat.SetObject(
+                    path=geom_path, shape=filament, rgba=rgba)
         if self._waiting_for_first_draw_message:
             self._waiting_for_first_draw_message = False
             self._set_visible(True)
@@ -450,11 +448,11 @@ class _ViewerApplet:
             type=Filament.CrossSectionType(int(geom.float_data[3])),
             width=geom.float_data[4],
             height=geom.float_data[5])
-        index = 6
-        node_pos = np.array(geom.float_data[index:index+3*num_nodes])
+        offset = 6
+        node_pos = np.array(geom.float_data[offset:offset+3*num_nodes])
         node_pos = np.reshape(node_pos, (3, num_nodes), order='F')
-        index += 3 * num_nodes
-        edge_m1 = np.array(geom.float_data[index:index+3*num_edges])
+        offset += 3 * num_nodes
+        edge_m1 = np.array(geom.float_data[offset:offset+3*num_edges])
         edge_m1 = np.reshape(edge_m1, (3, num_edges), order='F')
         return Filament(closed=closed, node_pos=node_pos, edge_m1=edge_m1,
                         cross_section=cross_section)
