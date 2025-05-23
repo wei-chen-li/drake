@@ -472,7 +472,7 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
   template <typename T1 = T>
   typename std::enable_if_t<std::is_same_v<T1, double>, void>
   BuildFilamentDerModel(DeformableBodyId id,
-                        const math::RigidTransform<double>& X_WG,
+                        const math::RigidTransform<T>& X_WG,
                         const geometry::Filament& filament_G,
                         const fem::DeformableBodyConfig<T>& config);
 

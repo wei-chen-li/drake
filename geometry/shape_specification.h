@@ -446,7 +446,7 @@ class Ellipsoid final : public Shape {
 
  A filament describes a slender, thread-like shape defined by a sequence of
  nodes connected by edges. Each edge is associated with a material frame,
- consisting of a unit tangent vector (t) and two orthogonal material directions
+ consisting of a unit tangent vector (t) and two orthonormal material directors
  (m₁ and m₂), which span the plane of the cross-section. The filament can either
  be open-ended or form a closed loop. */
 class Filament final : public Shape {
@@ -467,32 +467,32 @@ class Filament final : public Shape {
   /** Constructs a filament by specifying the position of nodes and the m₁
    director in the first frame. The m₁ directors in the remaining frames are
    implicitly defined so that the filament is twist free.
-   @pre `‖first_frame_m1‖ ≈ 1`.
-   @pre `first_frame_m1` is perpendicular to the first edge vector.
+   @pre `first_edge_m1 ≈ 1`.
+   @pre `first_edge_m1` is perpendicular to the first edge vector.
    @pre `cross_section.width > 0`.
    @pre `cross_section.height > 0`.
    @pydrake_mkdoc_identifier{first_m1} */
-  Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
-           const Eigen::Vector3d& first_frame_m1,
+  Filament(bool closed, Eigen::Matrix3Xd node_pos,
+           const Eigen::Vector3d& first_edge_m1,
            const CrossSection& cross_section);
 
   /** Constructs a filament by specifying the position of nodes and the m₁
    directors of all frame.
-   @pre Every column of `frames_m1` is perpendicular to the corresponding
+   @pre Every column of `edge_m1` is perpendicular to the corresponding
         edge vector.
    @pre `cross_section.width > 0`.
    @pre `cross_section.height > 0`.
    @pydrake_mkdoc_identifier{all_m1} */
-  Filament(bool has_closed_ends, Eigen::Matrix3Xd node_positions,
-           Eigen::Matrix3Xd frames_m1, const CrossSection& cross_section);
+  Filament(bool closed, Eigen::Matrix3Xd node_pos, Eigen::Matrix3Xd edge_m1,
+           const CrossSection& cross_section);
 
   ~Filament() final;
 
-  bool has_closed_ends() const { return has_closed_ends_; }
+  bool closed() const { return closed_; }
 
-  const Eigen::Matrix3Xd& node_positions() const { return node_positions_; }
+  const Eigen::Matrix3Xd& node_pos() const { return node_pos_; }
 
-  const Eigen::Matrix3Xd& frames_m1() const { return frames_m1_; }
+  const Eigen::Matrix3Xd& edge_m1() const { return edge_m1_; }
 
   const CrossSection& cross_section() const { return cross_section_; }
 
@@ -503,9 +503,9 @@ class Filament final : public Shape {
   std::string do_to_string() const final;
   VariantShapeConstPtr get_variant_this() const final;
 
-  bool has_closed_ends_{};
-  Eigen::Matrix3Xd node_positions_;
-  Eigen::Matrix3Xd frames_m1_;
+  bool closed_{};
+  Eigen::Matrix3Xd node_pos_;
+  Eigen::Matrix3Xd edge_m1_;
   CrossSection cross_section_;
 };
 

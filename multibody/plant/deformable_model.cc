@@ -113,11 +113,7 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
       /* Build FEM model for the deformable body. */
       BuildLinearVolumetricModel(body_id, mesh_W, config);
     } else {
-      const Eigen::Matrix3Xd& node_G = filament_G->node_positions();
-      reference_position.resize(node_G.size());
-      for (int i = 0; i < node_G.cols(); ++i) {
-        reference_position.template segment<3>(3 * i) = X_WG * node_G.col(i);
-      }
+      reference_position = (X_WG * filament_G->node_pos()).reshaped();
       /* Build DER model for the deformable body. */
       BuildFilamentDerModel(body_id, X_WG, *filament_G, config);
     }
@@ -582,38 +578,36 @@ template <typename T>
 template <typename T1>
 typename std::enable_if_t<std::is_same_v<T1, double>, void>
 DeformableModel<T>::BuildFilamentDerModel(
-    DeformableBodyId id, const math::RigidTransform<double>& X_WG,
+    DeformableBodyId id, const math::RigidTransform<T>& X_WG,
     const geometry::Filament& filament_G,
     const fem::DeformableBodyConfig<T>& config) {
   if (der_models_.find(id) != der_models_.end()) {
     throw std::logic_error("A DER model with id: " + to_string(id) +
                            " already exists.");
   }
-  const Eigen::Matrix3Xd& node_positions = X_WG * filament_G.node_positions();
-  const Eigen::Matrix3Xd& frames_m1 = X_WG.rotation() * filament_G.frames_m1();
-  const int num_nodes = node_positions.cols();
-  const int num_edges = frames_m1.cols();
+  const Eigen::Matrix3X<T> node_pos = X_WG * filament_G.node_pos();
+  const Eigen::Matrix3X<T> edge_m1 = X_WG.rotation() * filament_G.edge_m1();
+  const int num_nodes = node_pos.cols();
+  const int num_edges = edge_m1.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
-  DRAKE_THROW_UNLESS(
-      num_edges == (filament_G.has_closed_ends() ? num_nodes : num_nodes - 1));
-  Eigen::Matrix3Xd frames_t(3, num_edges);
+  DRAKE_THROW_UNLESS(num_edges ==
+                     (filament_G.closed() ? num_nodes : num_nodes - 1));
+  Eigen::Matrix3X<T> edge_t(3, num_edges);
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
-    frames_t.col(i) = math::internal::NormalizeOrThrow<T>(
-        node_positions.col(ip1) - node_positions.col(i), __func__);
+    edge_t.col(i) = math::internal::NormalizeOrThrow<T>(
+        node_pos.col(ip1) - node_pos.col(i), __func__);
   }
-  Eigen::Matrix3Xd frames_d1(3, num_edges);
-  math::SpaceParallelFrameTransport<T>(frames_t, frames_m1.col(0), &frames_d1);
+  Eigen::Matrix3X<T> edge_d1(3, num_edges);
+  math::SpaceParallelFrameTransport<T>(edge_t, edge_m1.col(0), &edge_d1);
 
   typename der::DerModel<T>::Builder builder;
-  const double gamma_0 = 0.0;
-  builder.AddFirstEdge(node_positions.col(0), gamma_0, node_positions.col(1),
-                       frames_m1.col(0));
+  builder.AddFirstEdge(node_pos.col(0), 0.0, node_pos.col(1), edge_m1.col(0));
   for (int i = 1; i < num_edges; ++i) {
-    const double gamma_i = math::SignedAngleAroundAxis<T>(
-        frames_d1.col(i), frames_m1.col(i), frames_t.col(i));
+    const T gamma_i = math::SignedAngleAroundAxis<T>(
+        edge_d1.col(i), edge_m1.col(i), edge_t.col(i));
     const int ip1 = (i + 1) % num_nodes;
-    builder.AddEdge(gamma_i, node_positions.col(ip1));
+    builder.AddEdge(gamma_i, node_pos.col(ip1));
   }
 
   builder.SetUndeformedStateToInitialState();
@@ -753,6 +747,8 @@ void DeformableModel<T>::CopyConfigurationVectors(
               .head(num_dofs);
       output_value.set_value(geometry_id, std::move(vertex_positions));
     } else if (IsDerModel(body_id)) {
+      // TODO(wei-chen): Maybe store a DerState in cache to avoid allocating
+      // every time.
       auto der_state = GetDerModel(body_id).CreateDerState();
       der_state->Deserialize(
           context.get_discrete_state(GetDiscreteStateIndex(body_id)).value());

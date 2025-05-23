@@ -598,19 +598,15 @@ void DefineShapes(py::module m) {
     filament_cls  // BR
         .def(py::init<bool, Eigen::Matrix3Xd, const Eigen::Vector3d&,
                  const Filament::CrossSection&>(),
-            py::arg("has_closed_ends"), py::arg("node_positions"),
-            py::arg("first_frame_m1"), py::arg("cross_section"),
-            doc.Filament.ctor.doc_first_m1)
+            py::arg("closed"), py::arg("node_pos"), py::arg("first_edge_m1"),
+            py::arg("cross_section"), doc.Filament.ctor.doc_first_m1)
         .def(py::init<bool, Eigen::Matrix3Xd, Eigen::Matrix3Xd,
                  const Filament::CrossSection&>(),
-            py::arg("has_closed_ends"), py::arg("node_positions"),
-            py::arg("frames_m1"), py::arg("cross_section"),
-            doc.Filament.ctor.doc_all_m1)
-        .def("has_closed_ends", &Filament::has_closed_ends,
-            doc.Filament.has_closed_ends.doc)
-        .def("node_positions", &Filament::node_positions,
-            doc.Filament.node_positions.doc)
-        .def("frames_m1", &Filament::frames_m1, doc.Filament.frames_m1.doc)
+            py::arg("closed"), py::arg("node_pos"), py::arg("edge_m1"),
+            py::arg("cross_section"), doc.Filament.ctor.doc_all_m1)
+        .def("closed", &Filament::closed, doc.Filament.closed.doc)
+        .def("node_pos", &Filament::node_pos, doc.Filament.node_pos.doc)
+        .def("edge_m1", &Filament::edge_m1, doc.Filament.edge_m1.doc)
         .def("cross_section", &Filament::cross_section,
             doc.Filament.cross_section.doc);
 
