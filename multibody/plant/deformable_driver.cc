@@ -1063,8 +1063,7 @@ void DeformableDriver<T>::CalcFreeMotionDerSolver(
   const DeformableBodyId body_id = deformable_model_->GetBodyId(index);
   const DerState<T>& der_state = EvalDerState(context, index);
   if (!deformable_model_->is_enabled(body_id, context)) {
-    // der_solver->SetNextDerState(der_state);
-    // TODO(wei-chen): Handle this.
+    der_solver->set_state(der_state);
     return;
   }
   const der::internal::ExternalForceField<T> external_force_field{
