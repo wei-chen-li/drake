@@ -172,6 +172,8 @@ void DeformableDriver<T>::DeclareCacheEntries(
       const der::DerModel<T>& der_model = deformable_model_->GetDerModel(id);
       unused(der_model);
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
 
@@ -234,6 +236,8 @@ void DeformableDriver<T>::AppendLinearDynamicsMatrix(
                    manager_->plant().time_step());
     } else if (deformable_model_->IsDerModel(index)) {
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
 }
@@ -867,6 +871,8 @@ void DeformableDriver<T>::CalcDiscreteStates(
                              discrete_value);
     } else if (deformable_model_->IsDerModel(index)) {
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
 }
@@ -1174,6 +1180,8 @@ void DeformableDriver<T>::CalcParticipatingVelocityMultiplexer(
     } else if (deformable_model_->IsDerModel(i)) {
       num_participating_dofs[i] = 0;
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
   *result = Multiplexer<T>(std::move(num_participating_dofs));
@@ -1200,6 +1208,8 @@ void DeformableDriver<T>::CalcParticipatingVelocities(
       permutation.Apply(v, &participating_velocities[i]);
     } else if (deformable_model_->IsDerModel(i)) {
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
   *result = EvalParticipatingVelocityMultiplexer(context).Multiplex(
@@ -1229,6 +1239,8 @@ void DeformableDriver<T>::CalcParticipatingFreeMotionVelocities(
       permutation.Apply(v_star, &participating_v_star[i]);
     } else if (deformable_model_->IsDerModel(i)) {
       // TODO(wei-chen): Implement this.
+    } else {
+      DRAKE_UNREACHABLE();
     }
   }
   // TODO(xuchenhan-tri): Consider adding a in-place version of Multiplex.
