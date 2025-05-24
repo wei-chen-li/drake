@@ -84,6 +84,12 @@ int DerSolver<T>::AdvanceOneTimeStep(
 }
 
 template <typename T>
+void DerSolver<T>::set_state(const DerState<T>& state) {
+  model_->ValidateDerState(state);
+  state_->CopyFrom(state);
+}
+
+template <typename T>
 T DerSolver<T>::unit_adjusted_norm(
     const Eigen::Ref<const Eigen::VectorX<T>>& residual) {
   const DerStructuralProperty<T>& prop = model_->structural_property();

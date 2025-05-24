@@ -326,9 +326,11 @@ void DeformableModel<T>::Disable(DeformableBodyId id,
       .set_value(false);
   /* Set both the accelerations and the velocities to zero, noting that the
    dofs are stored in the order of q, v, and then a. */
+  const int num_dofs = IsFemModel(id) ? fem_models_.at(id)->num_dofs()
+                                      : der_models_.at(id)->num_dofs();
   context->get_mutable_discrete_state(discrete_state_indexes_.at(id))
       .get_mutable_value()
-      .tail(2 * fem_models_.at(id)->num_dofs())
+      .segment(num_dofs, 2 * num_dofs)
       .setZero();
 }
 

@@ -51,6 +51,10 @@ class DerSolver {
   int AdvanceOneTimeStep(const DerState<T>& prev_state,
                          const ExternalForceField<T>& external_force_field);
 
+  /* Sets the internally owned DerState to `state`.
+   @pre `state` is created from the model prescribed at construction. */
+  void set_state(const DerState<T>& state);
+
   /* Returns a reference to the internally owned DerState. */
   const DerState<T>& get_state() const { return *state_; }
 

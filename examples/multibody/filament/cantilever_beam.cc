@@ -37,6 +37,7 @@ namespace {
 using drake::geometry::Filament;
 using drake::geometry::SceneGraph;
 using drake::multibody::AddMultibodyPlant;
+using drake::multibody::DeformableBodyId;
 using drake::multibody::DeformableModel;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
@@ -48,7 +49,8 @@ using Eigen::Vector4d;
 using math::RigidTransform;
 using math::RotationMatrix;
 
-void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
+DeformableBodyId RegisterCantileverBeam(
+    DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
   /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
@@ -82,14 +84,15 @@ void RegisterCantileverBeam(DeformableModel<double>* deformable_model) {
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
   const double edge_length = FLAGS_length / FLAGS_num_edges;
-  multibody::DeformableBodyId body_id =
-      deformable_model->RegisterDeformableBody(
-          std::move(geometry_instance), config,
-          /* resolution_hint = */ edge_length);
+  DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
+      std::move(geometry_instance), config,
+      /* resolution_hint = */ edge_length);
 
   /* Fix the first two nodes effectively makes the beam have a clamped end. */
   deformable_model->SetWallBoundaryCondition(
       body_id, Vector3d(edge_length * 1.001, 0, 0), Vector3d(1, 0, 0));
+
+  return body_id;
 }
 
 int do_main() {
@@ -102,7 +105,7 @@ int do_main() {
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
 
-  RegisterCantileverBeam(&deformable_model);
+  DeformableBodyId body_id = RegisterCantileverBeam(&deformable_model);
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */
@@ -117,12 +120,12 @@ int do_main() {
   Context<double>& mutable_root_context = simulator.get_mutable_context();
   Context<double>& plant_context =
       diagram->GetMutableSubsystemContext(plant, &mutable_root_context);
+  deformable_model.is_enabled(body_id, plant_context);
 
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
   simulator.AdvanceTo(FLAGS_simulation_time);
-  unused(plant_context);
 
   return 0;
 }
