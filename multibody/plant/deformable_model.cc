@@ -468,9 +468,7 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
      compare this function to the private fields, and check that every single
      field got a mention. For each field, this function will either:
      1. Copy the field directly.
-     2. Place a disclaimer comment why that field does not need to be copied.
-   */
-
+     2. Place a disclaimer comment why that field does not need to be copied. */
     result->reference_positions_ = reference_positions_;
     result->discrete_state_indexes_ = discrete_state_indexes_;
     result->is_enabled_parameter_indexes_ = is_enabled_parameter_indexes_;
