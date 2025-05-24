@@ -220,8 +220,9 @@ Ellipsoid::Ellipsoid(const Vector3<double>& measures)
 std::string Ellipsoid::do_to_string() const {
   return fmt::format("Ellipsoid(a={}, b={}, c={})", a(), b(), c());
 }
+
 Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
-                   const Eigen::Vector3d& first_edge_m1,
+                   const Eigen::Vector3d& first_edge_m1_in,
                    const CrossSection& cross_section)
     : closed_(closed),
       node_pos_(std::move(node_pos)),
@@ -231,17 +232,31 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
       cross_section.type == Filament::CrossSectionType::kElliptical);
   DRAKE_THROW_UNLESS(cross_section.width > 0);
   DRAKE_THROW_UNLESS(cross_section.height > 0);
-  DRAKE_THROW_UNLESS(node_pos_.cols() >= 2);
   const int num_nodes = node_pos_.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
   const int num_edges = closed ? num_nodes : num_nodes - 1;
   Eigen::Matrix3Xd edge_t(3, num_edges);
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
-    edge_t.col(i) = math::internal::NormalizeOrThrow<double>(
-        node_pos_.col(ip1) - node_pos_.col(i), __func__);
+    const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
+    if (edge_length < 1e-10) {
+      throw std::invalid_argument(fmt::format(
+          "Node {} and node {} has a distance value of {}, computing the unit "
+          "tangent vector from it would cause numerical problems.",
+          i, ip1, edge_length));
+    }
+    edge_t.col(i) = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
   }
-  math::internal::ThrowIfNotOrthonormal<double>(edge_t.col(0), first_edge_m1,
-                                                __func__);
+  const Eigen::Vector3d first_edge_m1 = first_edge_m1_in.normalized();
+  if (std::abs(edge_t.col(0).dot(first_edge_m1)) >
+      math::internal::kTolerancePerpendicularDotProduct) {
+    throw std::invalid_argument(fmt::format(
+        "The specified first frame m₁ director [{}] is not perpendicular to "
+        "the unit tangent vector [{}].",
+        fmt_eigen(first_edge_m1_in.transpose()),
+        fmt_eigen(edge_t.col(0).transpose())));
+  }
+
   edge_m1_.resize(3, num_edges);
   math::SpaceParallelFrameTransport<double>(edge_t, first_edge_m1, &edge_m1_);
 }
@@ -261,6 +276,26 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
   const int num_edges = edge_m1_.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
   DRAKE_THROW_UNLESS(num_edges == (closed ? num_nodes : num_nodes - 1));
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
+    if (edge_length < 1e-10) {
+      throw std::invalid_argument(fmt::format(
+          "Node {} and node {} has a distance value of {}, computing the unit "
+          "tangent vector from it would cause numerical problems.",
+          i, ip1, edge_length));
+    }
+    Eigen::Vector3d t = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
+    Eigen::Vector3d m1 = edge_m1_.col(i).normalized();
+    if (std::abs(t.dot(m1)) >
+        math::internal::kTolerancePerpendicularDotProduct) {
+      throw std::invalid_argument(fmt::format(
+          "The unit tangent vector [{}] and the m₁ director [{}] of edge {} is "
+          "not perpendicular.",
+          fmt_eigen(t.transpose()), fmt_eigen(edge_m1_.col(i).transpose()), i));
+    }
+    edge_m1_.col(i) = m1;
+  }
 }
 
 std::string Filament::do_to_string() const {
