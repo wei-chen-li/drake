@@ -90,8 +90,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
                   }}),
           {systems::System<T>::xd_ticket(),
            systems::System<T>::all_parameters_ticket()});
-      cache_indexes_.fem_states.emplace_back(
-          fem_state_cache_entry.cache_index());
+      cache_indexes_.states.emplace_back(fem_state_cache_entry.cache_index());
 
       /* Constraint participation information for each body. */
       ContactParticipation empty_contact_participation(fem_model.num_nodes());
@@ -146,8 +145,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
            vertex_permutation_cache_entry.ticket(),
            systems::System<T>::all_input_ports_ticket(),
            systems::System<T>::all_parameters_ticket()});
-      cache_indexes_.fem_solvers.emplace_back(
-          fem_solver_cache_entry.cache_index());
+      cache_indexes_.solvers.emplace_back(fem_solver_cache_entry.cache_index());
 
       /* Cache entry for FEM state at next time step. */
       const auto& next_fem_state_cache_entry = manager->DeclareCacheEntry(
@@ -165,7 +163,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
            systems::System<T>::all_input_ports_ticket(),
            systems::System<T>::time_ticket(),
            systems::System<T>::accuracy_ticket()});
-      cache_indexes_.next_fem_states.emplace_back(
+      cache_indexes_.next_states.emplace_back(
           next_fem_state_cache_entry.cache_index());
     } else if (deformable_model_->IsDerModel(id)) {
       const der::DerModel<T>& der_model = deformable_model_->GetDerModel(id);
@@ -947,7 +945,7 @@ template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalFemState(
     const Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
-      .get_cache_entry(cache_indexes_.fem_states.at(index))
+      .get_cache_entry(cache_indexes_.states.at(index))
       .template Eval<FemState<T>>(context);
 }
 
@@ -984,7 +982,7 @@ template <typename T>
 const FemSolver<T>& DeformableDriver<T>::EvalFreeMotionFemSolver(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
-      .get_cache_entry(cache_indexes_.fem_solvers.at(index))
+      .get_cache_entry(cache_indexes_.solvers.at(index))
       .template Eval<FemSolver<T>>(context);
 }
 
@@ -1067,7 +1065,7 @@ template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalNextFemState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
-      .get_cache_entry(cache_indexes_.next_fem_states.at(index))
+      .get_cache_entry(cache_indexes_.next_states.at(index))
       .template Eval<FemState<T>>(context);
 }
 
