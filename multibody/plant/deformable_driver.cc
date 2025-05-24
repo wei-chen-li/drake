@@ -13,6 +13,7 @@
 #include "drake/geometry/geometry_ids.h"
 #include "drake/math/rigid_transform.h"
 #include "drake/multibody/contact_solvers/contact_configuration.h"
+#include "drake/multibody/der/der_model.h"
 #include "drake/multibody/fem/dirichlet_boundary_condition.h"
 #include "drake/multibody/fem/fem_model.h"
 #include "drake/multibody/plant/contact_properties.h"
@@ -35,6 +36,9 @@ using drake::multibody::contact_solvers::internal::PartialPermutation;
 using drake::multibody::contact_solvers::internal::SapConstraintJacobian;
 using drake::multibody::contact_solvers::internal::SchurComplement;
 using drake::multibody::contact_solvers::internal::VertexPartialPermutation;
+using drake::multibody::der::DerModel;
+using drake::multibody::der::internal::DerSolver;
+using drake::multibody::der::internal::DerState;
 using drake::multibody::fem::FemModel;
 using drake::multibody::fem::FemState;
 using drake::multibody::fem::internal::DirichletBoundaryCondition;
@@ -167,9 +171,60 @@ void DeformableDriver<T>::DeclareCacheEntries(
       cache_indexes_.next_states.emplace_back(
           next_fem_state_cache_entry.cache_index());
     } else if (deformable_model_->IsDerModel(id)) {
-      const der::DerModel<T>& der_model = deformable_model_->GetDerModel(id);
-      unused(der_model);
-      // TODO(wei-chen): Implement this.
+      const DerModel<T>& der_model = deformable_model_->GetDerModel(id);
+      std::unique_ptr<DerState<T>> model_state = der_model.CreateDerState();
+      /* Cache entry for current DER state. */
+      const auto& der_state_cache_entry = manager->DeclareCacheEntry(
+          fmt::format("DER state for body with index {}", i),
+          systems::ValueProducer(
+              *model_state,
+              std::function<void(const Context<T>&, DerState<T>*)>{
+                  [this, i](const Context<T>& context, DerState<T>* state) {
+                    this->CalcDerState(context, i, state);
+                  }}),
+          {systems::System<T>::xd_ticket(),
+           systems::System<T>::all_parameters_ticket()});
+      cache_indexes_.states.emplace_back(der_state_cache_entry.cache_index());
+
+      cache_indexes_.constraint_participations.emplace_back(
+          2147483647);  // TODO(wei-chen): Implement this.
+
+      DerSolver<T> model_der_solver(&der_model,
+                                    &deformable_model_->der_integrator());
+      /* Cache entry for free motion DER state and data. */
+      const auto& der_solver_cache_entry = manager->DeclareCacheEntry(
+          fmt::format("DER solver and data for body with index {}", i),
+          systems::ValueProducer(
+              model_der_solver,
+              std::function<void(const systems::Context<T>&, DerSolver<T>*)>{
+                  [this, i](const systems::Context<T>& context,
+                            DerSolver<T>* der_solver) {
+                    this->CalcFreeMotionDerSolver(context, i, der_solver);
+                  }}),
+          /* Free motion velocities can depend on user defined external forces
+           which in turn depends on input ports. */
+          {der_state_cache_entry.ticket(),
+           systems::System<T>::all_input_ports_ticket(),
+           systems::System<T>::all_parameters_ticket()});
+      cache_indexes_.solvers.emplace_back(der_solver_cache_entry.cache_index());
+
+      /* Cache entry for DER state at next time step. */
+      const auto& next_der_state_cache_entry = manager->DeclareCacheEntry(
+          fmt::format("DER state for body with index {} at next time step", i),
+          systems::ValueProducer(
+              *model_state,
+              std::function<void(const systems::Context<T>&, DerState<T>*)>{
+                  [this, i](const systems::Context<T>& context,
+                            DerState<T>* next_der_state) {
+                    this->CalcNextDerState(context, i, next_der_state);
+                  }}),
+          {systems::System<T>::xd_ticket(),
+           systems::System<T>::all_parameters_ticket(),
+           systems::System<T>::all_input_ports_ticket(),
+           systems::System<T>::time_ticket(),
+           systems::System<T>::accuracy_ticket()});
+      cache_indexes_.next_states.emplace_back(
+          next_der_state_cache_entry.cache_index());
     } else {
       DRAKE_UNREACHABLE();
     }
@@ -943,11 +998,31 @@ void DeformableDriver<T>::CalcFemState(const Context<T>& context,
 }
 
 template <typename T>
+void DeformableDriver<T>::CalcDerState(const Context<T>& context,
+                                       DeformableBodyIndex index,
+                                       DerState<T>* der_state) const {
+  const DeformableBodyId id = deformable_model_->GetBodyId(index);
+  const systems::BasicVector<T>& discrete_state =
+      context.get_discrete_state().get_vector(
+          deformable_model_->GetDiscreteStateIndex(id));
+  const VectorX<T>& discrete_value = discrete_state.value();
+  der_state->Deserialize(discrete_value);
+}
+
+template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalFemState(
     const Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
       .get_cache_entry(cache_indexes_.states.at(index))
       .template Eval<FemState<T>>(context);
+}
+
+template <typename T>
+const DerState<T>& DeformableDriver<T>::EvalDerState(
+    const Context<T>& context, DeformableBodyIndex index) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.states.at(index))
+      .template Eval<DerState<T>>(context);
 }
 
 template <typename T>
@@ -980,6 +1055,22 @@ void DeformableDriver<T>::CalcFreeMotionFemSolver(
 }
 
 template <typename T>
+void DeformableDriver<T>::CalcFreeMotionDerSolver(
+    const systems::Context<T>& context, DeformableBodyIndex index,
+    DerSolver<T>* der_solver) const {
+  const DeformableBodyId body_id = deformable_model_->GetBodyId(index);
+  const DerState<T>& der_state = EvalDerState(context, index);
+  if (!deformable_model_->is_enabled(body_id, context)) {
+    // der_solver->SetNextDerState(der_state);
+    // TODO(wei-chen): Handle this.
+    return;
+  }
+  const der::internal::ExternalForceField<T> external_force_field{
+      &context, deformable_model_->GetExternalForces(body_id)};
+  der_solver->AdvanceOneTimeStep(der_state, external_force_field);
+}
+
+template <typename T>
 const FemSolver<T>& DeformableDriver<T>::EvalFreeMotionFemSolver(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
@@ -988,10 +1079,25 @@ const FemSolver<T>& DeformableDriver<T>::EvalFreeMotionFemSolver(
 }
 
 template <typename T>
+const DerSolver<T>& DeformableDriver<T>::EvalFreeMotionDerSolver(
+    const systems::Context<T>& context, DeformableBodyIndex index) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.solvers.at(index))
+      .template Eval<DerSolver<T>>(context);
+}
+
+template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalFreeMotionFemState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   const FemSolver<T>& fem_solver = EvalFreeMotionFemSolver(context, index);
   return fem_solver.next_fem_state();
+}
+
+template <typename T>
+const DerState<T>& DeformableDriver<T>::EvalFreeMotionDerState(
+    const systems::Context<T>& context, DeformableBodyIndex index) const {
+  const DerSolver<T>& der_solver = EvalFreeMotionDerSolver(context, index);
+  return der_solver.get_state();
 }
 
 template <typename T>
@@ -1063,11 +1169,27 @@ void DeformableDriver<T>::CalcNextFemState(const systems::Context<T>& context,
 }
 
 template <typename T>
+void DeformableDriver<T>::CalcNextDerState(const systems::Context<T>& context,
+                                           DeformableBodyIndex index,
+                                           DerState<T>* next_der_state) const {
+  const DerState<T>& free_motion_state = EvalFreeMotionDerState(context, index);
+  next_der_state->CopyFrom(free_motion_state);
+}
+
+template <typename T>
 const FemState<T>& DeformableDriver<T>::EvalNextFemState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   return manager_->plant()
       .get_cache_entry(cache_indexes_.next_states.at(index))
       .template Eval<FemState<T>>(context);
+}
+
+template <typename T>
+const DerState<T>& DeformableDriver<T>::EvalNextDerState(
+    const systems::Context<T>& context, DeformableBodyIndex index) const {
+  return manager_->plant()
+      .get_cache_entry(cache_indexes_.next_states.at(index))
+      .template Eval<DerState<T>>(context);
 }
 
 template <typename T>
