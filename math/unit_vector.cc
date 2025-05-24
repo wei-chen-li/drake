@@ -96,7 +96,7 @@ void ThrowIfNotOrthonormal(const Eigen::Ref<const Vector3<T>>& unit_vector1,
         tolerance_perpendicular_dot_product) {
       throw std::logic_error(
           fmt::format("{}(): The two vectors are not perpendicular.\n"
-                      "{} {}ᵀ = {} is greater than {}.",
+                      "[{}] [{}]ᵀ = {} is greater than {}.",
                       function_name, fmt_eigen(unit_vector1.transpose()),
                       fmt_eigen(unit_vector2.transpose()), dot_product,
                       tolerance_perpendicular_dot_product));
