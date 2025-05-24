@@ -922,7 +922,10 @@ void DeformableDriver<T>::CalcDiscreteStates(
       next_states->set_value(deformable_model_->GetDiscreteStateIndex(id),
                              discrete_value);
     } else if (deformable_model_->IsDerModel(index)) {
-      // TODO(wei-chen): Implement this.
+      const DerState<T>& next_der_state = EvalNextDerState(context, index);
+      const DeformableBodyId id = deformable_model_->GetBodyId(index);
+      next_states->set_value(deformable_model_->GetDiscreteStateIndex(id),
+                             next_der_state.Serialize());
     } else {
       DRAKE_UNREACHABLE();
     }
