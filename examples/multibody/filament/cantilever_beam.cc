@@ -4,12 +4,13 @@
 
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/multibody/plant/deformable_model.h"
+#include "drake/multibody/plant/force_density_field.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 10.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
@@ -19,7 +20,7 @@ DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
 DEFINE_double(width, 0.02, "Width of the cantilever beam [m].");
 DEFINE_double(height, 0.015, "Height of the cantilever beam [m].");
-DEFINE_int32(num_edges, 300,
+DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
@@ -39,6 +40,7 @@ using drake::geometry::SceneGraph;
 using drake::multibody::AddMultibodyPlant;
 using drake::multibody::DeformableBodyId;
 using drake::multibody::DeformableModel;
+using drake::multibody::ForceDensityField;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::fem::DeformableBodyConfig;
@@ -80,6 +82,7 @@ DeformableBodyId RegisterCantileverBeam(
   config.set_youngs_modulus(FLAGS_E);
   config.set_poissons_ratio(0.5 * FLAGS_E / FLAGS_G - 1);
   config.set_mass_density(FLAGS_rho);
+  config.set_mass_damping_coefficient(1.0);
 
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
@@ -136,10 +139,9 @@ int do_main() {
 
 int main(int argc, char* argv[]) {
   gflags::SetUsageMessage(
-      "This is a demo used to showcase enabling/disabling of deformable bodies."
-      "Deformable torus bodies are stacked on top of each other and enabled "
-      "one-by-one. Refer to README for instructions on meldis as well as "
-      "optional flags.");
+      "This is a demo used to showcase the modeling of a cantilever beam using "
+      "a deformable filament. Refer to README for instructions on meldis as "
+      "well as optional flags.");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   return drake::examples::do_main();
 }
