@@ -212,14 +212,13 @@ class DerState {
   /* Returns an identical copy of this DerState. */
   std::unique_ptr<DerState<T>> Clone() const;
 
-  /* Serializes `this` state into an Eigen::VectorX. The resulting vetor will
-   have size greater than `3 * num_dofs()` because it also containts data at the
-   prevoius time step. */
+  /* Serializes `this` DerState into an Eigen::VectorX. The resulting vector
+   will contain q, q̇, q̈ (in that order), and data at the previous time step. */
   Eigen::VectorX<T> Serialize() const {
     return der_state_system_->Serialize(*context_);
   }
 
-  /* Deserializes from `serialized` into `this`.
+  /* Deserializes the Serialize() returned `serialized` vector into `this`.
    @pre `serialized` has the correct size. */
   void Deserialize(const Eigen::Ref<const Eigen::VectorX<T>>& serialized) {
     der_state_system_->Deserialize(context_.get_mutable(), serialized);
