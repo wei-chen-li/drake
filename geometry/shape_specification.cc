@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -78,6 +79,23 @@ void ThrowForBadScale(const Vector3<double>& scale, std::string_view source) {
         fmt::format("{} |scale| cannot be < 1e-8 on any axis, given [{}].",
                     source, fmt_eigen(scale.transpose())));
   }
+}
+
+std::string repr(const Eigen::Matrix3Xd& mat) {
+  std::stringstream ss;
+  ss.precision(std::numeric_limits<double>::max_digits10 - 1);
+  ss << '[';
+  for (int i = 0; i < mat.rows(); ++i) {
+    ss << '[';
+    for (int j = 0; j < mat.cols(); ++j) {
+      ss << mat(i, j);
+      if (j < mat.cols() - 1) ss << ',';
+    }
+    ss << ']';
+    if (i < mat.rows() - 1) ss << ',';
+  }
+  ss << ']';
+  return std::move(ss).str();
 }
 
 }  // namespace
@@ -301,10 +319,14 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
 }
 
 std::string Filament::do_to_string() const {
-  return fmt::format("Filament(closed={}, num_nodes={})", closed_,
-                     node_pos_.cols());
-  // TODO(wei-chen): Make this string more descreptive, then add unit tests for
-  // the python binding.
+  const std::string cross_section_type =
+      cross_section().type == CrossSectionType::kRectangular ? "kRectangular"
+                                                             : "kElliptical";
+  return fmt::format(
+      "Filament(closed={}, node_pos={}, edge_m1={}, cross_section="
+      "Filament.CrossSection(type=Filament.{}, width={}, height={}))",
+      static_cast<int>(closed_), repr(node_pos_), repr(edge_m1_),
+      cross_section_type, cross_section_.width, cross_section_.height);
 }
 
 HalfSpace::HalfSpace() = default;

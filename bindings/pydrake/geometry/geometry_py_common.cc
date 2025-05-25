@@ -596,14 +596,24 @@ void DefineShapes(py::module m) {
           .def_readwrite("height", &Nested::height, nested_doc.height.doc);
     }
     filament_cls  // BR
+        .def(py::init([](bool closed, Eigen::Matrix3Xd node_pos,
+                          Eigen::Matrix3Xd edge_m1,
+                          const Filament::CrossSection& cross_section) {
+          if (edge_m1.cols() == 1) {
+            const Eigen::Vector3d first_edge_m1 = edge_m1.col(0);
+            return std::make_unique<Filament>(
+                closed, node_pos, first_edge_m1, cross_section);
+          } else {
+            return std::make_unique<Filament>(
+                closed, node_pos, edge_m1, cross_section);
+          }
+        }),
+            py::arg("closed"), py::arg("node_pos"), py::arg("edge_m1"),
+            py::arg("cross_section"), doc.Filament.ctor.doc_all_m1)
         .def(py::init<bool, Eigen::Matrix3Xd, const Eigen::Vector3d&,
                  const Filament::CrossSection&>(),
             py::arg("closed"), py::arg("node_pos"), py::arg("first_edge_m1"),
             py::arg("cross_section"), doc.Filament.ctor.doc_first_m1)
-        .def(py::init<bool, Eigen::Matrix3Xd, Eigen::Matrix3Xd,
-                 const Filament::CrossSection&>(),
-            py::arg("closed"), py::arg("node_pos"), py::arg("edge_m1"),
-            py::arg("cross_section"), doc.Filament.ctor.doc_all_m1)
         .def("closed", &Filament::closed, doc.Filament.closed.doc)
         .def("node_pos", &Filament::node_pos, doc.Filament.node_pos.doc)
         .def("edge_m1", &Filament::edge_m1, doc.Filament.edge_m1.doc)
