@@ -56,7 +56,7 @@ void DrawCircularLoop(Meshcat* meshcat) {
 
 }  // namespace
 
-int main(int argc, char* argv[]) {
+int main() {
   Meshcat meshcat;
   DrawTwistedBeam(&meshcat);
   DrawCircularLoop(&meshcat);
