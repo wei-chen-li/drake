@@ -275,16 +275,28 @@ void DeformableModel<T>::SetPositions(
   this->plant().ValidateContext(*context);
   this->ThrowIfSystemResourcesNotDeclared(__func__);
   ThrowUnlessRegistered(__func__, id);
-  const int num_nodes = fem_models_.at(id)->num_nodes();
-  DRAKE_THROW_UNLESS(q.cols() == num_nodes);
   auto all_finite = [](const Matrix3X<T>& positions) {
     return (positions.array().isFinite().all());
   };
   DRAKE_THROW_UNLESS(all_finite(q));
 
-  context->get_mutable_discrete_state(GetDiscreteStateIndex(id))
-      .get_mutable_value()
-      .head(num_nodes * 3) = Eigen::Map<const VectorX<T>>(q.data(), q.size());
+  if (IsFemModel(id)) {
+    const int num_nodes = fem_models_.at(id)->num_nodes();
+    DRAKE_THROW_UNLESS(q.cols() == num_nodes);
+    context->get_mutable_discrete_state(GetDiscreteStateIndex(id))
+        .get_mutable_value()
+        .head(num_nodes * 3) = Eigen::Map<const VectorX<T>>(q.data(), q.size());
+  } else if (IsDerModel(id)) {
+    const int num_nodes = GetDerModel(id).num_nodes();
+    DRAKE_THROW_UNLESS(q.cols() == num_nodes);
+    Eigen::VectorBlock<VectorX<T>> q_state =
+        context->get_mutable_discrete_state(GetDiscreteStateIndex(id))
+            .get_mutable_value();
+    for (int i = 0; i < num_nodes; ++i)
+      q_state.template segment<3>(3 * i) = q.col(i);
+  } else {
+    DRAKE_UNREACHABLE();
+  }
 }
 
 template <typename T>
@@ -294,11 +306,24 @@ Matrix3X<T> DeformableModel<T>::GetPositions(const systems::Context<T>& context,
   this->ThrowIfSystemResourcesNotDeclared(__func__);
   ThrowUnlessRegistered(__func__, id);
 
-  const int num_nodes = fem_models_.at(id)->num_nodes();
-  const VectorX<T>& q = context.get_discrete_state(GetDiscreteStateIndex(id))
-                            .get_value()
-                            .head(num_nodes * 3);
-  return Eigen::Map<const Matrix3X<T>>(q.data(), 3, num_nodes);
+  if (IsFemModel(id)) {
+    const int num_nodes = fem_models_.at(id)->num_nodes();
+    const VectorX<T>& q = context.get_discrete_state(GetDiscreteStateIndex(id))
+                              .get_value()
+                              .head(num_nodes * 3);
+    return Eigen::Map<const Matrix3X<T>>(q.data(), 3, num_nodes);
+  } else if (IsDerModel(id)) {
+    const VectorX<T>& discrete_state_vector =
+        context.get_discrete_state(GetDiscreteStateIndex(id)).get_value();
+    const int num_nodes = GetDerModel(id).num_nodes();
+    Matrix3X<T> node_positions(3, num_nodes);
+    for (int i = 0; i < num_nodes; ++i) {
+      node_positions.col(i) = discrete_state_vector.template segment<3>(4 * i);
+    }
+    return node_positions;
+  } else {
+    DRAKE_UNREACHABLE();
+  }
 }
 
 template <typename T>
