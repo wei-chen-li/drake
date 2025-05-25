@@ -173,19 +173,23 @@ void DeformableModel<T>::SetWallBoundaryCondition(DeformableBodyId id,
   } else if (IsDerModel(id)) {
     der::DerModel<T>& der_model = *der_models_.at(id);
     const VectorX<T>& p_WVs = GetReferencePositions(id);
-    DRAKE_DEMAND(p_WVs.size() == kDim * der_model.num_nodes());
-    std::set<int> fixed_nodes;
-    for (int i = 0; i < der_model.num_nodes(); ++i) {
+    const int num_nodes = der_model.num_nodes();
+    DRAKE_DEMAND(p_WVs.size() == kDim * num_nodes);
+    /* Fix the nodes that are inside the wall. */
+    std::vector<int> fixed_nodes;
+    for (int i = 0; i < num_nodes; ++i) {
       const auto p_WV = p_WVs.template segment<kDim>(kDim * i);
       if (is_inside_wall(p_WV)) {
         der_model.FixPositionOrAngle(der::DerNodeIndex(i));
-        fixed_nodes.insert(i);
+        fixed_nodes.push_back(i);
       }
     }
-    for (const int i : fixed_nodes) {
-      int ip1 = i + 1;
-      if (der_model.has_closed_ends()) ip1 %= der_model.num_nodes();
-      if (fixed_nodes.find(ip1) != fixed_nodes.end()) {
+    /* If node i and node i+1 are fixed, also fix edge i. */
+    for (int k = 0; k < ssize(fixed_nodes); ++k) {
+      const int i = fixed_nodes[k];
+      const int ip1 =
+          der_model.has_closed_ends() ? (i + 1) % num_nodes : (i + 1);
+      if (ip1 == fixed_nodes[(k + 1) % ssize(fixed_nodes)]) {
         der_model.FixPositionOrAngle(der::DerEdgeIndex(i));
       }
     }
@@ -208,6 +212,7 @@ MultibodyConstraintId DeformableModel<T>::AddFixedConstraint(
                     "MultibodyPlant owning the deformable model.",
                     body_B.name()));
   }
+  // TODO(wei-chen): Implement this function for DerModel.
   const MultibodyConstraintId constraint_id =
       MultibodyConstraintId::get_new_id();
   /* Create an empty spec first. We will add to it. */
