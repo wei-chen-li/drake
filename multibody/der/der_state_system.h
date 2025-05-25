@@ -209,11 +209,11 @@ class DerStateSystem final : public systems::LeafSystem<T> {
                    Context<T>* to_context) const;
 
   /* Serializes the states in `context` into an Eigen::VectorX. The resulting
-   vetor will have size greater than `3 * num_dofs()` because it also containts
-   data at the prevoius time step. */
+   vector will contain q, q̇, q̈ (in that order), and data at the previous time
+   step. */
   Eigen::VectorX<T> Serialize(const Context<T>& context) const;
 
-  /* Deserializes from `serialized` into `context`.
+  /* Deserializes the Serialize() returned `serialized` vector into `context`.
    @pre `context != nullptr`.
    @pre `serialized` has the correct size. */
   void Deserialize(Context<T>* context,

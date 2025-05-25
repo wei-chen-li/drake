@@ -148,8 +148,17 @@ TYPED_TEST(DerStateSystemTest, Serialize) {
   system.AdvancePositionToNextStep(context1.get(),
                                    VectorX<T>::LinSpaced(num_dofs, 1.0, 2.0));
 
+  /* Perform serialization. */
+  const VectorX<T> serialized = system.Serialize(*context1);
+  EXPECT_EQ(serialized.head(num_dofs), system.get_position(*context1));
+  EXPECT_EQ(serialized.segment(num_dofs, num_dofs),
+            system.get_velocity(*context1));
+  EXPECT_EQ(serialized.segment(num_dofs * 2, num_dofs),
+            system.get_acceleration(*context1));
+
+  /* Perform the deserialization. */
   auto context2 = system.CreateDefaultContext();
-  system.Deserialize(context2.get(), system.Serialize(*context1));
+  system.Deserialize(context2.get(), serialized);
 
   /* If the abstract state holding PrevStep is not serialized, some of these
    EXPECT_EQ will fail. */
