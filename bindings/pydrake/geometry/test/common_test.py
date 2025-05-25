@@ -530,6 +530,16 @@ class TestGeometryCore(unittest.TestCase):
             mut.Box(width=1.0, depth=2.0, height=3.0),
             mut.Capsule(radius=1.0, length=2.0),
             mut.Ellipsoid(a=1.0, b=2.0, c=3.0),
+            mut.Filament(closed=False, node_pos=[[0, 1], [0, 0], [0, 0]],
+                         first_edge_m1=[0, 1, 0],
+                         cross_section=mut.Filament.CrossSection(
+                type=mut.Filament.kRectangular,
+                width=0.02, height=0.01)),
+            mut.Filament(closed=True, node_pos=[[0, 1], [0, 0], [0, 0]],
+                         edge_m1=[[0, 0], [1, 1], [0, 0]],
+                         cross_section=mut.Filament.CrossSection(
+                type=mut.Filament.kElliptical,
+                width=0.02, height=0.01)),
             mut.HalfSpace(),
             mut.Mesh(filename="arbitrary/path", scale=1.0),
             mut.Mesh(filename="arbitrary/path", scale3=[1.0, 2.0, 3.0]),
@@ -563,7 +573,8 @@ class TestGeometryCore(unittest.TestCase):
             # Representation of Mesh/Convex requires additional types.
             new_shape = eval(repr(shape), {shape_cls_name: shape_cls,
                                            'InMemoryMesh': mut.InMemoryMesh,
-                                           'MemoryFile': MemoryFile})
+                                           'MemoryFile': MemoryFile,
+                                           'Filament': mut.Filament})
             self.assertIsInstance(new_shape, shape_cls)
             self.assertEqual(repr(new_shape), repr(shape))
 
@@ -643,17 +654,17 @@ class TestGeometryCore(unittest.TestCase):
         junk_path = "arbitrary/path.ext"
         for dut_mesh in [mut.Mesh(filename=junk_path, scale=1.5),
                          mut.Mesh(mesh_data=mut.InMemoryMesh(
-                                      mesh_file=MemoryFile("#junk", ".ext",
+                             mesh_file=MemoryFile("#junk", ".ext",
                                                            "test")),
                                   scale=1.5),
                          mut.Mesh(source=mut.MeshSource(path=junk_path),
                                   scale=1.5),
                          mut.Convex(filename=junk_path, scale=1.5),
                          mut.Convex(mesh_data=mut.InMemoryMesh(
-                            mesh_file=MemoryFile("#junk", ".ext", "test")),
-                            scale=1.5),
-                         mut.Convex(source=mut.MeshSource(path=junk_path),
-                                    scale=1.5)]:
+                             mesh_file=MemoryFile("#junk", ".ext", "test")),
+            scale=1.5),
+            mut.Convex(source=mut.MeshSource(path=junk_path),
+                       scale=1.5)]:
             assert_shape_api(dut_mesh)
             self.assertEqual(".ext", dut_mesh.extension())
             self.assertEqual(dut_mesh.scale(), 1.5)
