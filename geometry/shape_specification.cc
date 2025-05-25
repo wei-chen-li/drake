@@ -247,15 +247,16 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
     }
     edge_t.col(i) = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
   }
-  const Eigen::Vector3d first_edge_m1 = first_edge_m1_in.normalized();
-  if (std::abs(edge_t.col(0).dot(first_edge_m1)) >
-      math::internal::kTolerancePerpendicularDotProduct) {
+  Eigen::Vector3d first_edge_m1 = first_edge_m1_in.normalized();
+  if (std::abs(edge_t.col(0).dot(first_edge_m1)) > 0.99) {
     throw std::invalid_argument(fmt::format(
-        "The specified first frame m₁ director [{}] is not perpendicular to "
-        "the unit tangent vector [{}].",
+        "The specified first frame m₁ director [{}] and the unit tangent "
+        "vector [{}] should be perpendicular but is nearly parallel.",
         fmt_eigen(first_edge_m1_in.transpose()),
         fmt_eigen(edge_t.col(0).transpose())));
   }
+  first_edge_m1 -= edge_t.col(0).dot(first_edge_m1) * edge_t.col(0);
+  first_edge_m1.normalize();
 
   edge_m1_.resize(3, num_edges);
   math::SpaceParallelFrameTransport<double>(edge_t, first_edge_m1, &edge_m1_);
@@ -287,13 +288,14 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
     }
     Eigen::Vector3d t = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
     Eigen::Vector3d m1 = edge_m1_.col(i).normalized();
-    if (std::abs(t.dot(m1)) >
-        math::internal::kTolerancePerpendicularDotProduct) {
+    if (std::abs(t.dot(m1)) > 0.99) {
       throw std::invalid_argument(fmt::format(
-          "The unit tangent vector [{}] and the m₁ director [{}] of edge {} is "
-          "not perpendicular.",
+          "The unit tangent vector [{}] and the m₁ director [{}] of edge {} "
+          "should be perpendicular but is nearly parallel.",
           fmt_eigen(t.transpose()), fmt_eigen(edge_m1_.col(i).transpose()), i));
     }
+    m1 -= t.dot(m1) * t;
+    m1.normalize();
     edge_m1_.col(i) = m1;
   }
 }
