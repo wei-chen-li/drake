@@ -14,14 +14,15 @@ DEFINE_double(simulation_time, 10.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 1e9, "Young's modulus of the deformable bodies [Pa].");
-DEFINE_double(G, 0.4e9, "Shear modulus of the deformable bodies [Pa].");
+DEFINE_double(E, 1e7, "Young's modulus of the deformable bodies [Pa].");
+DEFINE_double(G, 5e7, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
 DEFINE_double(width, 0.02, "Width of the cantilever beam [m].");
 DEFINE_double(height, 0.015, "Height of the cantilever beam [m].");
 DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
+DEFINE_string(shape, "line", "Shape of the beam. \"line\" or \"circle\"");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
               "multibody::DiscreteContactApproximation for details. Options "
@@ -48,19 +49,35 @@ using drake::systems::Context;
 using drake::systems::Simulator;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
+using Eigen::VectorXd;
 using math::RigidTransform;
 using math::RotationMatrix;
 
 DeformableBodyId RegisterCantileverBeam(
-    DeformableModel<double>* deformable_model) {
+    DeformableModel<double>* deformable_model, bool circular = false) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
-  /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
-  const bool closed = false;
-  Eigen::Matrix3Xd node_pos(3, 2);
-  node_pos.col(0) = Vector3d(0, 0, 0);
-  node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
-  const Vector3d first_edge_m1 = Vector3d(0, 1, 0);
+  bool closed;
+  Eigen::Matrix3Xd node_pos;
+  Vector3d first_edge_m1;
+  if (!circular) {
+    /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
+    closed = false;
+    node_pos.resize(3, 2);
+    node_pos.col(0) = Vector3d(0, 0, 0);
+    node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
+    first_edge_m1 = Vector3d(0, 1, 0);
+  } else {
+    closed = true;
+    const int num_nodes = FLAGS_num_edges;
+    const auto theta =
+        VectorXd::LinSpaced(num_nodes + 1, 0, 2 * M_PI).head(num_nodes).array();
+    node_pos.resize(3, num_nodes);
+    node_pos.row(0) = 0.5 * FLAGS_length * (cos(theta) + 1);
+    node_pos.row(1) = 0.5 * FLAGS_length * sin(theta);
+    node_pos.row(2) = VectorXd::Zero(num_nodes);
+    first_edge_m1 = Vector3d(-1, 0, 0);
+  }
   Filament filament(closed, node_pos, first_edge_m1,
                     Filament::CrossSection{.type = Filament::kRectangular,
                                            .width = FLAGS_width,
@@ -86,7 +103,8 @@ DeformableBodyId RegisterCantileverBeam(
 
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
-  const double edge_length = FLAGS_length / FLAGS_num_edges;
+  const double edge_length =
+      (circular ? M_PI * FLAGS_length : FLAGS_length) / FLAGS_num_edges;
   DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
       std::move(geometry_instance), config,
       /* resolution_hint = */ edge_length);
@@ -108,7 +126,9 @@ int do_main() {
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
 
-  DeformableBodyId body_id = RegisterCantileverBeam(&deformable_model);
+  DRAKE_THROW_UNLESS(FLAGS_shape == "line" || FLAGS_shape == "circle");
+  DeformableBodyId body_id =
+      RegisterCantileverBeam(&deformable_model, FLAGS_shape != "line");
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */
