@@ -373,6 +373,14 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     collision_filter_.AddGeometry(id);
   }
 
+  void AddFilamentGeometry(const Filament& filament, GeometryId id) {
+    unused(filament);
+    collision_filter_.AddGeometry(id);
+    throw std::logic_error(
+        "ProximityEngine::Impl::AddFilamentGeometry() not "
+        "implemented yet.");
+  }
+
   bool NeedsConvexHull(const InternalGeometry& geometry) const {
     // We only need convex hulls for rigid Mesh and Convex geometries.
     return !geometry.is_deformable() &&
@@ -1314,6 +1322,12 @@ void ProximityEngine<T>::AddDeformableGeometry(
   impl_->AddDeformableGeometry(mesh, std::move(surface_mesh),
                                std::move(surface_index_to_volume_index),
                                std::move(surface_tri_to_volume_tet), id);
+}
+
+template <typename T>
+void ProximityEngine<T>::AddFilamentGeometry(const Filament& filament,
+                                             GeometryId id) {
+  impl_->AddFilamentGeometry(filament, id);
 }
 
 template <typename T>

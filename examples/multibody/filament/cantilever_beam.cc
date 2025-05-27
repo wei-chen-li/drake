@@ -94,6 +94,10 @@ DeformableBodyId RegisterCantileverBeam(
   illus_props.AddProperty("phong", "diffuse", Vector4d(0.7, 0.5, 0.4, 1.0));
   geometry_instance->set_illustration_properties(std::move(illus_props));
 
+  /* Add a minimal proximity property for collision detection. */
+  geometry::ProximityProperties proximity_props;
+  geometry_instance->set_proximity_properties(proximity_props);
+
   /* Set the material properties. Notice G = E / 2(1+𝜈). */
   DeformableBodyConfig<double> config;
   config.set_youngs_modulus(FLAGS_E);
