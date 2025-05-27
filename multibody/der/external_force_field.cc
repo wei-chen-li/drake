@@ -18,7 +18,7 @@ struct QuadraturePair {
 };
 
 const std::array<QuadraturePair, 5>& GaussQuadrature() {
-  /* Use Gauss–Lobatto quadrature so that end points are included.  */
+  /* Use Gauss–Lobatto quadrature so that end points are included. */
   static constexpr std::array<QuadraturePair, 5> quadrature_pairs = {
       QuadraturePair{0.0, 32 / 45.0},
       QuadraturePair{-0.654653670707977, 49 / 90.0},
@@ -87,7 +87,7 @@ Eigen::Ref<Eigen::VectorX<T>> ExternalForceVector<T>::ScaleAndAddToVector(
   auto& q = state_->get_position();
   auto& t = state_->get_tangent();
   auto& l = state_->get_edge_length();
-  auto& l_bar = undeformed_->get_edge_length();
+  auto& l_undeformed = undeformed_->get_edge_length();
 
   for (const ForceDensityField<T>* force_density_field :
        *force_density_fields_) {
@@ -109,8 +109,8 @@ Eigen::Ref<Eigen::VectorX<T>> ExternalForceVector<T>::ScaleAndAddToVector(
       }
       /* Multiply by the volume to convert force density to force. Divide
        by 2 because the Gauss quadrature weights sum to 2. */
-      rod_i_force *= prop_->A() * l_bar[i] * 0.5;
-      rod_i_moment *= prop_->A() * l_bar[i] * 0.5;
+      rod_i_force *= prop_->A() * l_undeformed[i] * 0.5;
+      rod_i_moment *= prop_->A() * l_undeformed[i] * 0.5;
 
       auto node_i_force = other->template segment<3>(4 * i);
       auto node_ip1_force = other->template segment<3>(4 * ip1);
@@ -131,7 +131,7 @@ Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
     const DerStructuralProperty<T>& prop,
     const DerUndeformedState<T>& undeformed) {
   Eigen::VectorX<T> generalized_mass(undeformed.num_dofs());
-  auto& l_bar = undeformed.get_edge_length();
+  auto& l_undeformed = undeformed.get_edge_length();
   const int num_edges = undeformed.num_edges();
 
   /* The generalized mass assiciated with the node position DoF is half the
@@ -141,10 +141,10 @@ Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
     T effective_length = 0;
     if (undeformed.has_closed_ends()) {
       const int im1 = (i - 1 + num_edges) % num_edges;
-      effective_length = 0.5 * (l_bar[im1] + l_bar[i]);
+      effective_length = 0.5 * (l_undeformed[im1] + l_undeformed[i]);
     } else {
-      if (i - 1 >= 0) effective_length += 0.5 * l_bar[i - 1];
-      if (i < num_edges) effective_length += 0.5 * l_bar[i];
+      if (i - 1 >= 0) effective_length += 0.5 * l_undeformed[i - 1];
+      if (i < num_edges) effective_length += 0.5 * l_undeformed[i];
     }
     generalized_mass.template segment<3>(4 * i).setConstant(effective_length *
                                                             prop.rhoA());
@@ -153,7 +153,7 @@ Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
   /* The generalized mass associated with the edge angle DoF is the axial
    rotational inertial of the rod. */
   for (int i = 0; i < num_edges; ++i) {
-    generalized_mass(4 * i + 3) = l_bar[i] * prop.rhoJ();
+    generalized_mass(4 * i + 3) = l_undeformed[i] * prop.rhoJ();
   }
 
   return generalized_mass.asDiagonal();
