@@ -87,9 +87,9 @@ void ASSERT_NUM_COLS(const First& first, const Second& second,
                      const Other&... other) {
   static_assert(First::RowsAtCompileTime != Eigen::Dynamic);
   if constexpr (std::is_integral_v<Second>) {
-    DRAKE_ASSERT(first.cols() == second);
+    DRAKE_DEMAND(first.cols() == second);
   } else {
-    DRAKE_ASSERT(first.cols() == second.cols());
+    DRAKE_DEMAND(first.cols() == second.cols());
   }
   ASSERT_NUM_COLS(second, other...);
 }
@@ -193,14 +193,14 @@ template <typename T>
 T ComputeStretchingEnergy(const DerStructuralProperty<T>& prop,
                           const DerUndeformedState<T>& undeformed,
                           const DerState<T>& state) {
-  auto& l_bar = undeformed.get_edge_length();
+  auto& l_undeformed = undeformed.get_edge_length();
   auto& l = state.get_edge_length();
-  ASSERT_NUM_COLS(l_bar, l, state.num_edges());
+  ASSERT_NUM_COLS(l_undeformed, l, state.num_edges());
 
   T energy = 0;  // Eₛ
   for (int i = 0; i < state.num_edges(); ++i) {
-    T strain = l[i] / l_bar[i] - 1.0;
-    energy += 0.5 * prop.EA() * strain * strain * l_bar[i];
+    T strain = l[i] / l_undeformed[i] - 1.0;
+    energy += 0.5 * prop.EA() * strain * strain * l_undeformed[i];
   }
   return energy;
 }
@@ -213,14 +213,15 @@ void AddStretchingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& l_bar = undeformed.get_edge_length();
+  auto& l_undeformed = undeformed.get_edge_length();
   auto& l = state.get_edge_length();
   auto& tangent = state.get_tangent();
-  ASSERT_NUM_COLS(l_bar, l, tangent, state.num_edges());
+  ASSERT_NUM_COLS(l_undeformed, l, tangent, state.num_edges());
 
   for (int i = 0; i < state.num_edges(); ++i) {
     // ∂Eₛ/∂eⁱ
-    Vector3<T> grad_E_ei = (l[i] / l_bar[i] - 1.0) * tangent.col(i) * prop.EA();
+    Vector3<T> grad_E_ei =
+        (l[i] / l_undeformed[i] - 1.0) * tangent.col(i) * prop.EA();
 
     const int node_i = 4 * i;
     const int node_ip1 = 4 * ((i + 1) % state.num_nodes());
@@ -236,15 +237,15 @@ void AddStretchingEnergyHessian(const DerStructuralProperty<T>& prop,
                                 Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& l_bar = undeformed.get_edge_length();
+  auto& l_undeformed = undeformed.get_edge_length();
   auto& l = state.get_edge_length();
   auto& tangent = state.get_tangent();
-  ASSERT_NUM_COLS(l_bar, l, tangent, state.num_edges());
+  ASSERT_NUM_COLS(l_undeformed, l, tangent, state.num_edges());
 
   for (int i = 0; i < state.num_edges(); ++i) {
     // ∂²Eₛ/∂(eⁱ)²
     Matrix3<T> grad2_E_ei_ei =
-        ((1 / l_bar[i] - 1 / l[i]) * eye<T>() +
+        ((1 / l_undeformed[i] - 1 / l[i]) * eye<T>() +
          1 / l[i] * outer<T>(tangent.col(i), tangent.col(i))) *
         prop.EA();
 
@@ -260,15 +261,16 @@ template <typename T>
 T ComputeTwistingEnergy(const DerStructuralProperty<T>& prop,
                         const DerUndeformedState<T>& undeformed,
                         const DerState<T>& state) {
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& twist_bar = undeformed.get_twist();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& twist_undeformed = undeformed.get_twist();
   auto& twist = state.get_twist();
-  ASSERT_NUM_COLS(V_bar, twist_bar, twist, state.num_internal_nodes());
+  ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist,
+                  state.num_internal_nodes());
 
   T energy = 0;  // Eₜ
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
-    T delta = twist[i] - twist_bar[i];
-    energy += 0.5 * prop.GJ() * delta * delta / V_bar[i];
+    T delta = twist[i] - twist_undeformed[i];
+    energy += 0.5 * prop.GJ() * delta * delta / V_undeformed[i];
   }
   return energy;
 }
@@ -281,11 +283,11 @@ void AddTwistingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& twist_bar = undeformed.get_twist();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& twist_undeformed = undeformed.get_twist();
   auto& twist = state.get_twist();
   auto& curvature = state.get_discrete_integrated_curvature();
-  ASSERT_NUM_COLS(V_bar, twist_bar, twist, curvature,
+  ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist, curvature,
                   state.num_internal_nodes());
 
   auto& l = state.get_edge_length();
@@ -295,7 +297,8 @@ void AddTwistingEnergyJacobian(const DerStructuralProperty<T>& prop,
     const int ip1 = (i + 1) % state.num_edges();
 
     // ∂Eₜ/∂τᵢ
-    T grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
+    T grad_E_twisti =
+        (twist[i] - twist_undeformed[i]) * prop.GJ() / V_undeformed[i];
 
     const int edge_i = 4 * i + 3;
     const int edge_ip1 = 4 * ip1 + 3;
@@ -329,11 +332,11 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
                               Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& twist_bar = undeformed.get_twist();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& twist_undeformed = undeformed.get_twist();
   auto& twist = state.get_twist();
   auto& curvature = state.get_discrete_integrated_curvature();
-  ASSERT_NUM_COLS(V_bar, twist_bar, twist, curvature,
+  ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist, curvature,
                   state.num_internal_nodes());
 
   auto& l = state.get_edge_length();
@@ -344,9 +347,10 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
     const int ip1 = (i + 1) % state.num_edges();
 
     // ∂Eₜ/∂τᵢ
-    T grad_E_twisti = (twist[i] - twist_bar[i]) * prop.GJ() / V_bar[i];
+    T grad_E_twisti =
+        (twist[i] - twist_undeformed[i]) * prop.GJ() / V_undeformed[i];
     // ∂²Eₜ/∂(τᵢ)²
-    T grad2_E_twisti_twisti = prop.GJ() / V_bar[i];
+    T grad2_E_twisti_twisti = prop.GJ() / V_undeformed[i];
 
     const DerEdgeIndex edge_i(i);
     const DerEdgeIndex edge_ip1((i + 1) % state.num_edges());
@@ -434,20 +438,20 @@ template <typename T>
 T ComputeBendingEnergy(const DerStructuralProperty<T>& prop,
                        const DerUndeformedState<T>& undeformed,
                        const DerState<T>& state) {
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& kappa1_bar = undeformed.get_curvature_kappa1();
-  auto& kappa2_bar = undeformed.get_curvature_kappa2();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
   auto& kappa1 = state.get_curvature_kappa1();
   auto& kappa2 = state.get_curvature_kappa2();
-  ASSERT_NUM_COLS(V_bar, kappa1_bar, kappa2_bar, kappa1, kappa2,
-                  state.num_internal_nodes());
+  ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
+                  kappa2, state.num_internal_nodes());
 
   T energy = 0;  // Eₙ
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
-    T delta = kappa1[i] - kappa1_bar[i];
-    energy += 0.5 * prop.EI1() * delta * delta / V_bar[i];
-    delta = kappa2[i] - kappa2_bar[i];
-    energy += 0.5 * prop.EI2() * delta * delta / V_bar[i];
+    T delta = kappa1[i] - kappa1_undeformed[i];
+    energy += 0.5 * prop.EI1() * delta * delta / V_undeformed[i];
+    delta = kappa2[i] - kappa2_undeformed[i];
+    energy += 0.5 * prop.EI2() * delta * delta / V_undeformed[i];
   }
   return energy;
 }
@@ -460,14 +464,14 @@ void AddBendingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& kappa1_bar = undeformed.get_curvature_kappa1();
-  auto& kappa2_bar = undeformed.get_curvature_kappa2();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
   auto& kappa1 = state.get_curvature_kappa1();
   auto& kappa2 = state.get_curvature_kappa2();
   auto& curvature = state.get_discrete_integrated_curvature();
-  ASSERT_NUM_COLS(V_bar, kappa1_bar, kappa2_bar, kappa1, kappa2, curvature,
-                  state.num_internal_nodes());
+  ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
+                  kappa2, curvature, state.num_internal_nodes());
 
   auto& l = state.get_edge_length();
   auto& t = state.get_tangent();
@@ -479,9 +483,11 @@ void AddBendingEnergyJacobian(const DerStructuralProperty<T>& prop,
     const int ip1 = (i + 1) % state.num_edges();
 
     // ∂Eₙ/∂κ₁ᵢ
-    T grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
+    T grad_E_kappa1i =
+        (kappa1[i] - kappa1_undeformed[i]) * prop.EI1() / V_undeformed[i];
     // ∂Eₙ/∂κ₂ᵢ
-    T grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
+    T grad_E_kappa2i =
+        (kappa2[i] - kappa2_undeformed[i]) * prop.EI2() / V_undeformed[i];
 
     // 1/χ
     T chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
@@ -550,14 +556,14 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
                              Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& V_bar = undeformed.get_voronoi_length();
-  auto& kappa1_bar = undeformed.get_curvature_kappa1();
-  auto& kappa2_bar = undeformed.get_curvature_kappa2();
+  auto& V_undeformed = undeformed.get_voronoi_length();
+  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
   auto& kappa1 = state.get_curvature_kappa1();
   auto& kappa2 = state.get_curvature_kappa2();
   auto& curvature = state.get_discrete_integrated_curvature();
-  ASSERT_NUM_COLS(V_bar, kappa1_bar, kappa2_bar, kappa1, kappa2, curvature,
-                  state.num_internal_nodes());
+  ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
+                  kappa2, curvature, state.num_internal_nodes());
 
   auto& l = state.get_edge_length();
   auto& t = state.get_tangent();
@@ -569,13 +575,15 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
     const int ip1 = (i + 1) % state.num_edges();
 
     // ∂Eₙ/∂κ₁ᵢ
-    T grad_E_kappa1i = (kappa1[i] - kappa1_bar[i]) * prop.EI1() / V_bar[i];
+    T grad_E_kappa1i =
+        (kappa1[i] - kappa1_undeformed[i]) * prop.EI1() / V_undeformed[i];
     // ∂Eₙ/∂κ₂ᵢ
-    T grad_E_kappa2i = (kappa2[i] - kappa2_bar[i]) * prop.EI2() / V_bar[i];
+    T grad_E_kappa2i =
+        (kappa2[i] - kappa2_undeformed[i]) * prop.EI2() / V_undeformed[i];
     // ∂²Eₙ/∂(κ₁ᵢ)²
-    T grad2_E_kappa1i_kappa1i = prop.EI1() / V_bar[i];
+    T grad2_E_kappa1i_kappa1i = prop.EI1() / V_undeformed[i];
     // ∂²Eₙ/∂(κ₂ᵢ)²
-    T grad2_E_kappa2i_kappa2i = prop.EI2() / V_bar[i];
+    T grad2_E_kappa2i_kappa2i = prop.EI2() / V_undeformed[i];
 
     // 1/χ
     T chi_inv = 1.0 / (1.0 + t.col(ip1).dot(t.col(i)));
