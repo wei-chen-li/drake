@@ -26,12 +26,4 @@ drake_cc_binary(
     ],
 )
 
-drake_cc_binary(
-    name = "visualization",
-    srcs = ["visualization.cc"],
-    deps = [
-        "//geometry:meshcat",
-    ],
-)
-
 add_lint_tests()

@@ -19,7 +19,6 @@ DEFINE_double(G, 5e7, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
 DEFINE_double(width, 0.02, "Width of the cantilever beam [m].");
-DEFINE_double(height, 0.015, "Height of the cantilever beam [m].");
 DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
 DEFINE_string(shape, "line", "Shape of the beam. \"line\" or \"circle\"");
@@ -68,6 +67,7 @@ DeformableBodyId RegisterCantileverBeam(
     node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
     first_edge_m1 = Vector3d(0, 1, 0);
   } else {
+    /* The beam has an initial shape of a circle. */
     closed = true;
     const int num_nodes = FLAGS_num_edges;
     const auto theta =
@@ -81,7 +81,7 @@ DeformableBodyId RegisterCantileverBeam(
   Filament filament(closed, node_pos, first_edge_m1,
                     Filament::CrossSection{.type = Filament::kRectangular,
                                            .width = FLAGS_width,
-                                           .height = FLAGS_height});
+                                           .height = FLAGS_width});
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
   const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
