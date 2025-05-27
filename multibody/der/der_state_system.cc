@@ -533,25 +533,26 @@ void DerStateSystem<T>::Deserialize(
         "The serialized vector has size incompatible with this DerState and "
         "therefore cannot be deserialized.");
   }
-  int start = 0;
-  context->SetDiscreteState(q_index_, serialized.segment(start, num_dofs()));
-  start += num_dofs();
-  context->SetDiscreteState(qdot_index_, serialized.segment(start, num_dofs()));
-  start += num_dofs();
+  int offset = 0;
+  context->SetDiscreteState(q_index_, serialized.segment(offset, num_dofs()));
+  offset += num_dofs();
+  context->SetDiscreteState(qdot_index_,
+                            serialized.segment(offset, num_dofs()));
+  offset += num_dofs();
   context->SetDiscreteState(qddot_index_,
-                            serialized.segment(start, num_dofs()));
-  start += num_dofs();
+                            serialized.segment(offset, num_dofs()));
+  offset += num_dofs();
 
   PrevStep<T>& prev_step =
       context->template get_mutable_abstract_state<PrevStep<T>>(
           prev_step_index_);
   prev_step.tangent =
-      serialized.segment(start, 3 * num_edges()).reshaped(3, num_edges());
-  start += 3 * num_edges();
+      serialized.segment(offset, 3 * num_edges()).reshaped(3, num_edges());
+  offset += 3 * num_edges();
   prev_step.reference_frame_d1 =
-      serialized.segment(start, 3 * num_edges()).reshaped(3, num_edges());
-  start += 3 * num_edges();
-  prev_step.reference_twist = serialized.segment(start, num_internal_nodes())
+      serialized.segment(offset, 3 * num_edges()).reshaped(3, num_edges());
+  offset += 3 * num_edges();
+  prev_step.reference_twist = serialized.segment(offset, num_internal_nodes())
                                   .reshaped(1, num_internal_nodes());
 
   increment_serial_number(context);

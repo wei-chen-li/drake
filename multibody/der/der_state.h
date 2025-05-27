@@ -230,8 +230,12 @@ class DerState {
     return der_state_system_->serial_number(*context_);
   }
 
-  /* (Advanced.) Make the derivatives of other quantities with respect to d1 and
-   d2 be zero when performing automatic differentiation. */
+  /* (Advanced) Makes the derivatives of other quantities with respect to d1 and
+   d2 be zero during performing automatic differentiation. This is currently
+   used only in testing, where we compare analytical derivatives against those
+   computed via autodiff. Some components of the analytical derivatives are
+   intentionally omitted due to their complexity. Hence, we call this function
+   to zero out the corresponding parts in the autodiff-based derivatives. */
   template <typename U = T,
             std::enable_if_t<std::is_same_v<U, AutoDiffXd>, bool> = true>
   void FixReferenceFrameDuringAutoDiff() {
