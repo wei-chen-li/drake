@@ -133,6 +133,12 @@ class ProximityEngine {
                              std::vector<int> surface_tri_to_volume_tet,
                              GeometryId id);
 
+  /* Adds the given `filament` to the engine.
+   @param filament  The filament to add.
+   @param id        The id of the geometry in SceneGraph to which this mesh
+                    belongs. */
+  void AddFilamentGeometry(const Filament& filament, GeometryId id);
+
   /* Reports if the engine requires a convex hull for the given geometry. */
   bool NeedsConvexHull(const InternalGeometry& geometry) const;
 

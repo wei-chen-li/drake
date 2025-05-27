@@ -1248,8 +1248,7 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
   switch (assign) {
     case RoleAssign::kNew: {
       geometry.SetRole(std::move(properties));
-      if (geometry.is_deformable()) {
-        DRAKE_DEMAND(geometry.reference_mesh() != nullptr);
+      if (geometry.is_deformable() && geometry.reference_mesh() != nullptr) {
         const VolumeMesh<double>& reference_mesh = *geometry.reference_mesh();
         std::vector<int> surface_vertices;
         std::vector<int> surface_tri_to_volume_tet;
@@ -1266,6 +1265,10 @@ void GeometryState<T>::AssignRole(SourceId source_id, GeometryId geometry_id,
         driven_meshes.emplace_back(vertex_sampler, surface_mesh);
         kinematics_data_.driven_mesh_data[Role::kProximity].SetMeshes(
             geometry_id, std::move(driven_meshes));
+      } else if (geometry.is_deformable() &&
+                 geometry.reference_filament() != nullptr) {
+        const Filament& reference_filament = *geometry.reference_filament();
+        geometry_engine_->AddFilamentGeometry(reference_filament, geometry_id);
       } else if (geometry.is_dynamic()) {
         // Pass the geometry to the engine.
         const RigidTransformd& X_WG =
@@ -1977,8 +1980,7 @@ template <typename T>
 void GeometryState<T>::AddToProximityEngineUnchecked(
     const InternalGeometry& geometry) {
   const GeometryId geometry_id = geometry.id();
-  if (geometry.is_deformable()) {
-    DRAKE_DEMAND(geometry.reference_mesh() != nullptr);
+  if (geometry.is_deformable() && geometry.reference_mesh() != nullptr) {
     const VolumeMesh<double>& reference_mesh = *geometry.reference_mesh();
     std::vector<int> surface_vertices;
     std::vector<int> surface_tri_to_volume_tet;
@@ -1993,6 +1995,10 @@ void GeometryState<T>::AddToProximityEngineUnchecked(
     driven_meshes.emplace_back(vertex_sampler, surface_mesh);
     kinematics_data_.driven_mesh_data[Role::kProximity].SetMeshes(
         geometry_id, driven_meshes);
+  } else if (geometry.is_deformable() &&
+             geometry.reference_filament() != nullptr) {
+    const Filament& reference_filament = *geometry.reference_filament();
+    geometry_engine_->AddFilamentGeometry(reference_filament, geometry_id);
   } else if (geometry.is_dynamic()) {
     // Pass the geometry to the engine.
     const RigidTransformd& X_WG =
