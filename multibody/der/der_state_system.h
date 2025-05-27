@@ -223,17 +223,17 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    `context` is modified by DerStateStstem. */
   int64_t serial_number(const Context<T>& context) const;
 
-  /* (Advanced.) Make the derivatives of other quantities with respect to d1 and
-   d2 be zero when performing automatic differentiation.
-   @pre `std::is_same_v<T, AutoDiffXd>` */
-  void FixReferenceFrameDuringAutoDiff(Context<T>* context) const;
-
   const std::vector<Eigen::Vector3<T>>& initial_node_positions() const {
     return initial_node_positions_;
   }
   const std::vector<T>& initial_edge_angles() const {
     return initial_edge_angles_;
   }
+
+  /* (Advanced) Makes the derivatives of other quantities with respect to d1 and
+   d2 be zero during performing automatic differentiation.
+   @pre `std::is_same_v<T, AutoDiffXd>` */
+  void FixReferenceFrameDuringAutoDiff(Context<T>* context) const;
 
  private:
   /* All DerStateSystem of different template type can access other's data. */
