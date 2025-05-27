@@ -259,8 +259,8 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
     const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
     if (edge_length < 1e-10) {
       throw std::invalid_argument(fmt::format(
-          "Node {} and node {} has a distance value of {}, computing the unit "
-          "tangent vector from it would cause numerical problems.",
+          "Nodes {} and {} have a distance value of {}, computing the unit "
+          "tangent from it would cause numerical problems.",
           i, ip1, edge_length));
     }
     edge_t.col(i) = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
@@ -268,8 +268,8 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
   Eigen::Vector3d first_edge_m1 = first_edge_m1_in.normalized();
   if (std::abs(edge_t.col(0).dot(first_edge_m1)) > 0.99) {
     throw std::invalid_argument(fmt::format(
-        "The specified first frame m₁ director [{}] and the unit tangent "
-        "vector [{}] should be perpendicular but is nearly parallel.",
+        "The specified first frame m₁ director [{}] and the unit tangent [{}] "
+        "should be perpendicular but is nearly parallel.",
         fmt_eigen(first_edge_m1_in.transpose()),
         fmt_eigen(edge_t.col(0).transpose())));
   }
@@ -294,21 +294,33 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
   const int num_nodes = node_pos_.cols();
   const int num_edges = edge_m1_.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
+  if (closed && num_edges != num_nodes) {
+    throw std::invalid_argument(fmt::format(
+        "For a filament with closed ends, the number of nodes ({} provided) "
+        "must be equal to the number of edges ({} provided).",
+        num_nodes, num_edges));
+  }
+  if (!closed && num_edges + 1 != num_nodes) {
+    throw std::invalid_argument(fmt::format(
+        "For a filament with open ends, the number of nodes ({} provided) "
+        "must be equal to the number of edges ({} provided) plus one.",
+        num_nodes, num_edges));
+  }
   DRAKE_THROW_UNLESS(num_edges == (closed ? num_nodes : num_nodes - 1));
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
     const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
     if (edge_length < 1e-10) {
       throw std::invalid_argument(fmt::format(
-          "Node {} and node {} has a distance value of {}, computing the unit "
-          "tangent vector from it would cause numerical problems.",
+          "Nodes {} and {} have a distance value of {}, computing the unit "
+          "tangent from it would cause numerical problems.",
           i, ip1, edge_length));
     }
     Eigen::Vector3d t = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
     Eigen::Vector3d m1 = edge_m1_.col(i).normalized();
     if (std::abs(t.dot(m1)) > 0.99) {
       throw std::invalid_argument(fmt::format(
-          "The unit tangent vector [{}] and the m₁ director [{}] of edge {} "
+          "The unit tangent [{}] and the m₁ director [{}] of edge {} "
           "should be perpendicular but is nearly parallel.",
           fmt_eigen(t.transpose()), fmt_eigen(edge_m1_.col(i).transpose()), i));
     }
@@ -322,6 +334,7 @@ std::string Filament::do_to_string() const {
   const std::string cross_section_type =
       cross_section().type == CrossSectionType::kRectangular ? "kRectangular"
                                                              : "kElliptical";
+  // Note: The string should be able to be parsed by python eval().
   return fmt::format(
       "Filament(closed={}, node_pos={}, edge_m1={}, cross_section="
       "Filament.CrossSection(type=Filament.{}, width={}, height={}))",
