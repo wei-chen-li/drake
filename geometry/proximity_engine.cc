@@ -21,6 +21,7 @@
 #include "drake/geometry/proximity/deformable_contact_internal.h"
 #include "drake/geometry/proximity/distance_to_point_callback.h"
 #include "drake/geometry/proximity/distance_to_shape_callback.h"
+#include "drake/geometry/proximity/filament_contact_internal.h"
 #include "drake/geometry/proximity/find_collision_candidates_callback.h"
 #include "drake/geometry/proximity/hydroelastic_calculator.h"
 #include "drake/geometry/proximity/hydroelastic_internal.h"
@@ -277,7 +278,10 @@ void CullFlatten(std::vector<X>* maybes, std::vector<R>* objects) {
 template <typename T>
 class ProximityEngine<T>::Impl : public ShapeReifier {
  public:
-  Impl() = default;
+  Impl() {
+    filament_geometries_ =
+        filament::Geometries({&dynamic_tree_, &anchored_tree_});
+  }
 
   Impl(const Impl& other) : ShapeReifier(other) {
     hydroelastic_geometries_ = other.hydroelastic_geometries_;
@@ -301,6 +305,9 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     BuildTreeFromReference(other.anchored_tree_, object_map, &anchored_tree_);
 
     collision_filter_ = other.collision_filter_;
+
+    filament_geometries_ =
+        filament::Geometries({&dynamic_tree_, &anchored_tree_});
   }
 
   // Only the copy constructor is used to facilitate copying of the parent
@@ -374,11 +381,8 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
   }
 
   void AddFilamentGeometry(const Filament& filament, GeometryId id) {
-    unused(filament);
+    filament_geometries_.AddFilamentGeometry(id, filament);
     collision_filter_.AddGeometry(id);
-    throw std::logic_error(
-        "ProximityEngine::Impl::AddFilamentGeometry() not "
-        "implemented yet.");
   }
 
   bool NeedsConvexHull(const InternalGeometry& geometry) const {
@@ -933,6 +937,10 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     return geometries_for_deformable_contact_;
   }
 
+  const filament::Geometries& filament_geometries() const {
+    return filament_geometries_;
+  }
+
   const TriangleSurfaceMesh<double>* mesh_distance_boundary(
       GeometryId g_id) const {
     const auto iter = mesh_sdf_data_.find(g_id);
@@ -1253,6 +1261,10 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
   // `dynamic_objects_` and `dynamic_tree_`.
   deformable::Geometries geometries_for_deformable_contact_;
 
+  // All of the filament geometries that product contact with rigid geometries
+  // and self contact.
+  filament::Geometries filament_geometries_;
+
   // Data for ComputeSignedDistanceToPoint from meshes (Mesh and Convex).
   std::unordered_map<GeometryId, MeshDistanceBoundary> mesh_sdf_data_{};
 };
@@ -1501,6 +1513,11 @@ template <typename T>
 const deformable::Geometries&
 ProximityEngine<T>::deformable_contact_geometries() const {
   return impl_->deformable_contact_geometries();
+}
+
+template <typename T>
+const filament::Geometries& ProximityEngine<T>::filament_geometries() const {
+  return impl_->filament_geometries();
 }
 
 template <typename T>
