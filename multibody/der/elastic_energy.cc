@@ -193,8 +193,8 @@ template <typename T>
 T ComputeStretchingEnergy(const DerStructuralProperty<T>& prop,
                           const DerUndeformedState<T>& undeformed,
                           const DerState<T>& state) {
-  auto& l_undeformed = undeformed.get_edge_length();
-  auto& l = state.get_edge_length();
+  const auto& l_undeformed = undeformed.get_edge_length();
+  const auto& l = state.get_edge_length();
   ASSERT_NUM_COLS(l_undeformed, l, state.num_edges());
 
   T energy = 0;  // Eₛ
@@ -213,9 +213,9 @@ void AddStretchingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& l_undeformed = undeformed.get_edge_length();
-  auto& l = state.get_edge_length();
-  auto& tangent = state.get_tangent();
+  const auto& l_undeformed = undeformed.get_edge_length();
+  const auto& l = state.get_edge_length();
+  const auto& tangent = state.get_tangent();
   ASSERT_NUM_COLS(l_undeformed, l, tangent, state.num_edges());
 
   for (int i = 0; i < state.num_edges(); ++i) {
@@ -237,9 +237,9 @@ void AddStretchingEnergyHessian(const DerStructuralProperty<T>& prop,
                                 Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& l_undeformed = undeformed.get_edge_length();
-  auto& l = state.get_edge_length();
-  auto& tangent = state.get_tangent();
+  const auto& l_undeformed = undeformed.get_edge_length();
+  const auto& l = state.get_edge_length();
+  const auto& tangent = state.get_tangent();
   ASSERT_NUM_COLS(l_undeformed, l, tangent, state.num_edges());
 
   for (int i = 0; i < state.num_edges(); ++i) {
@@ -261,9 +261,9 @@ template <typename T>
 T ComputeTwistingEnergy(const DerStructuralProperty<T>& prop,
                         const DerUndeformedState<T>& undeformed,
                         const DerState<T>& state) {
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& twist_undeformed = undeformed.get_twist();
-  auto& twist = state.get_twist();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& twist_undeformed = undeformed.get_twist();
+  const auto& twist = state.get_twist();
   ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist,
                   state.num_internal_nodes());
 
@@ -283,14 +283,14 @@ void AddTwistingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& twist_undeformed = undeformed.get_twist();
-  auto& twist = state.get_twist();
-  auto& curvature = state.get_discrete_integrated_curvature();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& twist_undeformed = undeformed.get_twist();
+  const auto& twist = state.get_twist();
+  const auto& curvature = state.get_discrete_integrated_curvature();
   ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist, curvature,
                   state.num_internal_nodes());
 
-  auto& l = state.get_edge_length();
+  const auto& l = state.get_edge_length();
   ASSERT_NUM_COLS(l, state.num_edges());
 
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
@@ -332,15 +332,15 @@ void AddTwistingEnergyHessian(const DerStructuralProperty<T>& prop,
                               Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& twist_undeformed = undeformed.get_twist();
-  auto& twist = state.get_twist();
-  auto& curvature = state.get_discrete_integrated_curvature();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& twist_undeformed = undeformed.get_twist();
+  const auto& twist = state.get_twist();
+  const auto& curvature = state.get_discrete_integrated_curvature();
   ASSERT_NUM_COLS(V_undeformed, twist_undeformed, twist, curvature,
                   state.num_internal_nodes());
 
-  auto& l = state.get_edge_length();
-  auto& t = state.get_tangent();
+  const auto& l = state.get_edge_length();
+  const auto& t = state.get_tangent();
   ASSERT_NUM_COLS(l, t, state.num_edges());
 
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
@@ -438,11 +438,11 @@ template <typename T>
 T ComputeBendingEnergy(const DerStructuralProperty<T>& prop,
                        const DerUndeformedState<T>& undeformed,
                        const DerState<T>& state) {
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
-  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
-  auto& kappa1 = state.get_curvature_kappa1();
-  auto& kappa2 = state.get_curvature_kappa2();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  const auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
+  const auto& kappa1 = state.get_curvature_kappa1();
+  const auto& kappa2 = state.get_curvature_kappa2();
   ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
                   kappa2, state.num_internal_nodes());
 
@@ -464,19 +464,19 @@ void AddBendingEnergyJacobian(const DerStructuralProperty<T>& prop,
   DRAKE_THROW_UNLESS(jacobian != nullptr);
   DRAKE_THROW_UNLESS(jacobian->size() == state.num_dofs());
 
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
-  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
-  auto& kappa1 = state.get_curvature_kappa1();
-  auto& kappa2 = state.get_curvature_kappa2();
-  auto& curvature = state.get_discrete_integrated_curvature();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  const auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
+  const auto& kappa1 = state.get_curvature_kappa1();
+  const auto& kappa2 = state.get_curvature_kappa2();
+  const auto& curvature = state.get_discrete_integrated_curvature();
   ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
                   kappa2, curvature, state.num_internal_nodes());
 
-  auto& l = state.get_edge_length();
-  auto& t = state.get_tangent();
-  auto& m1 = state.get_material_frame_m1();
-  auto& m2 = state.get_material_frame_m2();
+  const auto& l = state.get_edge_length();
+  const auto& t = state.get_tangent();
+  const auto& m1 = state.get_material_frame_m1();
+  const auto& m2 = state.get_material_frame_m2();
   ASSERT_NUM_COLS(l, t, m1, m2, state.num_edges());
 
   for (int i = 0; i < state.num_internal_nodes(); ++i) {
@@ -556,19 +556,19 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
                              Block4x4SparseSymmetricMatrix<T>* hessian) {
   DRAKE_THROW_UNLESS(hessian != nullptr);
 
-  auto& V_undeformed = undeformed.get_voronoi_length();
-  auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
-  auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
-  auto& kappa1 = state.get_curvature_kappa1();
-  auto& kappa2 = state.get_curvature_kappa2();
-  auto& curvature = state.get_discrete_integrated_curvature();
+  const auto& V_undeformed = undeformed.get_voronoi_length();
+  const auto& kappa1_undeformed = undeformed.get_curvature_kappa1();
+  const auto& kappa2_undeformed = undeformed.get_curvature_kappa2();
+  const auto& kappa1 = state.get_curvature_kappa1();
+  const auto& kappa2 = state.get_curvature_kappa2();
+  const auto& curvature = state.get_discrete_integrated_curvature();
   ASSERT_NUM_COLS(V_undeformed, kappa1_undeformed, kappa2_undeformed, kappa1,
                   kappa2, curvature, state.num_internal_nodes());
 
-  auto& l = state.get_edge_length();
-  auto& t = state.get_tangent();
-  auto& m1 = state.get_material_frame_m1();
-  auto& m2 = state.get_material_frame_m2();
+  const auto& l = state.get_edge_length();
+  const auto& t = state.get_tangent();
+  const auto& m1 = state.get_material_frame_m1();
+  const auto& m2 = state.get_material_frame_m2();
   ASSERT_NUM_COLS(l, t, m1, m2, state.num_edges());
 
   for (int i = 0; i < state.num_internal_nodes(); ++i) {

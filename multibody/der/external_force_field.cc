@@ -84,10 +84,10 @@ Eigen::Ref<Eigen::VectorX<T>> ExternalForceVector<T>::ScaleAndAddToVector(
   DRAKE_THROW_UNLESS(other != nullptr);
   DRAKE_THROW_UNLESS(other->size() == state_->num_dofs());
 
-  auto& q = state_->get_position();
-  auto& t = state_->get_tangent();
-  auto& l = state_->get_edge_length();
-  auto& l_undeformed = undeformed_->get_edge_length();
+  const auto& q = state_->get_position();
+  const auto& t = state_->get_tangent();
+  const auto& l = state_->get_edge_length();
+  const auto& l_undeformed = undeformed_->get_edge_length();
 
   for (const ForceDensityField<T>* force_density_field :
        *force_density_fields_) {
@@ -131,7 +131,7 @@ Eigen::DiagonalMatrix<T, Eigen::Dynamic> ComputeMassMatrix(
     const DerStructuralProperty<T>& prop,
     const DerUndeformedState<T>& undeformed) {
   Eigen::VectorX<T> generalized_mass(undeformed.num_dofs());
-  auto& l_undeformed = undeformed.get_edge_length();
+  const auto& l_undeformed = undeformed.get_edge_length();
   const int num_edges = undeformed.num_edges();
 
   /* The generalized mass assiciated with the node position DoF is half the

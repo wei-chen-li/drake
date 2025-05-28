@@ -98,8 +98,8 @@ class DerModelBuilderTest
   void CheckRodConfiguration() {
     std::unique_ptr<internal::DerState<double>> state =
         model_->CreateDerState();
-    auto& q = state->get_position();
-    auto& d1 = state->get_reference_frame_d1();
+    const auto& q = state->get_position();
+    const auto& d1 = state->get_reference_frame_d1();
 
     RodConfigurationTests opt = std::get<0>(GetParam());
     if (opt == kOpenEnds) {
@@ -334,9 +334,10 @@ TEST_P(DerModelTest, ComputeResidual) {
   }
 
   // Compute and expected residual and compare to `residual`.
-  auto& prop = DerModelTester::get_der_structural_property(*der_model_);
-  auto& undeformed = DerModelTester::get_der_undeformed_state(*der_model_);
-  auto& damping = DerModelTester::get_damping_model(*der_model_);
+  const auto& prop = DerModelTester::get_der_structural_property(*der_model_);
+  const auto& undeformed =
+      DerModelTester::get_der_undeformed_state(*der_model_);
+  const auto& damping = DerModelTester::get_damping_model(*der_model_);
   const int num_dofs = state->num_dofs();
 
   VectorXd dEdq(num_dofs);
@@ -378,9 +379,10 @@ TEST_P(DerModelTest, ComputeTangentMatrix) {
   }
 
   // Compute the expected tangent matrix and compare to `tangent_matrix`.
-  auto& prop = DerModelTester::get_der_structural_property(*der_model_);
-  auto& undeformed = DerModelTester::get_der_undeformed_state(*der_model_);
-  auto& damping = DerModelTester::get_damping_model(*der_model_);
+  const auto& prop = DerModelTester::get_der_structural_property(*der_model_);
+  const auto& undeformed =
+      DerModelTester::get_der_undeformed_state(*der_model_);
+  const auto& damping = DerModelTester::get_damping_model(*der_model_);
   const int num_dofs = state->num_dofs();
 
   auto d2Edq2 = internal::MakeEnergyHessianMatrix<double>(

@@ -53,7 +53,7 @@ TEST_F(DerStateTest, Position) {
   const double ang = M_PI / 6;
   q_expected << 0, 0, 0, ang, 1, 0, 0, ang, 2, 1, 0;
 
-  auto& q = state_->get_position();
+  const auto& q = state_->get_position();
   EXPECT_TRUE(CompareMatrices(q, q_expected));
 }
 
@@ -70,20 +70,20 @@ TEST_F(DerStateTest, Acceleration) {
 }
 
 TEST_F(DerStateTest, EdgeLength) {
-  auto& edge_length = state_->get_edge_length();
+  const auto& edge_length = state_->get_edge_length();
   EXPECT_NEAR(edge_length[0], 1.0, kTol);
   EXPECT_NEAR(edge_length[1], sqrt(2), kTol);
 }
 
 TEST_F(DerStateTest, Tangent) {
-  auto& t = state_->get_tangent();
+  const auto& t = state_->get_tangent();
   EXPECT_TRUE(CompareMatrices(t.col(0), Vector3d(1, 0, 0), kTol));
   EXPECT_TRUE(CompareMatrices(t.col(1), Vector3d(1, 1, 0).normalized(), kTol));
 }
 
 TEST_F(DerStateTest, ReferenceFrame) {
-  auto& d1 = state_->get_reference_frame_d1();
-  auto& d2 = state_->get_reference_frame_d2();
+  const auto& d1 = state_->get_reference_frame_d1();
+  const auto& d2 = state_->get_reference_frame_d2();
 
   EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0), kTol));
   EXPECT_TRUE(CompareMatrices(d2.col(0), Vector3d(0, 0, 1), kTol));
@@ -97,8 +97,8 @@ TEST_F(DerStateTest, MaterialFrame) {
   const double a = sqrt(2) / 2;
   auto [sin30, cos30] = std::make_pair(1.0 / 2, sqrt(3) / 2);
 
-  auto& m1 = state_->get_material_frame_m1();
-  auto& m2 = state_->get_material_frame_m2();
+  const auto& m1 = state_->get_material_frame_m1();
+  const auto& m2 = state_->get_material_frame_m2();
 
   EXPECT_TRUE(CompareMatrices(m1.col(0), Vector3d(0, cos30, sin30), kTol));
   EXPECT_TRUE(CompareMatrices(m2.col(0), Vector3d(0, -sin30, cos30), kTol));
@@ -110,19 +110,19 @@ TEST_F(DerStateTest, MaterialFrame) {
 }
 
 TEST_F(DerStateTest, Curvature) {
-  auto& m1 = state_->get_material_frame_m1();
-  auto& m2 = state_->get_material_frame_m2();
+  const auto& m1 = state_->get_material_frame_m1();
+  const auto& m2 = state_->get_material_frame_m2();
   Vector3d curvature_expected = 2 / (1 + sqrt(2)) * Vector3d(0, 0, 1);
   double kappa1_expected = curvature_expected.dot((m2.col(0) + m2.col(1)) / 2);
   double kappa2_expected = -curvature_expected.dot((m1.col(0) + m1.col(1)) / 2);
 
-  auto& curvature = state_->get_discrete_integrated_curvature();
+  const auto& curvature = state_->get_discrete_integrated_curvature();
   EXPECT_TRUE(CompareMatrices(curvature.col(0), curvature_expected, kTol));
 
-  auto& kappa1 = state_->get_curvature_kappa1();
+  const auto& kappa1 = state_->get_curvature_kappa1();
   EXPECT_NEAR(kappa1[0], kappa1_expected, kTol);
 
-  auto& kappa2 = state_->get_curvature_kappa2();
+  const auto& kappa2 = state_->get_curvature_kappa2();
   EXPECT_NEAR(kappa2[0], kappa2_expected, kTol);
 }
 
@@ -130,7 +130,7 @@ TEST_F(DerStateTest, Twist) {
   // The twist and reference twist are related by τᵢ = γⁱ⁺¹ - γⁱ + τᵢ,ᵣₑ. The
   // initial reference twist is zero. And since γⁱ and γⁱ⁺¹ have the same angle
   // here, τᵢ = 0.
-  auto& twist = state_->get_twist();
+  const auto& twist = state_->get_twist();
   EXPECT_NEAR(twist[0], 0.0, kTol);
 }
 
@@ -153,25 +153,25 @@ TEST_F(DerStateAfterDeformationTest, Position) {
   const double ang = M_PI / 6;
   q_expected << 0, 0, 0, ang, 1, 0, 0, ang, 2, 1, e_;
 
-  auto& q = state_->get_position();
+  const auto& q = state_->get_position();
   EXPECT_TRUE(CompareMatrices(q, q_expected));
 }
 
 TEST_F(DerStateAfterDeformationTest, EdgeLength) {
-  auto& edge_length = state_->get_edge_length();
+  const auto& edge_length = state_->get_edge_length();
   EXPECT_NEAR(edge_length[0], 1.0, kTol);
   EXPECT_NEAR(edge_length[1], sqrt(2 + e_ * e_), kTol);
 }
 
 TEST_F(DerStateAfterDeformationTest, Tangent) {
-  auto& t = state_->get_tangent();
+  const auto& t = state_->get_tangent();
   EXPECT_TRUE(CompareMatrices(t.col(0), Vector3d(1, 0, 0), kTol));
   EXPECT_TRUE(CompareMatrices(t.col(1), Vector3d(1, 1, e_).normalized(), kTol));
 }
 
 TEST_F(DerStateAfterDeformationTest, ReferenceFrame) {
-  auto& d1 = state_->get_reference_frame_d1();
-  auto& d2 = state_->get_reference_frame_d2();
+  const auto& d1 = state_->get_reference_frame_d1();
+  const auto& d2 = state_->get_reference_frame_d2();
 
   EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0), kTol));
   EXPECT_TRUE(CompareMatrices(d2.col(0), Vector3d(0, 0, 1), kTol));
@@ -187,8 +187,8 @@ TEST_F(DerStateAfterDeformationTest, MaterialFrame) {
   const double c = d * e_ / 2;
   auto [sin30, cos30] = std::make_pair(1.0 / 2, sqrt(3) / 2);
 
-  auto& m1 = state_->get_material_frame_m1();
-  auto& m2 = state_->get_material_frame_m2();
+  const auto& m1 = state_->get_material_frame_m1();
+  const auto& m2 = state_->get_material_frame_m2();
 
   EXPECT_TRUE(CompareMatrices(m1.col(0), Vector3d(0, cos30, sin30), kTol));
   EXPECT_TRUE(CompareMatrices(m2.col(0), Vector3d(0, -sin30, cos30), kTol));
@@ -200,20 +200,20 @@ TEST_F(DerStateAfterDeformationTest, MaterialFrame) {
 }
 
 TEST_F(DerStateAfterDeformationTest, Curvature) {
-  auto& m1 = state_->get_material_frame_m1();
-  auto& m2 = state_->get_material_frame_m2();
+  const auto& m1 = state_->get_material_frame_m1();
+  const auto& m2 = state_->get_material_frame_m2();
   Vector3d curvature_expected =
       2 / (1 + sqrt(2 + e_ * e_)) * Vector3d(0, -e_, 1);
   double kappa1_expected = curvature_expected.dot((m2.col(0) + m2.col(1)) / 2);
   double kappa2_expected = -curvature_expected.dot((m1.col(0) + m1.col(1)) / 2);
 
-  auto& curvature = state_->get_discrete_integrated_curvature();
+  const auto& curvature = state_->get_discrete_integrated_curvature();
   EXPECT_TRUE(CompareMatrices(curvature.col(0), curvature_expected, kTol));
 
-  auto& kappa1 = state_->get_curvature_kappa1();
+  const auto& kappa1 = state_->get_curvature_kappa1();
   EXPECT_NEAR(kappa1[0], kappa1_expected, kTol);
 
-  auto& kappa2 = state_->get_curvature_kappa2();
+  const auto& kappa2 = state_->get_curvature_kappa2();
   EXPECT_NEAR(kappa2[0], kappa2_expected, kTol);
 }
 
@@ -221,7 +221,7 @@ TEST_F(DerStateAfterDeformationTest, ReferenceTwist) {
   // The twist and reference twist are related by τᵢ = γⁱ⁺¹ - γⁱ + τᵢ,ᵣₑ, where
   // γⁱ are the edge angles. Since γⁱ and γⁱ⁺¹ have the same angle here (both
   // are π/6), we have τᵢ,ᵣₑ = τᵢ.
-  auto& ref_twist = state_->get_twist();
+  const auto& ref_twist = state_->get_twist();
 
   double e2 = e_ * e_;
   double cos_ref_twist_expected =
@@ -255,8 +255,8 @@ class DerStateAdjustPositionWithinStepTest : public DerStateTest {
 };
 
 TEST_F(DerStateAdjustPositionWithinStepTest, ReferenceFrame) {
-  auto& d1 = state_->get_reference_frame_d1();
-  auto& d2 = state_->get_reference_frame_d2();
+  const auto& d1 = state_->get_reference_frame_d1();
+  const auto& d2 = state_->get_reference_frame_d2();
 
   EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0), kTol));
   EXPECT_TRUE(CompareMatrices(d2.col(0), Vector3d(0, 0, 1), kTol));
@@ -268,7 +268,7 @@ TEST_F(DerStateAdjustPositionWithinStepTest, ReferenceFrame) {
 }
 
 TEST_F(DerStateAdjustPositionWithinStepTest, ReferenceTwist) {
-  auto& ref_twist = state_->get_twist();
+  const auto& ref_twist = state_->get_twist();
 
   double e2 = e_ * e_;
   double cos_ref_twist_expected =
@@ -301,8 +301,8 @@ class DerStateAdvancePositionToNextStepTest : public DerStateTest {
 };
 
 TEST_F(DerStateAdvancePositionToNextStepTest, ReferenceFrame) {
-  auto& d1 = state_->get_reference_frame_d1();
-  auto& d2 = state_->get_reference_frame_d2();
+  const auto& d1 = state_->get_reference_frame_d1();
+  const auto& d2 = state_->get_reference_frame_d2();
 
   EXPECT_TRUE(CompareMatrices(d1.col(0), Vector3d(0, 1, 0), kTol));
   EXPECT_TRUE(CompareMatrices(d2.col(0), Vector3d(0, 0, 1), kTol));
