@@ -11,17 +11,7 @@ namespace internal {
 /*
  A viscous Rayleigh damping model in which the damping matrix D is a linear
  combination of mass and stiffness matrices, as, D = αM + βK where α and β are
- nonnegative. The damping ratio ζ for a given natural frequency ωₙ of a mode of
- vibration can be calculated as ζ = (α/ωₙ + βωₙ)/2. Notice the contribution of
- the stiffness term βK to the damping matrix D causes ζ to be proportional to a
- mode's natural frequency ωₙ whereas the contribution of the mass term αM to the
- damping matrix D causes ζ to be inversely proportional to a mode's natural
- frequency ωₙ. In the context of rigid body motion (ωₙ = 0), only the αM term
- contributes to the damping matrix D, hence if rigid body motion (or low value
- of ωₙ) is expected, α should be kept small. One way to determine numerical
- values for α and β is to somehow obtain reasonable estimates of the range of
- ωₙ, and then choose numerical values for ζ (e.g 0 ≤ ζ < 0.05). Thereafter
- calculate the associated numerical values of α and β.
+ nonnegative.
 
  @tparam_default_scalar
  */
