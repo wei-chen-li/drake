@@ -15,10 +15,7 @@ namespace filament {
 
 class Geometries {
  public:
-  Geometries() = default;
-
-  Geometries(std::vector<const fcl::DynamicAABBTreeCollisionManager<double>*>
-                 rigid_body_trees);
+  Geometries();
 
   Geometries(const Geometries& other) = delete;
   Geometries& operator=(const Geometries& other) = delete;
@@ -29,6 +26,10 @@ class Geometries {
   ~Geometries();
 
   void AddFilamentGeometry(GeometryId id, const Filament& filament);
+
+  void RemoveGeometry(GeometryId id);
+
+  bool is_filament(GeometryId id) const;
 
  private:
   /* Unique pointer to Impl. */

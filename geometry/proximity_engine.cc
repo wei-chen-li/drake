@@ -278,10 +278,7 @@ void CullFlatten(std::vector<X>* maybes, std::vector<R>* objects) {
 template <typename T>
 class ProximityEngine<T>::Impl : public ShapeReifier {
  public:
-  Impl() {
-    filament_geometries_ =
-        filament::Geometries({&dynamic_tree_, &anchored_tree_});
-  }
+  Impl() = default;
 
   Impl(const Impl& other) : ShapeReifier(other) {
     hydroelastic_geometries_ = other.hydroelastic_geometries_;
@@ -305,9 +302,6 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     BuildTreeFromReference(other.anchored_tree_, object_map, &anchored_tree_);
 
     collision_filter_ = other.collision_filter_;
-
-    filament_geometries_ =
-        filament::Geometries({&dynamic_tree_, &anchored_tree_});
   }
 
   // Only the copy constructor is used to facilitate copying of the parent
@@ -475,6 +469,14 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
   }
 
   // Returns true if the geometry with the given Id has been registered in
+  // `this` ProximityEngine as a filament geometry (via
+  // "AddFilamentGeometry()") and has not been since removed (via
+  // "RemoveFilamentGeometry()").
+  bool IsRegisteredAsFilament(GeometryId id) const {
+    return filament_geometries_.is_filament(id);
+  }
+
+  // Returns true if the geometry with the given Id has been registered in
   // `this` ProximityEngine as a rigid (non-deformable) geometry (via
   // "AddDynamicGeometry() or AddAnchoredGeometry()") and has not been since
   // removed (via "RemoveGeometry()").
@@ -491,6 +493,7 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     }
     hydroelastic_geometries_.RemoveGeometry(id);
     geometries_for_deformable_contact_.RemoveGeometry(id);
+    filament_geometries_.RemoveGeometry(id);
     mesh_sdf_data_.erase(id);
   }
 
@@ -502,6 +505,16 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
           id));
     }
     geometries_for_deformable_contact_.RemoveGeometry(id);
+  }
+
+  void RemoveFilamentGeometry(GeometryId id) {
+    if (!filament_geometries_.is_filament(id)) {
+      throw std::logic_error(fmt::format(
+          "The proximity engine does not contain a filament geometry with "
+          "the id {}; it cannot be removed.",
+          id));
+    }
+    filament_geometries_.RemoveGeometry(id);
   }
 
   // Returns the total number of **rigid** geometries in this engine.
@@ -1362,6 +1375,11 @@ void ProximityEngine<T>::RemoveGeometry(GeometryId id, bool is_dynamic) {
 template <typename T>
 void ProximityEngine<T>::RemoveDeformableGeometry(GeometryId id) {
   impl_->RemoveDeformableGeometry(id);
+}
+
+template <typename T>
+void ProximityEngine<T>::RemoveFilamentGeometry(GeometryId id) {
+  impl_->RemoveFilamentGeometry(id);
 }
 
 template <typename T>
