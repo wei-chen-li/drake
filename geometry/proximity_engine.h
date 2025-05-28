@@ -177,6 +177,12 @@ class ProximityEngine {
    this engine. */
   void RemoveDeformableGeometry(GeometryId id);
 
+  /* Removes the given filament geometry indicated by `id` from the engine.
+   @param id  The id of the geometry to be removed.
+   @throws std::exception if `id` does not refer to a filament geometry in
+   this engine. */
+  void RemoveFilamentGeometry(GeometryId id);
+
   /* Reports the _total_ number of geometries in the engine -- dynamic and
    anchored (spanning all sources).  */
   int num_geometries() const;
