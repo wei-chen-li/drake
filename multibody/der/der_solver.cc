@@ -12,13 +12,13 @@ DerSolver<T>::DerSolver(const DerModel<T>* model,
   DRAKE_THROW_UNLESS(model != nullptr);
   DRAKE_THROW_UNLESS(integrator != nullptr);
   state_ = model_->CreateDerState();
-  // Allocate the scratch for the DerModel.
+  /* Allocate the scratch for the DerModel. */
   scratch_.der_model_scratch = model_->MakeScratch();
-  // Tell BlockSparseCholeskySolver the block sparsity pattern.
+  /* Tell BlockSparseCholeskySolver the block sparsity pattern. */
   const Block4x4SparseSymmetricMatrix<T>& A = model_->ComputeTangentMatrix(
       *state_, integrator_->GetWeights(), scratch_.der_model_scratch.get());
   scratch_.linear_solver.SetMatrix(A);
-  // Set b to size that matches the tanget matrix.
+  /* Set b to size that matches the tangent matrix. */
   scratch_.b = Eigen::VectorX<T>::Zero(A.rows());
 }
 
@@ -67,8 +67,6 @@ int DerSolver<T>::AdvanceOneTimeStep(
           "large timestep.");
     }
     linear_solver.SolveInPlace(&b);
-    // TODO(wei-chen): ↑ This is the only line in this function that allocates
-    // heap momory.
     auto dz = b.head(num_dofs);
     integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
     b.head(num_dofs) = -model_->ComputeResidual(state, external_force_field,
@@ -113,11 +111,13 @@ bool DerSolver<T>::solver_converged(const T& residual_norm,
 template <typename T>
 std::unique_ptr<DerSolver<T>> DerSolver<T>::Clone() const {
   auto cloned = std::make_unique<DerSolver<T>>(this->model_, this->integrator_);
+  /* Copy the owned DerState. */
   cloned->state_->CopyFrom(*this->state_);
+  /* Copy the solver parameters. */
   cloned->relative_tolerance_ = this->relative_tolerance_;
   cloned->absolute_tolerance_ = this->absolute_tolerance_;
   cloned->max_iterations_ = this->max_iterations_;
-  // Scratch variables do not need to be copied.
+  /* Scratch variables do not need to be copied. */
   return cloned;
 }
 
