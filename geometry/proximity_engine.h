@@ -16,6 +16,7 @@
 #include "drake/geometry/mesh_deformation_interpolator.h"
 #include "drake/geometry/proximity/collision_filter.h"
 #include "drake/geometry/proximity/deformable_contact_internal.h"
+#include "drake/geometry/proximity/filament_contact_internal.h"
 #include "drake/geometry/proximity/hydroelastic_internal.h"
 #include "drake/geometry/query_results/contact_surface.h"
 #include "drake/geometry/query_results/deformable_contact.h"
@@ -323,6 +324,10 @@ class ProximityEngine {
   /* The representation of every geometry that was successfully requested for
    use for proximity queries for deformable contact. */
   const deformable::Geometries& deformable_contact_geometries() const;
+
+  /* The representation of every geometry that was successfully requested for
+   use for filament contact surface computation. */
+  const filament::Geometries& filament_geometries() const;
 
   /* Returns the mesh-distance boundary surface associated with the given
    geometry id; if it exists (otherwise null). */
