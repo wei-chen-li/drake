@@ -11,18 +11,9 @@ namespace multibody {
 namespace der {
 namespace internal {
 
-using systems::AbstractParameterIndex;
-using systems::AbstractStateIndex;
-using systems::CacheIndex;
-using systems::Context;
-using systems::DiscreteStateIndex;
-
+/* Forward decleration. */
 template <typename T>
-struct PrevStep {
-  Eigen::Matrix<T, 3, Eigen::Dynamic> tangent;
-  Eigen::Matrix<T, 3, Eigen::Dynamic> reference_frame_d1;
-  Eigen::Matrix<T, 1, Eigen::Dynamic> reference_twist;
-};
+struct PrevStep;
 
 /*
  @p DerStateSystem has discrete states representing q, q̇, and q̈ of a discrete
@@ -66,15 +57,18 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    @name Getting the state vectors
    @{
    */
-  const Eigen::VectorX<T>& get_position(const Context<T>& context) const {
+  const Eigen::VectorX<T>& get_position(
+      const systems::Context<T>& context) const {
     return get_discrete_state_vector(context, q_index_);
   }
 
-  const Eigen::VectorX<T>& get_velocity(const Context<T>& context) const {
+  const Eigen::VectorX<T>& get_velocity(
+      const systems::Context<T>& context) const {
     return get_discrete_state_vector(context, qdot_index_);
   }
 
-  const Eigen::VectorX<T>& get_acceleration(const Context<T>& context) const {
+  const Eigen::VectorX<T>& get_acceleration(
+      const systems::Context<T>& context) const {
     return get_discrete_state_vector(context, qddot_index_);
   }
   // @}
@@ -86,7 +80,8 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   /* Advances the position to its value at the next time step (`next_q`). */
   template <typename Derived>
   void AdvancePositionToNextStep(
-      Context<T>* context, const Eigen::MatrixBase<Derived>& next_q) const {
+      systems::Context<T>* context,
+      const Eigen::MatrixBase<Derived>& next_q) const {
     this->ValidateContext(context);
     static_assert(Derived::ColsAtCompileTime == 1);
     DRAKE_THROW_UNLESS(next_q.size() == num_dofs());
@@ -97,7 +92,7 @@ class DerStateSystem final : public systems::LeafSystem<T> {
 
   /* Adjusts the position within the current time step. */
   template <typename Derived>
-  void AdjustPositionWithinStep(Context<T>* context,
+  void AdjustPositionWithinStep(systems::Context<T>* context,
                                 const Eigen::MatrixBase<Derived>& q) const {
     this->ValidateContext(context);
     static_assert(Derived::ColsAtCompileTime == 1);
@@ -107,7 +102,7 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   }
 
   template <typename Derived>
-  void SetVelocity(Context<T>* context,
+  void SetVelocity(systems::Context<T>* context,
                    const Eigen::MatrixBase<Derived>& qdot) const {
     this->ValidateContext(context);
     static_assert(Derived::ColsAtCompileTime == 1);
@@ -117,7 +112,7 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   }
 
   template <typename Derived>
-  void SetAcceleration(Context<T>* context,
+  void SetAcceleration(systems::Context<T>* context,
                        const Eigen::MatrixBase<Derived>& qddot) const {
     this->ValidateContext(context);
     static_assert(Derived::ColsAtCompileTime == 1);
@@ -133,44 +128,48 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    @{
    */
   Eigen::VectorBlock<Eigen::VectorX<T>> get_mutable_position_within_step(
-      Context<T>* context) const;
+      systems::Context<T>* context) const;
 
   Eigen::VectorBlock<Eigen::VectorX<T>> get_mutable_velocity(
-      Context<T>* context) const;
+      systems::Context<T>* context) const;
 
   Eigen::VectorBlock<Eigen::VectorX<T>> get_mutable_acceleration(
-      Context<T>* context) const;
+      systems::Context<T>* context) const;
   // @}
 
   /*
    @name Quantities associated with edges
    @{
    */
-  decltype(auto) get_edge_vector(const Context<T>& context) const {
+  decltype(auto) get_edge_vector(const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, edge_vector_index_);
   }
 
-  decltype(auto) get_edge_length(const Context<T>& context) const {
+  decltype(auto) get_edge_length(const systems::Context<T>& context) const {
     return get_cache_matrix<1>(context, edge_length_index_);
   }
 
-  decltype(auto) get_tangent(const Context<T>& context) const {
+  decltype(auto) get_tangent(const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, tangent_index_);
   }
 
-  decltype(auto) get_reference_frame_d1(const Context<T>& context) const {
+  decltype(auto) get_reference_frame_d1(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, reference_frame_d1_index_);
   }
 
-  decltype(auto) get_reference_frame_d2(const Context<T>& context) const {
+  decltype(auto) get_reference_frame_d2(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, reference_frame_d2_index_);
   }
 
-  decltype(auto) get_material_frame_m1(const Context<T>& context) const {
+  decltype(auto) get_material_frame_m1(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, material_frame_m1_index_);
   }
 
-  decltype(auto) get_material_frame_m2(const Context<T>& context) const {
+  decltype(auto) get_material_frame_m2(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, material_frame_m2_index_);
   }
   // @}
@@ -180,23 +179,25 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    @{
    */
   decltype(auto) get_discrete_integrated_curvature(
-      const Context<T>& context) const {
+      const systems::Context<T>& context) const {
     return get_cache_matrix<3>(context, discrete_integrated_curvature_index_);
   }
 
-  decltype(auto) get_curvature_kappa1(const Context<T>& context) const {
+  decltype(auto) get_curvature_kappa1(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<1>(context, curvature_kappa1_index_);
   }
 
-  decltype(auto) get_curvature_kappa2(const Context<T>& context) const {
+  decltype(auto) get_curvature_kappa2(
+      const systems::Context<T>& context) const {
     return get_cache_matrix<1>(context, curvature_kappa2_index_);
   }
 
-  decltype(auto) get_reference_twist(const Context<T>& context) const {
+  decltype(auto) get_reference_twist(const systems::Context<T>& context) const {
     return get_cache_matrix<1>(context, reference_twist_index_);
   }
 
-  decltype(auto) get_twist(const Context<T>& context) const {
+  decltype(auto) get_twist(const systems::Context<T>& context) const {
     return get_cache_matrix<1>(context, twist_index_);
   }
   // @}
@@ -205,23 +206,23 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    serial number.
    @pre `to_context != nullptr`.
    @pre Both context are created from this system. */
-  void CopyContext(const Context<T>& from_context,
-                   Context<T>* to_context) const;
+  void CopyContext(const systems::Context<T>& from_context,
+                   systems::Context<T>* to_context) const;
 
   /* Serializes the states in `context` into an Eigen::VectorX. The resulting
    vector will contain q, q̇, q̈ (in that order), and data at the previous time
    step. */
-  Eigen::VectorX<T> Serialize(const Context<T>& context) const;
+  Eigen::VectorX<T> Serialize(const systems::Context<T>& context) const;
 
   /* Deserializes the Serialize() returned `serialized` vector into `context`.
    @pre `context != nullptr`.
    @pre `serialized` has the correct size. */
-  void Deserialize(Context<T>* context,
+  void Deserialize(systems::Context<T>* context,
                    const Eigen::Ref<const Eigen::VectorX<T>>& serialized) const;
 
   /* Returns the serial number. The serial number is incremented every time the
    `context` is modified by DerStateStstem. */
-  int64_t serial_number(const Context<T>& context) const;
+  int64_t serial_number(const systems::Context<T>& context) const;
 
   const std::vector<Eigen::Vector3<T>>& initial_node_positions() const {
     return initial_node_positions_;
@@ -233,7 +234,7 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   /* (Advanced) Makes the derivatives of other quantities with respect to d1 and
    d2 be zero during performing automatic differentiation.
    @pre `std::is_same_v<T, AutoDiffXd>` */
-  void FixReferenceFrameDuringAutoDiff(Context<T>* context) const;
+  void FixReferenceFrameDuringAutoDiff(systems::Context<T>* context) const;
 
  private:
   /* All DerStateSystem of different template type can access other's data. */
@@ -243,86 +244,95 @@ class DerStateSystem final : public systems::LeafSystem<T> {
   /* Friend class to facilitate testing. */
   friend class DerStateSystemTester;
 
-  void CalcEdgeVector(const Context<T>& context,
+  void CalcEdgeVector(const systems::Context<T>& context,
                       Eigen::Matrix<T, 3, Eigen::Dynamic>* edge_vector) const;
 
-  void CalcEdgeLength(const Context<T>& context,
+  void CalcEdgeLength(const systems::Context<T>& context,
                       Eigen::Matrix<T, 1, Eigen::Dynamic>* edge_length) const;
 
-  void CalcTangent(const Context<T>& context,
+  void CalcTangent(const systems::Context<T>& context,
                    Eigen::Matrix<T, 3, Eigen::Dynamic>* tangent) const;
 
-  void CalcReferenceFrameD1(const Context<T>& context,
+  void CalcReferenceFrameD1(const systems::Context<T>& context,
                             Eigen::Matrix<T, 3, Eigen::Dynamic>* d1) const;
 
-  void CalcReferenceFrameD2(const Context<T>& context,
+  void CalcReferenceFrameD2(const systems::Context<T>& context,
                             Eigen::Matrix<T, 3, Eigen::Dynamic>* d2) const;
 
-  void CalcMaterialFrameM1(const Context<T>& context,
+  void CalcMaterialFrameM1(const systems::Context<T>& context,
                            Eigen::Matrix<T, 3, Eigen::Dynamic>* m1) const;
 
-  void CalcMaterialFrameM2(const Context<T>& context,
+  void CalcMaterialFrameM2(const systems::Context<T>& context,
                            Eigen::Matrix<T, 3, Eigen::Dynamic>* m2) const;
 
   void CalcDiscreteIntegratedCurvature(
-      const Context<T>& context,
+      const systems::Context<T>& context,
       Eigen::Matrix<T, 3, Eigen::Dynamic>* curvature) const;
 
-  void CalcCurvatureKappa1(const Context<T>& context,
+  void CalcCurvatureKappa1(const systems::Context<T>& context,
                            Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa1) const;
 
-  void CalcCurvatureKappa2(const Context<T>& context,
+  void CalcCurvatureKappa2(const systems::Context<T>& context,
                            Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa2) const;
 
-  void CalcReferenceTwist(const Context<T>& context,
+  void CalcReferenceTwist(const systems::Context<T>& context,
                           Eigen::Matrix<T, 1, Eigen::Dynamic>* ref_twist) const;
 
-  void CalcTwist(const Context<T>& context,
+  void CalcTwist(const systems::Context<T>& context,
                  Eigen::Matrix<T, 1, Eigen::Dynamic>* twist) const;
 
   bool get_fix_reference_frame_during_autodiff_flag(
-      const Context<T>& context) const;
+      const systems::Context<T>& context) const;
 
-  const PrevStep<T>& get_prev_step(const Context<T>& context) const;
+  const PrevStep<T>& get_prev_step(const systems::Context<T>& context) const;
 
-  void StorePrevStep(Context<T>* context) const;
+  void StorePrevStep(systems::Context<T>* context) const;
 
   const Eigen::VectorX<T>& get_discrete_state_vector(
-      const Context<T>& context, DiscreteStateIndex index) const;
+      const systems::Context<T>& context,
+      systems::DiscreteStateIndex index) const;
 
   template <int num_rows>
   const Eigen::Matrix<T, num_rows, Eigen::Dynamic>& get_cache_matrix(
-      const Context<T>& context, CacheIndex index) const {
+      const systems::Context<T>& context, systems::CacheIndex index) const {
     this->ValidateContext(context);
     return this->get_cache_entry(index)
         .template Eval<Eigen::Matrix<T, num_rows, Eigen::Dynamic>>(context);
   }
 
-  void increment_serial_number(Context<T>* context) const;
+  void increment_serial_number(systems::Context<T>* context) const;
 
   const bool has_closed_ends_;
   const std::vector<Eigen::Vector3<T>> initial_node_positions_;
   const std::vector<T> initial_edge_angles_;
   const std::optional<Eigen::Vector3<T>> initial_d1_0_;
 
-  DiscreteStateIndex q_index_{};
-  DiscreteStateIndex qdot_index_{};
-  DiscreteStateIndex qddot_index_{};
-  AbstractStateIndex prev_step_index_{};
-  AbstractParameterIndex fix_ref_frame_flag_index_{};
-  AbstractParameterIndex serial_number_index_{};
-  CacheIndex edge_vector_index_{};
-  CacheIndex edge_length_index_{};
-  CacheIndex tangent_index_{};
-  CacheIndex reference_frame_d1_index_{};
-  CacheIndex reference_frame_d2_index_{};
-  CacheIndex material_frame_m1_index_{};
-  CacheIndex material_frame_m2_index_{};
-  CacheIndex discrete_integrated_curvature_index_{};
-  CacheIndex curvature_kappa1_index_{};
-  CacheIndex curvature_kappa2_index_{};
-  CacheIndex reference_twist_index_{};
-  CacheIndex twist_index_{};
+  systems::DiscreteStateIndex q_index_{};
+  systems::DiscreteStateIndex qdot_index_{};
+  systems::DiscreteStateIndex qddot_index_{};
+  systems::AbstractStateIndex prev_step_index_{};
+  systems::AbstractParameterIndex fix_ref_frame_flag_index_{};
+  systems::AbstractParameterIndex serial_number_index_{};
+  systems::CacheIndex edge_vector_index_{};
+  systems::CacheIndex edge_length_index_{};
+  systems::CacheIndex tangent_index_{};
+  systems::CacheIndex reference_frame_d1_index_{};
+  systems::CacheIndex reference_frame_d2_index_{};
+  systems::CacheIndex material_frame_m1_index_{};
+  systems::CacheIndex material_frame_m2_index_{};
+  systems::CacheIndex discrete_integrated_curvature_index_{};
+  systems::CacheIndex curvature_kappa1_index_{};
+  systems::CacheIndex curvature_kappa2_index_{};
+  systems::CacheIndex reference_twist_index_{};
+  systems::CacheIndex twist_index_{};
+};
+
+/* Struct storing previous step data. */
+template <typename T>
+struct PrevStep {
+  Eigen::Matrix<T, 3, Eigen::Dynamic> tangent;
+  Eigen::Matrix<T, 3, Eigen::Dynamic> reference_frame_d1;
+  Eigen::Matrix<T, 1, Eigen::Dynamic> reference_twist;
 };
 
 }  // namespace internal

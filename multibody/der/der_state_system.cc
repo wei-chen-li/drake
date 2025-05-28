@@ -137,11 +137,11 @@ DerStateSystem<T>::DerStateSystem(
       Eigen::Matrix<T, 1, Eigen::Dynamic>::Zero(num_internal_nodes());
   prev_step_index_ = this->DeclareAbstractState(Value(prev_step));
 
-  fix_ref_frame_flag_index_ =
-      AbstractParameterIndex{this->DeclareAbstractParameter(Value(false))};
+  fix_ref_frame_flag_index_ = systems::AbstractParameterIndex{
+      this->DeclareAbstractParameter(Value(false))};
 
-  serial_number_index_ =
-      AbstractParameterIndex{this->DeclareAbstractParameter(Value(int64_t(0)))};
+  serial_number_index_ = systems::AbstractParameterIndex{
+      this->DeclareAbstractParameter(Value(int64_t(0)))};
 
   edge_vector_index_ =
       this->DeclareCacheEntry("edge vector", Zero<T, 3>(num_edges()),
@@ -237,7 +237,8 @@ DerStateSystem<T>::~DerStateSystem() = default;
 
 template <typename T>
 Eigen::VectorBlock<Eigen::VectorX<T>>
-DerStateSystem<T>::get_mutable_position_within_step(Context<T>* context) const {
+DerStateSystem<T>::get_mutable_position_within_step(
+    systems::Context<T>* context) const {
   this->ValidateContext(context);
   increment_serial_number(context);
   return context->get_mutable_discrete_state(q_index_).get_mutable_value();
@@ -245,7 +246,7 @@ DerStateSystem<T>::get_mutable_position_within_step(Context<T>* context) const {
 
 template <typename T>
 Eigen::VectorBlock<Eigen::VectorX<T>> DerStateSystem<T>::get_mutable_velocity(
-    Context<T>* context) const {
+    systems::Context<T>* context) const {
   this->ValidateContext(context);
   increment_serial_number(context);
   return context->get_mutable_discrete_state(qdot_index_).get_mutable_value();
@@ -253,7 +254,8 @@ Eigen::VectorBlock<Eigen::VectorX<T>> DerStateSystem<T>::get_mutable_velocity(
 
 template <typename T>
 Eigen::VectorBlock<Eigen::VectorX<T>>
-DerStateSystem<T>::get_mutable_acceleration(Context<T>* context) const {
+DerStateSystem<T>::get_mutable_acceleration(
+    systems::Context<T>* context) const {
   this->ValidateContext(context);
   increment_serial_number(context);
   return context->get_mutable_discrete_state(qddot_index_).get_mutable_value();
@@ -261,7 +263,7 @@ DerStateSystem<T>::get_mutable_acceleration(Context<T>* context) const {
 
 template <typename T>
 void DerStateSystem<T>::CalcEdgeVector(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* edge_vector) const {
   DRAKE_ASSERT(edge_vector->cols() == num_edges());
   const Eigen::VectorX<T>& q = get_position(context);
@@ -274,7 +276,7 @@ void DerStateSystem<T>::CalcEdgeVector(
 
 template <typename T>
 void DerStateSystem<T>::CalcEdgeLength(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* edge_length) const {
   DRAKE_ASSERT(edge_length->cols() == num_edges());
   auto& edge_vector = get_edge_vector(context);
@@ -285,7 +287,7 @@ void DerStateSystem<T>::CalcEdgeLength(
 
 template <typename T>
 void DerStateSystem<T>::CalcTangent(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* tangent) const {
   DRAKE_ASSERT(tangent->cols() == num_edges());
   auto& edge_vector = get_edge_vector(context);
@@ -303,7 +305,8 @@ void DerStateSystem<T>::CalcTangent(
 
 template <typename T>
 void DerStateSystem<T>::CalcReferenceFrameD1(
-    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* d1) const {
+    const systems::Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* d1) const {
   DRAKE_ASSERT(d1->cols() == num_edges());
   const auto& prev_tangent = get_prev_step(context).tangent;
   const auto& prev_d1 = get_prev_step(context).reference_frame_d1;
@@ -313,7 +316,8 @@ void DerStateSystem<T>::CalcReferenceFrameD1(
 
 template <typename T>
 void DerStateSystem<T>::CalcReferenceFrameD2(
-    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* d2) const {
+    const systems::Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* d2) const {
   DRAKE_ASSERT(d2->cols() == num_edges());
   auto& t = get_tangent(context);
   auto& d1 = get_reference_frame_d1(context);
@@ -322,7 +326,8 @@ void DerStateSystem<T>::CalcReferenceFrameD2(
 
 template <typename T>
 void DerStateSystem<T>::CalcMaterialFrameM1(
-    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* m1) const {
+    const systems::Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* m1) const {
   DRAKE_ASSERT(m1->cols() == num_edges());
   if constexpr (std::is_same_v<T, AutoDiffXd>) {
     if (get_fix_reference_frame_during_autodiff_flag(context)) {
@@ -339,7 +344,8 @@ void DerStateSystem<T>::CalcMaterialFrameM1(
 }
 
 static void FixReferenceFrame_CalcMaterialFrameM1(
-    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    const DerStateSystem<AutoDiffXd>* self,
+    const systems::Context<AutoDiffXd>& context,
     Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>* m1) {
   auto t = self->get_tangent(context);
   RemoveDerivatives(&t);
@@ -354,7 +360,8 @@ static void FixReferenceFrame_CalcMaterialFrameM1(
 
 template <typename T>
 void DerStateSystem<T>::CalcMaterialFrameM2(
-    const Context<T>& context, Eigen::Matrix<T, 3, Eigen::Dynamic>* m2) const {
+    const systems::Context<T>& context,
+    Eigen::Matrix<T, 3, Eigen::Dynamic>* m2) const {
   DRAKE_ASSERT(m2->cols() == num_edges());
   if constexpr (std::is_same_v<T, AutoDiffXd>) {
     if (get_fix_reference_frame_during_autodiff_flag(context)) {
@@ -368,7 +375,8 @@ void DerStateSystem<T>::CalcMaterialFrameM2(
 }
 
 static void FixReferenceFrame_CalcMaterialFrameM2(
-    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    const DerStateSystem<AutoDiffXd>* self,
+    const systems::Context<AutoDiffXd>& context,
     Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>* m2) {
   auto t = self->get_tangent(context);
   RemoveDerivatives(&t);
@@ -378,7 +386,7 @@ static void FixReferenceFrame_CalcMaterialFrameM2(
 
 template <typename T>
 void DerStateSystem<T>::CalcDiscreteIntegratedCurvature(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* curvature) const {
   DRAKE_ASSERT(curvature->cols() == num_internal_nodes());
   auto& t = get_tangent(context);
@@ -391,7 +399,7 @@ void DerStateSystem<T>::CalcDiscreteIntegratedCurvature(
 
 template <typename T>
 void DerStateSystem<T>::CalcCurvatureKappa1(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa1) const {
   DRAKE_ASSERT(kappa1->cols() == num_internal_nodes());
   auto& curvature = get_discrete_integrated_curvature(context);
@@ -404,7 +412,7 @@ void DerStateSystem<T>::CalcCurvatureKappa1(
 
 template <typename T>
 void DerStateSystem<T>::CalcCurvatureKappa2(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa2) const {
   DRAKE_ASSERT(kappa2->cols() == num_internal_nodes());
   auto& curvature = get_discrete_integrated_curvature(context);
@@ -417,7 +425,7 @@ void DerStateSystem<T>::CalcCurvatureKappa2(
 
 template <typename T>
 void DerStateSystem<T>::CalcReferenceTwist(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* ref_twist) const {
   DRAKE_ASSERT(ref_twist->cols() == num_internal_nodes());
   if constexpr (std::is_same_v<T, AutoDiffXd>) {
@@ -447,7 +455,8 @@ void DerStateSystem<T>::CalcReferenceTwist(
 }
 
 static void FixReferenceFrame_CalcReferenceTwist(
-    const DerStateSystem<AutoDiffXd>* self, const Context<AutoDiffXd>& context,
+    const DerStateSystem<AutoDiffXd>* self,
+    const systems::Context<AutoDiffXd>& context,
     const Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>& prev_ref_twist,
     Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>* ref_twist) {
   using T = AutoDiffXd;
@@ -466,7 +475,7 @@ static void FixReferenceFrame_CalcReferenceTwist(
 
 template <typename T>
 void DerStateSystem<T>::CalcTwist(
-    const Context<T>& context,
+    const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* twist) const {
   DRAKE_ASSERT(twist->cols() == num_internal_nodes());
   auto& ref_twist = get_reference_twist(context);
@@ -479,8 +488,8 @@ void DerStateSystem<T>::CalcTwist(
 }
 
 template <typename T>
-void DerStateSystem<T>::CopyContext(const Context<T>& from_context,
-                                    Context<T>* to_context) const {
+void DerStateSystem<T>::CopyContext(const systems::Context<T>& from_context,
+                                    systems::Context<T>* to_context) const {
   this->ValidateContext(from_context);
   this->ValidateContext(to_context);
   if (&from_context == to_context) return;
@@ -491,7 +500,7 @@ void DerStateSystem<T>::CopyContext(const Context<T>& from_context,
 
   /* Copy the cache entry values that are up-to-date to avoid recalculation when
    the `to_context` is later used. */
-  for (CacheIndex i(0); i < this->num_cache_entries(); ++i) {
+  for (systems::CacheIndex i(0); i < this->num_cache_entries(); ++i) {
     const systems::CacheEntryValue& from_cache_entry_value =
         this->get_cache_entry(i).get_cache_entry_value(from_context);
     if (from_cache_entry_value.is_out_of_date()) continue;
@@ -507,7 +516,7 @@ void DerStateSystem<T>::CopyContext(const Context<T>& from_context,
 
 template <typename T>
 Eigen::VectorX<T> DerStateSystem<T>::Serialize(
-    const Context<T>& context) const {
+    const systems::Context<T>& context) const {
   this->ValidateContext(context);
   const int size = num_dofs() * 3 + num_edges() * 6 + num_internal_nodes();
   Eigen::VectorX<T> serialized(size);
@@ -524,7 +533,7 @@ Eigen::VectorX<T> DerStateSystem<T>::Serialize(
 
 template <typename T>
 void DerStateSystem<T>::Deserialize(
-    Context<T>* context,
+    systems::Context<T>* context,
     const Eigen::Ref<const Eigen::VectorX<T>>& serialized) const {
   this->ValidateContext(context);
   if (serialized.size() !=
@@ -559,14 +568,16 @@ void DerStateSystem<T>::Deserialize(
 }
 
 template <typename T>
-int64_t DerStateSystem<T>::serial_number(const Context<T>& context) const {
+int64_t DerStateSystem<T>::serial_number(
+    const systems::Context<T>& context) const {
   this->ValidateContext(context);
   return context.get_abstract_parameter(serial_number_index_)
       .template get_value<int64_t>();
 }
 
 template <typename T>
-void DerStateSystem<T>::increment_serial_number(Context<T>* context) const {
+void DerStateSystem<T>::increment_serial_number(
+    systems::Context<T>* context) const {
   this->ValidateContext(context);
   context->get_mutable_abstract_parameter(serial_number_index_)
       .set_value(serial_number(*context) + 1);
@@ -574,7 +585,7 @@ void DerStateSystem<T>::increment_serial_number(Context<T>* context) const {
 
 template <typename T>
 void DerStateSystem<T>::FixReferenceFrameDuringAutoDiff(
-    Context<T>* context) const {
+    systems::Context<T>* context) const {
   this->ValidateContext(context);
   DRAKE_THROW_UNLESS((std::is_same_v<T, AutoDiffXd>));
   if (!get_fix_reference_frame_during_autodiff_flag(*context)) {
@@ -586,7 +597,7 @@ void DerStateSystem<T>::FixReferenceFrameDuringAutoDiff(
 
 template <typename T>
 bool DerStateSystem<T>::get_fix_reference_frame_during_autodiff_flag(
-    const Context<T>& context) const {
+    const systems::Context<T>& context) const {
   this->ValidateContext(context);
   return context.get_abstract_parameter(fix_ref_frame_flag_index_)
       .template get_value<bool>();
@@ -594,13 +605,13 @@ bool DerStateSystem<T>::get_fix_reference_frame_during_autodiff_flag(
 
 template <typename T>
 const PrevStep<T>& DerStateSystem<T>::get_prev_step(
-    const Context<T>& context) const {
+    const systems::Context<T>& context) const {
   this->ValidateContext(context);
   return context.template get_abstract_state<PrevStep<T>>(prev_step_index_);
 }
 
 template <typename T>
-void DerStateSystem<T>::StorePrevStep(Context<T>* context) const {
+void DerStateSystem<T>::StorePrevStep(systems::Context<T>* context) const {
   this->ValidateContext(context);
   /* Force the calculation of tangent, reference_frame_d1, and reference_twist
    (if not already calculated and cached). */
@@ -628,7 +639,8 @@ void DerStateSystem<T>::StorePrevStep(Context<T>* context) const {
 
 template <typename T>
 const Eigen::VectorX<T>& DerStateSystem<T>::get_discrete_state_vector(
-    const Context<T>& context, DiscreteStateIndex index) const {
+    const systems::Context<T>& context,
+    systems::DiscreteStateIndex index) const {
   this->ValidateContext(context);
   return context.get_discrete_state(index).value();
 }

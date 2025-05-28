@@ -250,10 +250,10 @@ class DerState {
 
  private:
   DerState(const DerStateSystem<T>* der_state_system,
-           std::unique_ptr<Context<T>> context);
+           std::unique_ptr<systems::Context<T>> context);
 
   const DerStateSystem<T>* const der_state_system_;
-  copyable_unique_ptr<Context<T>> context_;
+  copyable_unique_ptr<systems::Context<T>> context_;
 };
 
 }  // namespace internal

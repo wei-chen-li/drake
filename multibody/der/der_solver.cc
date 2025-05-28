@@ -31,7 +31,8 @@ int DerSolver<T>::AdvanceOneTimeStep(
   DerState<T>& state = *state_;
   typename DerModel<T>::Scratch* der_model_scratch =
       scratch_.der_model_scratch.get();
-  BlockSparseCholeskySolver<Matrix4<T>>& linear_solver = scratch_.linear_solver;
+  contact_solvers::internal::BlockSparseCholeskySolver<Matrix4<T>>&
+      linear_solver = scratch_.linear_solver;
   Eigen::VectorX<T>& b = scratch_.b;
   const int num_dofs = model_->num_dofs();
   DRAKE_ASSERT(der_model_scratch != nullptr);

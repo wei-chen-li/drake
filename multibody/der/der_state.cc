@@ -13,7 +13,7 @@ DerState<T>::DerState(const DerStateSystem<T>* der_state_system)
 
 template <typename T>
 DerState<T>::DerState(const DerStateSystem<T>* der_state_system,
-                      std::unique_ptr<Context<T>> context)
+                      std::unique_ptr<systems::Context<T>> context)
     : der_state_system_(der_state_system), context_(std::move(context)) {
   DRAKE_THROW_UNLESS(der_state_system_ != nullptr);
   DRAKE_THROW_UNLESS(context_ != nullptr);
