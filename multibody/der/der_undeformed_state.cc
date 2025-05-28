@@ -51,10 +51,10 @@ DerUndeformedState<T> DerUndeformedState<T>::ZeroCurvatureAndTwist(
 template <typename T>
 DerUndeformedState<T> DerUndeformedState<T>::FromCurrentDerState(
     const DerState<T>& state) {
-  auto& edge_length = state.get_edge_length();
-  auto& kappa1 = state.get_curvature_kappa1();
-  auto& kappa2 = state.get_curvature_kappa2();
-  auto& twist = state.get_twist();
+  const auto& edge_length = state.get_edge_length();
+  const auto& kappa1 = state.get_curvature_kappa1();
+  const auto& kappa2 = state.get_curvature_kappa2();
+  const auto& twist = state.get_twist();
 
   Eigen::RowVectorX<T> voronoi_length(state.num_internal_nodes());
   for (int i = 0; i < state.num_internal_nodes(); ++i) {

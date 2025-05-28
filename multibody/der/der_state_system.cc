@@ -279,7 +279,7 @@ void DerStateSystem<T>::CalcEdgeLength(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* edge_length) const {
   DRAKE_ASSERT(edge_length->cols() == num_edges());
-  auto& edge_vector = get_edge_vector(context);
+  const auto& edge_vector = get_edge_vector(context);
   for (int i = 0; i < edge_length->cols(); ++i) {
     (*edge_length)[i] = edge_vector.col(i).norm();
   }
@@ -290,9 +290,9 @@ void DerStateSystem<T>::CalcTangent(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* tangent) const {
   DRAKE_ASSERT(tangent->cols() == num_edges());
-  auto& edge_vector = get_edge_vector(context);
-  auto& edge_length = get_edge_length(context);
-  auto& prev_tangent = get_prev_step(context).tangent;
+  const auto& edge_vector = get_edge_vector(context);
+  const auto& edge_length = get_edge_length(context);
+  const auto& prev_tangent = get_prev_step(context).tangent;
   for (int i = 0; i < num_edges(); ++i) {
     if (edge_length[i] > std::numeric_limits<double>::epsilon()) {
       tangent->col(i) = edge_vector.col(i) / edge_length[i];
@@ -310,7 +310,7 @@ void DerStateSystem<T>::CalcReferenceFrameD1(
   DRAKE_ASSERT(d1->cols() == num_edges());
   const auto& prev_tangent = get_prev_step(context).tangent;
   const auto& prev_d1 = get_prev_step(context).reference_frame_d1;
-  auto& tangent = get_tangent(context);
+  const auto& tangent = get_tangent(context);
   math::TimeParallelFrameTransport<T>(prev_tangent, prev_d1, tangent, d1);
 }
 
@@ -319,8 +319,8 @@ void DerStateSystem<T>::CalcReferenceFrameD2(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* d2) const {
   DRAKE_ASSERT(d2->cols() == num_edges());
-  auto& t = get_tangent(context);
-  auto& d1 = get_reference_frame_d1(context);
+  const auto& t = get_tangent(context);
+  const auto& d1 = get_reference_frame_d1(context);
   CompleteFrames<T>(t, d1, d2);
 }
 
@@ -335,9 +335,9 @@ void DerStateSystem<T>::CalcMaterialFrameM1(
       return;
     }
   }
-  auto& t = get_tangent(context);
-  auto& d1 = get_reference_frame_d1(context);
-  auto& q = get_position(context);
+  const auto& t = get_tangent(context);
+  const auto& d1 = get_reference_frame_d1(context);
+  const auto& q = get_position(context);
   for (int i = 0; i < num_edges(); ++i) {
     m1->col(i) = math::RotateAxisAngle<T>(d1.col(i), t.col(i), q(4 * i + 3));
   }
@@ -351,7 +351,7 @@ static void FixReferenceFrame_CalcMaterialFrameM1(
   RemoveDerivatives(&t);
   auto d1 = self->get_reference_frame_d1(context);
   RemoveDerivatives(&d1);
-  auto& q = self->get_position(context);
+  const auto& q = self->get_position(context);
   for (int i = 0; i < self->num_edges(); ++i) {
     m1->col(i) =
         math::RotateAxisAngle<AutoDiffXd>(d1.col(i), t.col(i), q(4 * i + 3));
@@ -369,8 +369,8 @@ void DerStateSystem<T>::CalcMaterialFrameM2(
       return;
     }
   }
-  auto& t = get_tangent(context);
-  auto& m1 = get_material_frame_m1(context);
+  const auto& t = get_tangent(context);
+  const auto& m1 = get_material_frame_m1(context);
   CompleteFrames<T>(t, m1, m2);
 }
 
@@ -380,7 +380,7 @@ static void FixReferenceFrame_CalcMaterialFrameM2(
     Eigen::Matrix<AutoDiffXd, 3, Eigen::Dynamic>* m2) {
   auto t = self->get_tangent(context);
   RemoveDerivatives(&t);
-  auto& m1 = self->get_material_frame_m1(context);
+  const auto& m1 = self->get_material_frame_m1(context);
   CompleteFrames<AutoDiffXd>(t, m1, m2);
 }
 
@@ -389,7 +389,7 @@ void DerStateSystem<T>::CalcDiscreteIntegratedCurvature(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 3, Eigen::Dynamic>* curvature) const {
   DRAKE_ASSERT(curvature->cols() == num_internal_nodes());
-  auto& t = get_tangent(context);
+  const auto& t = get_tangent(context);
   for (int i = 0; i < num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % num_edges();
     curvature->col(i) = 2 * t.col(i).cross(t.col(ip1));
@@ -402,8 +402,8 @@ void DerStateSystem<T>::CalcCurvatureKappa1(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa1) const {
   DRAKE_ASSERT(kappa1->cols() == num_internal_nodes());
-  auto& curvature = get_discrete_integrated_curvature(context);
-  auto& m2 = get_material_frame_m2(context);
+  const auto& curvature = get_discrete_integrated_curvature(context);
+  const auto& m2 = get_material_frame_m2(context);
   for (int i = 0; i < num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % num_edges();
     (*kappa1)[i] = 0.5 * (m2.col(i) + m2.col(ip1)).dot(curvature.col(i));
@@ -415,8 +415,8 @@ void DerStateSystem<T>::CalcCurvatureKappa2(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* kappa2) const {
   DRAKE_ASSERT(kappa2->cols() == num_internal_nodes());
-  auto& curvature = get_discrete_integrated_curvature(context);
-  auto& m1 = get_material_frame_m1(context);
+  const auto& curvature = get_discrete_integrated_curvature(context);
+  const auto& m1 = get_material_frame_m1(context);
   for (int i = 0; i < num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % num_edges();
     (*kappa2)[i] = -0.5 * (m1.col(i) + m1.col(ip1)).dot(curvature.col(i));
@@ -436,8 +436,8 @@ void DerStateSystem<T>::CalcReferenceTwist(
     }
   }
   const auto& prev_ref_twist = get_prev_step(context).reference_twist;
-  auto& t = get_tangent(context);
-  auto& d1 = get_reference_frame_d1(context);
+  const auto& t = get_tangent(context);
+  const auto& d1 = get_reference_frame_d1(context);
   Eigen::Vector3<T> vec;
   for (int i = 0; i < num_internal_nodes(); ++i) {
     const int ip1 = (i + 1) % num_edges();
@@ -460,7 +460,7 @@ static void FixReferenceFrame_CalcReferenceTwist(
     const Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>& prev_ref_twist,
     Eigen::Matrix<AutoDiffXd, 1, Eigen::Dynamic>* ref_twist) {
   using T = AutoDiffXd;
-  auto& t = self->get_tangent(context);
+  const auto& t = self->get_tangent(context);
   auto d1 = self->get_reference_frame_d1(context);
   RemoveDerivatives(&d1);
   Eigen::Vector3<T> vec;
@@ -478,8 +478,8 @@ void DerStateSystem<T>::CalcTwist(
     const systems::Context<T>& context,
     Eigen::Matrix<T, 1, Eigen::Dynamic>* twist) const {
   DRAKE_ASSERT(twist->cols() == num_internal_nodes());
-  auto& ref_twist = get_reference_twist(context);
-  auto& q = get_position(context);
+  const auto& ref_twist = get_reference_twist(context);
+  const auto& q = get_position(context);
   for (int i = 0; i < num_internal_nodes(); ++i) {
     const int edge_i = 4 * i + 3;
     const int edge_ip1 = 4 * ((i + 1) % num_edges()) + 3;
