@@ -73,6 +73,7 @@ drake_cc_library(
         ":energy_hessian_matrix_util",
         ":external_force_field",
         "//common:pointer_cast",
+        "//math:vector3_util",
     ],
 )
 

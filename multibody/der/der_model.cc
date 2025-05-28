@@ -4,6 +4,7 @@
 #include <tuple>
 
 #include "drake/common/pointer_cast.h"
+#include "drake/math/unit_vector.h"
 #include "drake/multibody/der/elastic_energy.h"
 #include "drake/multibody/der/energy_hessian_matrix_util.h"
 
@@ -15,11 +16,6 @@ namespace der {
 using internal::operator*;
 using internal::AddScaledMatrix;
 
-/* Tolerance for ‖unit_vector‖ is 1e-14 (≈ 5.5 bits) of 1.0.
-   Tolerance for v1.dot(v1) if v1 ⊥ v1 is 1e-14 of 0.0.
- Note: 1e-14 ≈ 2^5.5 * std::numeric_limits<double>::epsilon(); */
-constexpr double kTol = 1e-14;
-
 template <typename T>
 std::tuple<DerNodeIndex, DerEdgeIndex, DerNodeIndex>
 DerModel<T>::Builder::AddFirstEdge(
@@ -29,11 +25,10 @@ DerModel<T>::Builder::AddFirstEdge(
   if (is_built_) throw std::logic_error("The DER model is already build.");
   if (is_first_edge_added_)
     throw std::logic_error("AddFirstEdge() can only be called once.");
-  if (d1_0 && std::abs(ExtractDoubleOrThrow(d1_0->norm()) - 1.0) > kTol)
-    throw std::invalid_argument("The provided d₁⁰ is not a unit vector.");
-  if (d1_0 && std::abs(ExtractDoubleOrThrow(d1_0->dot(x_1 - x_0))) > kTol) {
-    throw std::invalid_argument(
-        "The provided d₁⁰ is not perpendicular to x₁ - x₀.");
+  if (d1_0) {
+    Eigen::Vector3<T> t_0 =
+        math::internal::NormalizeOrThrow<T>(x_1 - x_0, __func__);
+    math::internal::ThrowIfNotOrthonormal<T>(*d1_0, t_0, __func__);
   }
   node_positions_.push_back(x_0);
   edge_angles_.push_back(gamma_0);
@@ -56,7 +51,7 @@ std::tuple<DerEdgeIndex, DerNodeIndex> DerModel<T>::Builder::AddEdge(
 
   edge_angles_.push_back(gamma_i);
   node_positions_.push_back(x_ip1);
-  if ((node_positions_.back() - node_positions_.front()).norm() < kTol) {
+  if ((node_positions_.back() - node_positions_.front()).norm() < 1e-14) {
     node_positions_.pop_back();
     is_configuration_finalized_ = true;
     has_closed_ends_ = true;
