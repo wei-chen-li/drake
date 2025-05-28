@@ -12,8 +12,6 @@ namespace multibody {
 namespace der {
 namespace internal {
 
-using contact_solvers::internal::BlockSparseCholeskySolver;
-
 /*
  @p DerSolver solves the dynamic discrete elastic rod (DER) problem. The
  governing PDE of the dynamics is spatially discretized by DerModel and
@@ -105,7 +103,8 @@ class DerSolver {
     std::unique_ptr<typename DerModel<T>::Scratch,
                     typename DerModel<T>::ScratchDeleter>
         der_model_scratch;
-    BlockSparseCholeskySolver<Matrix4<T>> linear_solver;
+    contact_solvers::internal::BlockSparseCholeskySolver<Matrix4<T>>
+        linear_solver;
     Eigen::VectorX<T> b;
   } scratch_;
 };

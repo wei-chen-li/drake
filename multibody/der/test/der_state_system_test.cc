@@ -16,7 +16,7 @@ class DerStateSystemTester {
   DerStateSystemTester() = delete;
 
   template <typename T>
-  static std::vector<CacheIndex> get_all_cache_indexes(
+  static std::vector<systems::CacheIndex> get_all_cache_indexes(
       const DerStateSystem<T>& system) {
     return {system.edge_vector_index_,
             system.edge_length_index_,
@@ -37,6 +37,8 @@ namespace {
 
 using Eigen::Vector3;
 using Eigen::VectorX;
+using systems::CacheIndex;
+using systems::Context;
 
 template <typename T>
 class DerStateSystemTest : public ::testing::Test {
