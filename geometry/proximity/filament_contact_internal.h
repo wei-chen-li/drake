@@ -1,9 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <vector>
-
-#include <fcl/fcl.h>
 
 #include "drake/geometry/geometry_ids.h"
 #include "drake/geometry/shape_specification.h"
@@ -17,10 +14,9 @@ class Geometries {
  public:
   Geometries();
 
-  Geometries(const Geometries& other) = delete;
-  Geometries& operator=(const Geometries& other) = delete;
-  Geometries(Geometries&& other) = delete;
-
+  Geometries(const Geometries& other);
+  Geometries& operator=(const Geometries& other);
+  Geometries(Geometries&& other);
   Geometries& operator=(Geometries&& other);
 
   ~Geometries();
@@ -32,7 +28,7 @@ class Geometries {
   bool is_filament(GeometryId id) const;
 
  private:
-  /* Unique pointer to Impl. */
+  /* Pointer to Impl. */
   class Impl;
   struct ImplDeleter {
     void operator()(Impl*);

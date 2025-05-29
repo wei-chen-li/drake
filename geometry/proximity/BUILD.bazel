@@ -374,7 +374,7 @@ drake_cc_library(
     ],
     implementation_deps = [
         "@fcl_internal//:fcl",
-    ]
+    ],
 )
 
 drake_cc_library(

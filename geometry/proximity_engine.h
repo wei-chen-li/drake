@@ -136,7 +136,7 @@ class ProximityEngine {
 
   /* Adds the given `filament` to the engine.
    @param filament  The filament to add.
-   @param id        The id of the geometry in SceneGraph to which this mesh
+   @param id        The id of the geometry in SceneGraph to which this filament
                     belongs. */
   void AddFilamentGeometry(const Filament& filament, GeometryId id);
 
