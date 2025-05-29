@@ -1,11 +1,13 @@
 #include "drake/geometry/proximity/filament_contact_internal.h"
 
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
 #include <fcl/fcl.h>
 
 #include "drake/common/overloaded.h"
+#include "drake/common/type_safe_index.h"
 
 namespace drake {
 namespace geometry {
@@ -17,7 +19,8 @@ using Eigen::Vector3d;
 
 namespace {
 
-/* Helper function that creates a *deep* copy of the given collision object. */
+/* Helper function that creates a *deep* copy of the given collision object.
+ */
 std::unique_ptr<fcl::CollisionObjectd> CloneFclObject(
     const fcl::CollisionObjectd& object_source) {
   const auto& shape_source = *object_source.collisionGeometry();
@@ -40,17 +43,17 @@ std::unique_ptr<fcl::CollisionObjectd> CloneFclObject(
       DRAKE_UNREACHABLE();
   }
 
-  /* A copy of the geometry is passed to FCL, but CollisionObject's constructor
-   resets that copy's local bounding box to fit the _instantiated_ shape. So we
-   retain a pointer to the shape copy long enough after handing it off to FCL to
-   fix it back up to its original AABB. */
+  /* A copy of the geometry is passed to FCL, but CollisionObject's
+   constructor resets that copy's local bounding box to fit the _instantiated_
+   shape. So we retain a pointer to the shape copy long enough after handing
+   it off to FCL to fix it back up to its original AABB. */
   auto object_clone = std::make_unique<fcl::CollisionObjectd>(shape_clone);
 
-  /* The source's local AABB may have been inflated if the underlying object is
-   associated with a compliant hydroelastic shape with a non-zero margin;
-   therefore the AABB that fits the shape may not be what we want. We can't tell
-   simply by looking at the fcl object if this is the case, so, we'll simply
-   copy the source's local AABB verbatim to preserve the effect. */
+  /* The source's local AABB may have been inflated if the underlying object
+   is associated with a compliant hydroelastic shape with a non-zero margin;
+   therefore the AABB that fits the shape may not be what we want. We can't
+   tell simply by looking at the fcl object if this is the case, so, we'll
+   simply copy the source's local AABB verbatim to preserve the effect. */
   shape_clone->aabb_local.min_ = shape_source.aabb_local.min_;
   shape_clone->aabb_local.max_ = shape_source.aabb_local.max_;
   shape_clone->aabb_radius = shape_source.aabb_radius;
@@ -83,6 +86,37 @@ struct FilamentData {
   std::unordered_set<const fcl::CollisionObjectd*> object_pointers;
 };
 
+/* Each added filament to Geometries is indexed by a FilamentIndex. */
+using FilamentIndex = TypeSafeIndex<class FilamentTag>;
+
+/* A struct holding metadata of a filament edge. */
+struct FilamentEdgeData {
+  FilamentEdgeData(FilamentIndex filament_index_in, int edge_index_in)
+      : filament_index(filament_index_in), edge_index(edge_index_in) {
+    DRAKE_THROW_UNLESS(edge_index >= 0);
+  }
+
+  void write_to(fcl::CollisionObjectd* object) {
+    static_assert(sizeof(FilamentIndex) + sizeof(int) == sizeof(intptr_t));
+    const intptr_t data =
+        (intptr_t{filament_index} << (sizeof(int) * 8)) | intptr_t{edge_index};
+    static_assert(sizeof(intptr_t) == sizeof(void*));
+    object->setUserData(reinterpret_cast<void*>(data));
+  }
+
+  static FilamentEdgeData read_from(const fcl::CollisionObjectd& object) {
+    // A mask 0x00000000FFFFFFFF.
+    constexpr intptr_t kEdgeIndexMask = (intptr_t{1} << (sizeof(int) * 8)) - 1;
+    const intptr_t data = reinterpret_cast<intptr_t>(object.getUserData());
+    const FilamentIndex filament_index(data >> (sizeof(int) * 8));
+    const int edge_index = static_cast<int>(data & kEdgeIndexMask);
+    return FilamentEdgeData(filament_index, edge_index);
+  }
+
+  const FilamentIndex filament_index{};
+  const int edge_index{};
+};
+
 }  // namespace
 
 /* Geometries::Impl class. */
@@ -103,6 +137,9 @@ class Geometries::Impl {
             .first->second;
     filament_data.objects.resize(num_edges);
 
+    filament_index_to_id_.push_back(id);
+    FilamentIndex filament_index(ssize(filament_index_to_id_) - 1);
+
     for (int i = 0; i < num_edges; ++i) {
       const int ip1 = (i + 1) % num_nodes;
       const double l = (node_pos.col(ip1) - node_pos.col(i)).norm();
@@ -116,22 +153,24 @@ class Geometries::Impl {
       // Position of the material frame origin expressed in world frame.
       const Vector3d p_WM = (node_pos.col(ip1) - node_pos.col(i)) / 2;
 
-      std::unique_ptr<fcl::CollisionGeometryd> geom;
+      std::unique_ptr<fcl::CollisionGeometryd> shape;
       const auto& cs = filament.cross_section();
       if (std::holds_alternative<Filament::CircularCrossSection>(cs)) {
         const auto& circ_cs = std::get<Filament::CircularCrossSection>(cs);
-        geom = std::make_unique<fcl::Cylinderd>(circ_cs.diameter / 2, l);
+        shape = std::make_unique<fcl::Cylinderd>(circ_cs.diameter / 2, l);
       } else {
         const auto& rect_cs = std::get<Filament::RectangularCrossSection>(cs);
-        geom = std::make_unique<fcl::Boxd>(rect_cs.width, rect_cs.height, l);
+        shape = std::make_unique<fcl::Boxd>(rect_cs.width, rect_cs.height, l);
       }
 
       filament_data.objects[i] =
-          std::make_unique<fcl::CollisionObjectd>(std::move(geom), R_WM, p_WM);
-      fcl::CollisionObjectd* object_pointer = filament_data.objects[i].get();
+          std::make_unique<fcl::CollisionObjectd>(std::move(shape), R_WM, p_WM);
 
-      filament_data.object_pointers.insert(object_pointer);
-      filament_data.tree.registerObject(object_pointer);
+      FilamentEdgeData filament_edge_data(filament_index, i);
+      filament_edge_data.write_to(filament_data.objects[i].get());
+
+      filament_data.object_pointers.insert(filament_data.objects[i].get());
+      filament_data.tree.registerObject(filament_data.objects[i].get());
     }
     filament_data.tree.setup();
   }
@@ -144,7 +183,7 @@ class Geometries::Impl {
 
   std::unique_ptr<Impl, ImplDeleter> Clone() const {
     auto clone = std::unique_ptr<Impl, ImplDeleter>(new Impl());
-    for (const auto& pair : id_to_filament_data_) {
+    for (const auto& pair : this->id_to_filament_data_) {
       GeometryId id = pair.first;
       const FilamentData& filament_data_source = pair.second;
       const bool closed = filament_data_source.closed;
@@ -160,19 +199,20 @@ class Geometries::Impl {
       for (int i = 0; i < num_edges; ++i) {
         filament_data_clone.objects[i] =
             CloneFclObject(*filament_data_source.objects[i]);
-        fcl::CollisionObjectd* cloned_object_pointer =
-            filament_data_clone.objects[i].get();
-
-        filament_data_clone.object_pointers.insert(cloned_object_pointer);
-        filament_data_clone.tree.registerObject(cloned_object_pointer);
+        filament_data_clone.object_pointers.insert(
+            filament_data_clone.objects[i].get());
+        filament_data_clone.tree.registerObject(
+            filament_data_clone.objects[i].get());
       }
       filament_data_clone.tree.setup();
     }
+    clone->filament_index_to_id_ = this->filament_index_to_id_;
     return clone;
   }
 
  private:
   std::unordered_map<GeometryId, FilamentData> id_to_filament_data_;
+  std::vector<GeometryId> filament_index_to_id_;
 };
 
 /* Deleter for Geometries::Impl class. */

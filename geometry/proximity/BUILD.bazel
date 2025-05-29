@@ -368,6 +368,7 @@ drake_cc_library(
         ":collision_filter",
         "//common:essential",
         "//common:overloaded",
+        "//common:type_safe_index",
         "//geometry:geometry_ids",
         "//geometry:geometry_instance",
         "//geometry:shape_specification",
