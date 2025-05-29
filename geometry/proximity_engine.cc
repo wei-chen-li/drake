@@ -284,7 +284,9 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     hydroelastic_geometries_ = other.hydroelastic_geometries_;
     geometries_for_deformable_contact_ =
         other.geometries_for_deformable_contact_;
+    filament_geometries_ = other.filament_geometries_;
     mesh_sdf_data_ = other.mesh_sdf_data_;
+    distance_tolerance_ = other.distance_tolerance_;
     dynamic_tree_.clear();
     dynamic_objects_.clear();
     anchored_tree_.clear();
@@ -333,6 +335,7 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     engine->hydroelastic_geometries_ = this->hydroelastic_geometries_;
     engine->geometries_for_deformable_contact_ =
         this->geometries_for_deformable_contact_;
+    engine->filament_geometries_ = this->filament_geometries_;
     engine->mesh_sdf_data_ = this->mesh_sdf_data_;
     engine->distance_tolerance_ = this->distance_tolerance_;
 
@@ -433,9 +436,9 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
                       "the id {}; its properties cannot be updated",
                       id));
     }
-    if (IsRegisteredAsDeformable(id)) {
-      // Since deformable geometries currently don't depend on proximity
-      // properties for anything we simply return.
+    if (IsRegisteredAsDeformable(id) || IsRegisteredAsFilament(id)) {
+      // Since deformable geometries and filament geometries currently don't
+      // depend on proximity properties for anything we simply return.
       return;
     }
     // TODO(SeanCurtis-TRI): Precondition this with a test -- currently,
