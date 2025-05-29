@@ -235,6 +235,17 @@ class ProximityEngine {
       const std::unordered_map<GeometryId, std::vector<DrivenTriangleMesh>>&
           driven_meshes);
 
+  /* Updates the configuration vector of filament geometries in the engine.
+   @param q_WGs  The mapping from GeometryId `id` to configuration vector of
+                 filament geometry `G` measured and expressed in the the
+                 world frame `W`. If a filament geometry with the given `id`
+                 is registered in the engine (and hasn't been removed), its
+                 configuration is updated to the value in the given map.
+   @pre if a filament geometry with the given `id` is registered, the
+   corresponding q_WG has size (3 * num_nodes + 3 * num_edges). */
+  void UpdateFilamentConfigurationVector(
+      const std::unordered_map<GeometryId, VectorX<T>>& q_WGs);
+
   // ----------------------------------------------------------------------
   /* @name              Signed Distance Queries
   See @ref signed_distance_query "Signed Distance Query" for more details.  */

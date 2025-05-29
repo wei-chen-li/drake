@@ -569,6 +569,17 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
     }
   }
 
+  void UpdateFilamentConfigurationVector(
+      const std::unordered_map<GeometryId, VectorX<T>>& q_WGs) {
+    for (const auto& [id, q_WG] : q_WGs) {
+      if (!IsRegisteredAsFilament(id)) {
+        continue;  // No proximity role for this geometry.
+      }
+      filament_geometries_.UpdateFilamentConfigurationVector(
+          id, ExtractDoubleOrThrow(q_WG));
+    }
+  }
+
   // Implementation of ShapeReifier interface
   using ShapeReifier::ImplementGeometry;
 
@@ -1434,6 +1445,12 @@ void ProximityEngine<T>::UpdateDeformableVertexPositions(
     const std::unordered_map<GeometryId, std::vector<DrivenTriangleMesh>>&
         driven_meshes) {
   impl_->UpdateDeformableVertexPositions(q_WGs, driven_meshes);
+}
+
+template <typename T>
+void ProximityEngine<T>::UpdateFilamentConfigurationVector(
+    const std::unordered_map<GeometryId, VectorX<T>>& q_WGs) {
+  impl_->UpdateFilamentConfigurationVector(q_WGs);
 }
 
 template <typename T>

@@ -1,6 +1,5 @@
 #include "drake/geometry/proximity/filament_contact_internal.h"
 
-#include <fcl/fcl.h>
 #include <gtest/gtest.h>
 
 #include "drake/geometry/proximity_engine.h"

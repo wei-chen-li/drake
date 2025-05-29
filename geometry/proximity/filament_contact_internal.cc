@@ -8,6 +8,7 @@
 
 #include "drake/common/overloaded.h"
 #include "drake/common/type_safe_index.h"
+#include "drake/math/unit_vector.h"
 
 namespace drake {
 namespace geometry {
@@ -27,20 +28,17 @@ std::unique_ptr<fcl::CollisionObjectd> CloneFclObject(
 
   std::shared_ptr<fcl::CollisionGeometryd> shape_clone;
   /* Filaments consist of only cylinder or box shapes. */
-  switch (shape_source.getNodeType()) {
-    case fcl::GEOM_CYLINDER: {
-      const auto& cylinder = dynamic_cast<const fcl::Cylinderd&>(shape_source);
-      shape_clone =
-          std::make_shared<fcl::Cylinderd>(cylinder.radius, cylinder.lz);
-      break;
-    }
-    case fcl::GEOM_BOX: {
-      const auto& box = dynamic_cast<const fcl::Boxd&>(shape_source);
-      shape_clone = std::make_shared<fcl::Boxd>(box.side);
-      break;
-    }
-    default:
-      DRAKE_UNREACHABLE();
+  if (shape_source.getNodeType() == fcl::GEOM_CYLINDER) {
+    const auto& cylinder = dynamic_cast<const fcl::Cylinderd&>(shape_source);
+    shape_clone =
+        std::make_shared<fcl::Cylinderd>(cylinder.radius, cylinder.lz);
+
+  } else if (shape_source.getNodeType() == fcl::GEOM_BOX) {
+    const auto& box = dynamic_cast<const fcl::Boxd&>(shape_source);
+    shape_clone = std::make_shared<fcl::Boxd>(box.side);
+
+  } else {
+    DRAKE_UNREACHABLE();
   }
 
   /* A copy of the geometry is passed to FCL, but CollisionObject's
@@ -142,16 +140,18 @@ class Geometries::Impl {
 
     for (int i = 0; i < num_edges; ++i) {
       const int ip1 = (i + 1) % num_nodes;
-      const double l = (node_pos.col(ip1) - node_pos.col(i)).norm();
-      const Vector3d t = (node_pos.col(ip1) - node_pos.col(i)) / l;
+      const Vector3d node_i = node_pos.col(i);
+      const Vector3d node_ip1 = node_pos.col(ip1);
+      const double l = (node_ip1 - node_i).norm();
+      const Vector3d t = (node_ip1 - node_i) / l;
       const Vector3d& m1 = edge_m1.col(i);
-      // Rotation of material frame.
+      /* Rotation of the material frame. */
       Matrix3d R_WM;
       R_WM.col(0) = m1;
       R_WM.col(1) = t.cross(m1);
       R_WM.col(2) = t;
-      // Position of the material frame origin expressed in world frame.
-      const Vector3d p_WM = (node_pos.col(ip1) - node_pos.col(i)) / 2;
+      /* Position of the material frame origin expressed in world frame. */
+      const Vector3d p_WM = (node_i + node_ip1) / 2;
 
       std::unique_ptr<fcl::CollisionGeometryd> shape;
       const auto& cs = filament.cross_section();
@@ -176,6 +176,56 @@ class Geometries::Impl {
   }
 
   void RemoveGeometry(GeometryId id) { id_to_filament_data_.erase(id); }
+
+  void UpdateFilamentConfigurationVector(
+      GeometryId id, const Eigen::Ref<const Eigen::VectorXd>& q_WG) {
+    DRAKE_THROW_UNLESS(is_filament(id));
+    FilamentData& filament_data = id_to_filament_data_.at(id);
+    const int num_nodes = filament_data.num_nodes;
+    const int num_edges = filament_data.num_edges;
+    /* `q_WG` should hold the node positions and edge m1 directors. */
+    DRAKE_DEMAND(q_WG.size() == num_nodes * 3 + num_edges * 3);
+    for (int i = 0; i < num_edges; ++i) {
+      const int ip1 = (i + 1) % num_nodes;
+      const Vector3d node_i = q_WG.template segment<3>(3 * i);
+      const Vector3d node_ip1 = q_WG.template segment<3>(3 * ip1);
+      const double l = (node_ip1 - node_i).norm();
+      const Vector3d t = (node_ip1 - node_i) / l;
+      const Vector3d m1 = q_WG.template segment<3>(num_nodes * 3 + 3 * i);
+      math::internal::ThrowIfNotOrthonormal<double>(t, m1, __func__);
+      /* Rotation of the material frame. */
+      Matrix3d R_WM;
+      R_WM.col(0) = m1;
+      R_WM.col(1) = t.cross(m1);
+      R_WM.col(2) = t;
+      /* Position of the material frame origin expressed in world frame. */
+      const Vector3d p_WM = (node_i + node_ip1) / 2;
+
+      fcl::CollisionObjectd& object = *filament_data.objects[i];
+      /* Casting away constness should be fine as long as we remember to call
+       computeLocalAABB() after modifying the shape. */
+      fcl::CollisionGeometryd* shape = const_cast<fcl::CollisionGeometryd*>(
+          object.collisionGeometry().get());
+      /* For performance considerations, we use static_cast here and guard with
+       dynamic_cast assertions. */
+      if (object.getNodeType() == fcl::GEOM_CYLINDER) {
+        DRAKE_ASSERT(dynamic_cast<fcl::Cylinderd*>(shape) != nullptr);
+        auto& cylinder = static_cast<fcl::Cylinderd&>(*shape);
+        cylinder.lz = l;
+        cylinder.computeLocalAABB();
+      } else if (object.getNodeType() == fcl::GEOM_BOX) {
+        DRAKE_ASSERT(dynamic_cast<fcl::Boxd*>(shape) != nullptr);
+        auto& box = static_cast<fcl::Boxd&>(*shape);
+        box.side[2] = l;
+        box.computeLocalAABB();
+      } else {
+        DRAKE_UNREACHABLE();
+      }
+      object.setTransform(R_WM, p_WM);
+      object.computeAABB();
+    }
+    filament_data.tree.update();
+  }
 
   bool is_filament(GeometryId id) const {
     return id_to_filament_data_.find(id) != id_to_filament_data_.end();
@@ -246,6 +296,12 @@ void Geometries::AddFilamentGeometry(GeometryId id, const Filament& filament) {
 void Geometries::RemoveGeometry(GeometryId id) {
   DRAKE_DEMAND(impl_ != nullptr);
   impl_->RemoveGeometry(id);
+}
+
+void Geometries::UpdateFilamentConfigurationVector(
+    GeometryId id, const Eigen::Ref<const Eigen::VectorXd>& q_WG) {
+  DRAKE_DEMAND(impl_ != nullptr);
+  impl_->UpdateFilamentConfigurationVector(id, q_WG);
 }
 
 bool Geometries::is_filament(GeometryId id) const {
