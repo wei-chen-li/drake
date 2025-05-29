@@ -372,6 +372,7 @@ drake_cc_library(
         "//geometry:geometry_ids",
         "//geometry:geometry_instance",
         "//geometry:shape_specification",
+        "//math:vector3_util",
     ],
     implementation_deps = [
         "@fcl_internal//:fcl",

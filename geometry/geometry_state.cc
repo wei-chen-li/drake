@@ -1789,6 +1789,7 @@ void GeometryState<T>::FinalizeConfigurationUpdate(
       kinematics_data.driven_mesh_data.at(Role::kProximity);
   proximity_engine->UpdateDeformableVertexPositions(
       kinematics_data.q_WGs, proximity_driven_mesh_data.driven_meshes());
+  proximity_engine->UpdateFilamentConfigurationVector(kinematics_data.q_WGs);
   const internal::DrivenMeshData& perception_driven_mesh_data =
       kinematics_data.driven_mesh_data.at(Role::kPerception);
   for (const auto& [id, meshes] : perception_driven_mesh_data.driven_meshes()) {
