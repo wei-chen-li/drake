@@ -453,38 +453,44 @@ class Filament final : public Shape {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Filament);
 
-  enum CrossSectionType { kRectangular, kElliptical };
+  struct CircularCrossSection {
+    /** Diameter of the circular cross-section. */
+    double diameter;
+  };
 
-  struct CrossSection {
-    /** Type of the cross-section, can be kRectangular or kElliptical. */
-    CrossSectionType type;
+  struct RectangularCrossSection {
     /** Size of the cross-section in the m₁ direction. */
     double width;
     /** Size of the cross-section in the m₂ direction. */
     double height;
   };
 
-  /** Constructs a filament by specifying the position of nodes and the m₁
-   director in the first frame. The m₁ directors in the remaining frames are
-   implicitly defined so that the filament is twist free.
-   @pre `first_edge_m1 ≈ 1`.
-   @pre `first_edge_m1` is perpendicular to the first edge vector.
-   @pre `cross_section.width > 0`.
-   @pre `cross_section.height > 0`.
-   @pydrake_mkdoc_identifier{first_m1} */
+  /** Constructs a twist free filament with circular cross-sectioned by
+   specifying the position of the nodes.
+   @pre `cross_section.radius > 0`.
+   @pydrake_mkdoc_identifier{circ} */
   Filament(bool closed, Eigen::Matrix3Xd node_pos,
-           const Eigen::Vector3d& first_edge_m1,
-           const CrossSection& cross_section);
+           const CircularCrossSection& cross_section);
 
-  /** Constructs a filament by specifying the position of nodes and the m₁
-   directors of all frame.
-   @pre Every column of `edge_m1` is perpendicular to the corresponding
-        edge vector.
-   @pre `cross_section.width > 0`.
-   @pre `cross_section.height > 0`.
-   @pydrake_mkdoc_identifier{all_m1} */
+  /** Constructs a twist free filament with rectangular cross-section by
+   specifying the position of the nodes. Because the cross-section is not
+   axis-symmetric, the m₁ director of the first frame also need to be specified.
+   @pre `cross_section.width > 0 && cross_section.height > 0`.
+   @pre `‖first_edge_m1‖ ≈ 1`.
+   @pre `first_edge_m1` is perpendicular to the first edge vector.
+   @pydrake_mkdoc_identifier{rect} */
+  Filament(bool closed, Eigen::Matrix3Xd node_pos,
+           const RectangularCrossSection& cross_section,
+           const Eigen::Vector3d& first_edge_m1);
+
+  /** Constructs a filament with rectangular or circular cross-section by
+   specifying the position of nodes and the m₁ directors of all frames.
+   @pre `edge_m1.col(i)` ⊥ `node_pos.col(i+1) - node_pos.col(i)` ∀i.
+   @pre `cross_section` has nonzero size.
+   @pydrake_mkdoc_identifier{general} */
   Filament(bool closed, Eigen::Matrix3Xd node_pos, Eigen::Matrix3Xd edge_m1,
-           const CrossSection& cross_section);
+           const std::variant<CircularCrossSection, RectangularCrossSection>&
+               cross_section);
 
   ~Filament() final;
 
@@ -494,7 +500,10 @@ class Filament final : public Shape {
 
   const Eigen::Matrix3Xd& edge_m1() const { return edge_m1_; }
 
-  const CrossSection& cross_section() const { return cross_section_; }
+  const std::variant<CircularCrossSection, RectangularCrossSection>&
+  cross_section() const {
+    return cross_section_;
+  }
 
  private:
   void DoReify(ShapeReifier*, void*) const final;
@@ -506,7 +515,7 @@ class Filament final : public Shape {
   bool closed_{};
   Eigen::Matrix3Xd node_pos_;
   Eigen::Matrix3Xd edge_m1_;
-  CrossSection cross_section_;
+  std::variant<CircularCrossSection, RectangularCrossSection> cross_section_;
 };
 
 /** Definition of a half space. In its canonical frame, the plane defining the

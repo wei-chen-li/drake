@@ -78,10 +78,10 @@ DeformableBodyId RegisterCantileverBeam(
     node_pos.row(2) = VectorXd::Zero(num_nodes);
     first_edge_m1 = Vector3d(-1, 0, 0);
   }
-  Filament filament(closed, node_pos, first_edge_m1,
-                    Filament::CrossSection{.type = Filament::kRectangular,
-                                           .width = FLAGS_width,
-                                           .height = FLAGS_width});
+  Filament filament(closed, node_pos,
+                    Filament::RectangularCrossSection{.width = FLAGS_width,
+                                                      .height = FLAGS_width},
+                    first_edge_m1);
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
   const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),

@@ -183,10 +183,8 @@ TEST_F(ReifierTest, ReificationDifferentiation) {
 
   Eigen::Matrix3Xd node_pos = Eigen::Matrix3Xd::Zero(3, 2);
   node_pos(0, 1) = 1.0;
-  const Filament filament(
-      false, node_pos, Eigen::Vector3d(0, 1, 0),
-      Filament::CrossSection{
-          .type = Filament::kRectangular, .width = 0.02, .height = 0.01});
+  const Filament filament(false, node_pos,
+                          Filament::CircularCrossSection{.diameter = 0.01});
   filament.Reify(this);
   EXPECT_FALSE(sphere_made_);
   EXPECT_FALSE(half_space_made_);

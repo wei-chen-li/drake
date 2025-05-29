@@ -266,12 +266,12 @@ lcmt_viewer_geometry_data MakeDeformableSurfaceMesh(
  geometry described by the input parameters. The geometry data message is marked
  as a FILAMENT.
 
- @param[in] name                The name of the geometry.
- @param[in] reference_filament  The reference filament containing the
-                                cross-section information.
- @param[in] configuration       The configuration containing the position of all
-                                nodes and the m₁ of all frames.
- @param[in] color               The diffuse color of the geometry. */
+ @param[in] name           The name of the geometry.
+ @param[in] filament       The filament containing the cross-section
+                           information.
+ @param[in] configuration  The configuration containing the position of all
+                           nodes and the m₁ of all frames.
+ @param[in] color          The diffuse color of the geometry. */
 template <typename T>
 lcmt_viewer_geometry_data MakeDeformableFilament(
     const std::string& name, const Filament& reference_filament,
@@ -293,7 +293,6 @@ lcmt_viewer_geometry_data MakeDeformableFilament(
   const bool closed = reference_filament.closed();
   const int num_nodes = reference_filament.node_pos().cols();
   const int num_edges = reference_filament.edge_m1().cols();
-  const Filament::CrossSection& cs = reference_filament.cross_section();
   DRAKE_DEMAND(configuration.size() == num_nodes * 3 + num_edges * 3);
 
   // We can define the filament in the float data as:
@@ -303,9 +302,17 @@ lcmt_viewer_geometry_data MakeDeformableFilament(
   geometry_data.float_data.emplace_back(closed);
   geometry_data.float_data.emplace_back(num_nodes);
   geometry_data.float_data.emplace_back(num_edges);
-  geometry_data.float_data.emplace_back(cs.type);
-  geometry_data.float_data.emplace_back(cs.width);
-  geometry_data.float_data.emplace_back(cs.height);
+  std::visit(overloaded{[&](const Filament::CircularCrossSection& cs) {
+                          geometry_data.float_data.emplace_back(0);
+                          geometry_data.float_data.emplace_back(cs.diameter);
+                          geometry_data.float_data.emplace_back(cs.diameter);
+                        },
+                        [&](const Filament::RectangularCrossSection& cs) {
+                          geometry_data.float_data.emplace_back(1);
+                          geometry_data.float_data.emplace_back(cs.width);
+                          geometry_data.float_data.emplace_back(cs.height);
+                        }},
+             reference_filament.cross_section());
   for (int i = 0; i < configuration.size(); ++i) {
     geometry_data.float_data.push_back(ExtractDoubleOrThrow(configuration[i]));
   }

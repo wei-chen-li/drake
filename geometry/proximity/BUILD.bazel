@@ -367,6 +367,7 @@ drake_cc_library(
     deps = [
         ":collision_filter",
         "//common:essential",
+        "//common:overloaded",
         "//geometry:geometry_ids",
         "//geometry:geometry_instance",
         "//geometry:shape_specification",
@@ -669,6 +670,7 @@ drake_cc_library(
     hdrs = ["make_filament_mesh.h"],
     deps = [
         ":triangle_surface_mesh",
+        "//common:overloaded",
         "//geometry:shape_specification",
         "//math:frame_transport",
     ],
