@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "drake/common/overloaded.h"
 #include "drake/geometry/proximity/volume_mesh.h"
 #include "drake/math/axis_angle.h"
 #include "drake/math/frame_transport.h"
@@ -673,14 +674,15 @@ DeformableModel<T>::BuildFilamentDerModel(
   builder.SetDampingCoefficients(config.mass_damping_coefficient(),
                                  config.stiffness_damping_coefficient());
 
-  const geometry::Filament::CrossSection& cs = filament_G.cross_section();
-  if (cs.type == geometry::Filament::CrossSectionType::kRectangular) {
-    builder.SetRectangularCrossSection(cs.width, cs.height);
-  } else if (cs.type == geometry::Filament::CrossSectionType::kElliptical) {
-    builder.SetEllipticalCrossSection(cs.width / 2, cs.height / 2);
-  } else {
-    DRAKE_UNREACHABLE();
-  }
+  std::visit(
+      overloaded{
+          [&builder](const geometry::Filament::CircularCrossSection& cs) {
+            builder.SetCircularCrossSection(cs.diameter / 2);
+          },
+          [&builder](const geometry::Filament::RectangularCrossSection& cs) {
+            builder.SetRectangularCrossSection(cs.width, cs.height);
+          }},
+      filament_G.cross_section());
 
   std::unique_ptr<der::DerModel<T>> der_model = builder.Build();
   der_models_.emplace(id, std::move(der_model));

@@ -444,10 +444,13 @@ class _ViewerApplet:
         closed = int(geom.float_data[0])
         num_nodes = int(geom.float_data[1])
         num_edges = int(geom.float_data[2])
-        cross_section = Filament.CrossSection(
-            type=Filament.CrossSectionType(int(geom.float_data[3])),
-            width=geom.float_data[4],
-            height=geom.float_data[5])
+        if int(geom.float_data[3]) == 0:
+            cross_section = Filament.CircularCrossSection(
+                diameter=geom.float_data[4])
+        else:
+            cross_section = Filament.RectangularCrossSection(
+                width=geom.float_data[4], height=geom.float_data[5])
+
         offset = 6
         node_pos = np.array(geom.float_data[offset:offset+3*num_nodes])
         node_pos = np.reshape(node_pos, (3, num_nodes), order='F')

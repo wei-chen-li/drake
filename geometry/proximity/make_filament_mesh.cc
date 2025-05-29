@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "drake/common/overloaded.h"
 #include "drake/math/frame_transport.h"
 
 namespace drake {
@@ -87,29 +88,31 @@ TriangleSurfaceMesh<T> MakeFilamentSurfaceMesh(const Filament& filament) {
                                         : filament.node_pos().cols() - 1));
 
   /* Find the cross-section vertices in the cross-section frame.  */
-  const Filament::CrossSection& cs = filament.cross_section();
-  Eigen::Matrix3X<T> cs_vertices;
-  if (cs.type == Filament::CrossSectionType::kRectangular) {
-    cs_vertices.resize(3, 4);
-    const T w = cs.width;
-    const T h = cs.height;
-    // clang-format off
-    cs_vertices << -w / 2.0,  w / 2.0, w / 2.0, -w / 2.0,
-                   -h / 2.0, -h / 2.0, h / 2.0,  h / 2.0,
-                        0.0,      0.0,     0.0,      0.0;
-    // clang-format on
-  } else if (cs.type == Filament::CrossSectionType::kElliptical) {
-    const int kN = 20;  // TODO(wei-chen): Choose this number dynamically.
-    cs_vertices.resize(3, kN);
-    auto theta = VectorX<T>::LinSpaced(kN + 1, 0, 2 * M_PI).head(kN).array();
-    const T a = cs.width / 2.0;
-    const T b = cs.height / 2.0;
-    cs_vertices.row(0) = a * cos(theta);
-    cs_vertices.row(1) = b * sin(theta);
-    cs_vertices.row(2) = VectorX<T>::Zero(kN);
-  } else {
-    DRAKE_UNREACHABLE();
-  }
+  const Eigen::Matrix3X<T> cs_vertices = std::visit(
+      overloaded{
+          [](const Filament::RectangularCrossSection& cs) {
+            Eigen::Matrix3X<T> vertices(3, 4);
+            const T w = cs.width;
+            const T h = cs.height;
+            // clang-format off
+            vertices << -w / 2.0,  w / 2.0, w / 2.0, -w / 2.0,
+                        -h / 2.0, -h / 2.0, h / 2.0,  h / 2.0,
+                             0.0,      0.0,     0.0,      0.0;
+            // clang-format on
+            return vertices;
+          },
+          [](const Filament::CircularCrossSection& cs) {
+            const int kN =
+                20;  // TODO(wei-chen): Choose this number dynamically.
+            Eigen::Matrix3X<T> vertices(3, kN);
+            auto theta =
+                VectorX<T>::LinSpaced(kN + 1, 0, 2 * M_PI).head(kN).array();
+            vertices.row(0) = 0.5 * cs.diameter * cos(theta);
+            vertices.row(1) = 0.5 * cs.diameter * sin(theta);
+            vertices.row(2) = VectorX<T>::Zero(kN);
+            return vertices;
+          }},
+      filament.cross_section());
 
   /* Find the tangent and m1 vector of the edge frames. */
   std::vector<Vector3<T>> edge_t;

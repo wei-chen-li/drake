@@ -88,7 +88,8 @@ std::string repr(const Eigen::Matrix3Xd& mat) {
   for (int i = 0; i < mat.rows(); ++i) {
     ss << '[';
     for (int j = 0; j < mat.cols(); ++j) {
-      ss << mat(i, j);
+      // Avoid displaying -0.0.
+      ss << (mat(i, j) != 0.0 ? mat(i, j) : 0.0);
       if (j < mat.cols() - 1) ss << ',';
     }
     ss << ']';
@@ -240,16 +241,37 @@ std::string Ellipsoid::do_to_string() const {
 }
 
 Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
-                   const Eigen::Vector3d& first_edge_m1_in,
-                   const CrossSection& cross_section)
+                   const CircularCrossSection& cross_section)
     : closed_(closed),
       node_pos_(std::move(node_pos)),
       cross_section_(cross_section) {
-  DRAKE_THROW_UNLESS(
-      cross_section.type == Filament::CrossSectionType::kRectangular ||
-      cross_section.type == Filament::CrossSectionType::kElliptical);
-  DRAKE_THROW_UNLESS(cross_section.width > 0);
-  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  DRAKE_THROW_UNLESS(cross_section.diameter > 0);
+  const int num_nodes = node_pos_.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  const int num_edges = closed ? num_nodes : num_nodes - 1;
+  Eigen::Matrix3Xd edge_t(3, num_edges);
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    const double edge_length = (node_pos_.col(ip1) - node_pos_.col(i)).norm();
+    if (edge_length < 1e-10) {
+      throw std::invalid_argument(fmt::format(
+          "Nodes {} and {} have a distance value of {}, computing the unit "
+          "tangent from it would cause numerical problems.",
+          i, ip1, edge_length));
+    }
+    edge_t.col(i) = (node_pos_.col(ip1) - node_pos_.col(i)) / edge_length;
+  }
+  edge_m1_.resize(3, num_edges);
+  math::SpaceParallelFrameTransport<double>(edge_t, std::nullopt, &edge_m1_);
+}
+
+Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
+                   const RectangularCrossSection& cross_section,
+                   const Eigen::Vector3d& first_edge_m1_in)
+    : closed_(closed),
+      node_pos_(std::move(node_pos)),
+      cross_section_(cross_section) {
+  DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
   const int num_nodes = node_pos_.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
   const int num_edges = closed ? num_nodes : num_nodes - 1;
@@ -281,16 +303,20 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
 }
 
 Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
-                   Eigen::Matrix3Xd edge_m1, const CrossSection& cross_section)
+                   Eigen::Matrix3Xd edge_m1,
+                   const std::variant<CircularCrossSection,
+                                      RectangularCrossSection>& cross_section)
     : closed_(closed),
       node_pos_(std::move(node_pos)),
       edge_m1_(std::move(edge_m1)),
       cross_section_(cross_section) {
-  DRAKE_THROW_UNLESS(
-      cross_section.type == Filament::CrossSectionType::kRectangular ||
-      cross_section.type == Filament::CrossSectionType::kElliptical);
-  DRAKE_THROW_UNLESS(cross_section.width > 0);
-  DRAKE_THROW_UNLESS(cross_section.height > 0);
+  std::visit(overloaded{[](const CircularCrossSection cs) {
+                          DRAKE_THROW_UNLESS(cs.diameter > 0);
+                        },
+                        [](const RectangularCrossSection cs) {
+                          DRAKE_THROW_UNLESS(cs.width > 0 && cs.height > 0);
+                        }},
+             cross_section);
   const int num_nodes = node_pos_.cols();
   const int num_edges = edge_m1_.cols();
   DRAKE_THROW_UNLESS(num_nodes >= 2);
@@ -331,15 +357,23 @@ Filament::Filament(bool closed, Eigen::Matrix3Xd node_pos,
 }
 
 std::string Filament::do_to_string() const {
-  const std::string cross_section_type =
-      cross_section().type == CrossSectionType::kRectangular ? "kRectangular"
-                                                             : "kElliptical";
   // Note: The string should be able to be parsed by python eval().
+  const std::string cross_section_repr = std::visit(
+      overloaded{[](const CircularCrossSection cs) {
+                   return fmt::format(
+                       "Filament.CircularCrossSection(diameter={})",
+                       cs.diameter);
+                 },
+                 [](const RectangularCrossSection cs) {
+                   return fmt::format(
+                       "Filament.RectangularCrossSection(width={}, height={})",
+                       cs.width, cs.height);
+                 }},
+      cross_section());
   return fmt::format(
-      "Filament(closed={}, node_pos={}, edge_m1={}, cross_section="
-      "Filament.CrossSection(type=Filament.{}, width={}, height={}))",
+      "Filament(closed={}, node_pos={}, edge_m1={}, cross_section={})",
       static_cast<int>(closed_), repr(node_pos_), repr(edge_m1_),
-      cross_section_type, cross_section_.width, cross_section_.height);
+      cross_section_repr);
 }
 
 HalfSpace::HalfSpace() = default;
@@ -516,15 +550,14 @@ double CalcMeshVolume(const Mesh& mesh) {
 }
 
 double CalcFilamentVolume(const Filament& filament) {
-  double area = 0;
-  const Filament::CrossSection& cs = filament.cross_section();
-  if (cs.type == Filament::CrossSectionType::kRectangular) {
-    area = cs.width * cs.height;
-  } else if (cs.type == Filament::CrossSectionType::kElliptical) {
-    area = cs.width * cs.height * M_PI / 4;
-  } else {
-    DRAKE_UNREACHABLE();
-  }
+  const double area = std::visit(
+      overloaded{[](const Filament::CircularCrossSection cross_section) {
+                   return std::pow(cross_section.diameter, 2) * M_PI / 4;
+                 },
+                 [](const Filament::RectangularCrossSection cross_section) {
+                   return cross_section.width * cross_section.height;
+                 }},
+      filament.cross_section());
 
   const Eigen::Matrix3Xd& node_pos = filament.node_pos();
   const int num_nodes = node_pos.cols();

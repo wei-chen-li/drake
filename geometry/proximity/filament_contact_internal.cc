@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "drake/common/overloaded.h"
+
 namespace drake {
 namespace geometry {
 namespace internal {
@@ -36,7 +38,6 @@ class Geometries::Impl {
 
   void AddFilamentGeometry(GeometryId id, const Filament& filament) {
     DRAKE_THROW_UNLESS(!is_filament(id));
-    const Filament::CrossSection& cs = filament.cross_section();
     const Eigen::Matrix3Xd& node_pos = filament.node_pos();
     const Eigen::Matrix3Xd& edge_m1 = filament.edge_m1();
     const int num_nodes = node_pos.cols();
@@ -62,19 +63,13 @@ class Geometries::Impl {
       const Vector3d p_WM = (node_pos.col(ip1) - node_pos.col(i)) / 2;
 
       std::unique_ptr<fcl::CollisionGeometryd> geom;
-      if (cs.type == Filament::CrossSectionType::kRectangular) {
-        geom = std::make_unique<fcl::Boxd>(cs.width, cs.height, l);
-      } else if (cs.type == Filament::CrossSectionType::kElliptical &&
-                 cs.width == cs.height) {
-        geom = std::make_unique<fcl::Cylinderd>(cs.width / 2, l);
-      } else if (cs.type == Filament::CrossSectionType::kElliptical &&
-                 cs.width != cs.height) {
-        throw std::logic_error(
-            "Filament with elliptical cross-section is not supported by the "
-            "collision engine yet. Consider using a circular or rectangular "
-            "cross-section to approximate it.");
+      const auto& cs = filament.cross_section();
+      if (std::holds_alternative<Filament::CircularCrossSection>(cs)) {
+        const auto& circ_cs = std::get<Filament::CircularCrossSection>(cs);
+        geom = std::make_unique<fcl::Cylinderd>(circ_cs.diameter / 2, l);
       } else {
-        DRAKE_UNREACHABLE();
+        const auto& rect_cs = std::get<Filament::RectangularCrossSection>(cs);
+        geom = std::make_unique<fcl::Boxd>(rect_cs.width, rect_cs.height, l);
       }
 
       objects[i] =
