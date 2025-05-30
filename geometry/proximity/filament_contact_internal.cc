@@ -145,6 +145,7 @@ class Geometries::Impl {
       const double l = (node_ip1 - node_i).norm();
       const Vector3d t = (node_ip1 - node_i) / l;
       const Vector3d& m1 = edge_m1.col(i);
+      math::internal::ThrowIfNotOrthonormal(t, m1, __func__);
       /* Rotation of the material frame. */
       Matrix3d R_WM;
       R_WM.col(0) = m1;
@@ -192,7 +193,7 @@ class Geometries::Impl {
       const double l = (node_ip1 - node_i).norm();
       const Vector3d t = (node_ip1 - node_i) / l;
       const Vector3d m1 = q_WG.template segment<3>(num_nodes * 3 + 3 * i);
-      math::internal::ThrowIfNotOrthonormal<double>(t, m1, __func__);
+      math::internal::ThrowIfNotOrthonormal(t, m1, __func__);
       /* Rotation of the material frame. */
       Matrix3d R_WM;
       R_WM.col(0) = m1;
