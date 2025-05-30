@@ -8,9 +8,9 @@ namespace math {
 /** Returns the rotation of `vec` around the specified `axis` by `angle`.
  @pre `‖axis‖ ≈ 1`. */
 template <typename T>
-Eigen::Vector3<T> RotateAxisAngle(
-    const Eigen::Ref<const Eigen::Vector3<T>>& vec,
-    const Eigen::Ref<const Eigen::Vector3<T>>& axis, const T& angle);
+Eigen::Vector3<T> RotateAxisAngle(const Eigen::Vector3<T>& vec,
+                                  const Eigen::Vector3<T>& axis,
+                                  const T& angle);
 
 /** Returns the signed angle of rotation from `vec1` to `vec2` around a given
  `axis`. The signed angle is in the range (−π, π]. The angle is positive if the
@@ -21,9 +21,9 @@ Eigen::Vector3<T> RotateAxisAngle(
  @pre `vec1.dot(axis) ≈ 0`.
  @pre `vec2.dot(axis) ≈ 0`. */
 template <typename T>
-T SignedAngleAroundAxis(const Eigen::Ref<const Eigen::Vector3<T>>& vec1,
-                        const Eigen::Ref<const Eigen::Vector3<T>>& vec2,
-                        const Eigen::Ref<const Eigen::Vector3<T>>& axis);
+T SignedAngleAroundAxis(const Eigen::Vector3<T>& vec1,
+                        const Eigen::Vector3<T>& vec2,
+                        const Eigen::Vector3<T>& axis);
 
 }  // namespace math
 }  // namespace drake
