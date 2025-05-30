@@ -180,7 +180,8 @@ drake_cc_library(
         ":der_state",
         ":der_structural_property",
         ":der_undeformed_state",
-        "//multibody/plant:force_density_field",
+        "//multibody/fem:force_density_field_base",
+        "//multibody/tree",
     ],
 )
 
