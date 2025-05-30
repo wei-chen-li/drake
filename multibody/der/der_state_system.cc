@@ -83,8 +83,8 @@ void CompleteFrames(
     const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& t,
     const Eigen::Ref<const Eigen::Matrix<T, 3, Eigen::Dynamic>>& d1,
     EigenPtr<Eigen::Matrix<T, 3, Eigen::Dynamic>> d2) {
-  DRAKE_ASSERT(d2 != nullptr);
-  DRAKE_ASSERT(t.cols() == d1.cols() && d1.cols() == d2->cols());
+  DRAKE_THROW_UNLESS(d2 != nullptr);
+  DRAKE_THROW_UNLESS(t.cols() == d1.cols() && d1.cols() == d2->cols());
   for (int i = 0; i < t.cols(); ++i) {
     math::internal::ThrowIfNotOrthonormal<T>(t.col(i), d1.col(i), __func__);
     d2->col(i) = t.col(i).cross(d1.col(i));
@@ -94,7 +94,7 @@ void CompleteFrames(
 
 /* Remove the derivatives for all entries in the AutoDiffXd matrix. */
 void RemoveDerivatives(EigenPtr<Eigen::MatrixX<AutoDiffXd>> mat) {
-  DRAKE_ASSERT(mat != nullptr);
+  DRAKE_THROW_UNLESS(mat != nullptr);
   for (int j = 0; j < mat->cols(); ++j) {
     for (int i = 0; i < mat->rows(); ++i) {
       (*mat)(i, j).derivatives().setZero();
