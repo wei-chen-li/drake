@@ -33,7 +33,7 @@ const std::array<QuadraturePair, 5>& GaussQuadrature() {
 template <typename T>
 ExternalForceField<T>::ExternalForceField(
     const systems::Context<T>* plant_context,
-    std::vector<const ForceDensityField<T>*> force_density_fields)
+    std::vector<const ForceDensityFieldBase<T>*> force_density_fields)
     : plant_context_(plant_context),
       force_density_fields_(std::move(force_density_fields)) {
   DRAKE_THROW_UNLESS(plant_context != nullptr);
@@ -52,7 +52,7 @@ ExternalForceVector<T> ExternalForceField<T>::operator()(
 template <typename T>
 ExternalForceVector<T>::ExternalForceVector(
     const systems::Context<T>* plant_context,
-    const std::vector<const ForceDensityField<T>*>* force_density_fields,
+    const std::vector<const ForceDensityFieldBase<T>*>* force_density_fields,
     const DerStructuralProperty<T>* prop,
     const DerUndeformedState<T>* undeformed, const DerState<T>* state)
     : plant_context_(plant_context),
@@ -89,7 +89,7 @@ Eigen::Ref<Eigen::VectorX<T>> ExternalForceVector<T>::ScaleAndAddToVector(
   const auto& l = state_->get_edge_length();
   const auto& l_undeformed = undeformed_->get_edge_length();
 
-  for (const ForceDensityField<T>* force_density_field :
+  for (const ForceDensityFieldBase<T>* force_density_field :
        *force_density_fields_) {
     for (int i = 0; i < state_->num_edges(); ++i) {
       const int ip1 = (i + 1) % state_->num_nodes();

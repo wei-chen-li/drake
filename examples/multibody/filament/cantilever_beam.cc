@@ -3,8 +3,6 @@
 #include <gflags/gflags.h>
 
 #include "drake/geometry/drake_visualizer.h"
-#include "drake/multibody/plant/deformable_model.h"
-#include "drake/multibody/plant/force_density_field.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
 #include "drake/systems/analysis/simulator.h"

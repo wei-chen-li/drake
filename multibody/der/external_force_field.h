@@ -5,14 +5,14 @@
 #include "drake/multibody/der/der_state.h"
 #include "drake/multibody/der/der_structural_property.h"
 #include "drake/multibody/der/der_undeformed_state.h"
-#include "drake/multibody/plant/force_density_field.h"
+#include "drake/multibody/fem/force_density_field_base.h"
 
 namespace drake {
 namespace multibody {
 namespace der {
 namespace internal {
 
-// Forward declaration.
+/* Forward declaration. */
 template <typename T>
 class ExternalForceVector;
 
@@ -31,7 +31,7 @@ class ExternalForceField {
 
   ExternalForceField(
       const systems::Context<T>* plant_context,
-      std::vector<const ForceDensityField<T>*> force_density_fields);
+      std::vector<const ForceDensityFieldBase<T>*> force_density_fields);
 
   /* Returns an object representing the external generalized force evaluated at
    the given `state`.
@@ -46,7 +46,7 @@ class ExternalForceField {
 
  private:
   const systems::Context<T>* plant_context_;
-  std::vector<const ForceDensityField<T>*> force_density_fields_;
+  std::vector<const ForceDensityFieldBase<T>*> force_density_fields_;
 };
 
 /* Class returned by ExternalForceField::ComputeForce(). */
@@ -78,7 +78,7 @@ class ExternalForceVector {
 
   ExternalForceVector(
       const systems::Context<T>* plant_context,
-      const std::vector<const ForceDensityField<T>*>* force_density_fields,
+      const std::vector<const ForceDensityFieldBase<T>*>* force_density_fields,
       const DerStructuralProperty<T>* prop,
       const DerUndeformedState<T>* undeformed, const DerState<T>* state);
 
@@ -91,7 +91,7 @@ class ExternalForceVector {
       const T& scale, EigenPtr<Eigen::VectorX<T>> other) const;
 
   const systems::Context<T>* plant_context_;
-  const std::vector<const ForceDensityField<T>*>* force_density_fields_;
+  const std::vector<const ForceDensityFieldBase<T>*>* force_density_fields_;
   const DerStructuralProperty<T>* prop_;
   const DerUndeformedState<T>* undeformed_;
   const DerState<T>* state_;
