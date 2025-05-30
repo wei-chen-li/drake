@@ -35,8 +35,8 @@ int DerSolver<T>::AdvanceOneTimeStep(
       linear_solver = scratch_.linear_solver;
   Eigen::VectorX<T>& b = scratch_.b;
   const int num_dofs = model_->num_dofs();
-  DRAKE_ASSERT(der_model_scratch != nullptr);
-  DRAKE_ASSERT(b.size() ==
+  DRAKE_DEMAND(der_model_scratch != nullptr);
+  DRAKE_DEMAND(b.size() ==
                (model_->has_closed_ends() ? num_dofs : num_dofs + 1));
 
   const Eigen::VectorX<T>& z = integrator_->GetUnknowns(prev_state);

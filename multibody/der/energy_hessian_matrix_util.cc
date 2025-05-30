@@ -15,8 +15,8 @@ namespace {
 template <typename T>
 [[nodiscard]] bool IsMatrixSizeOk(const Block4x4SparseSymmetricMatrix<T>& mat,
                                   int num_dofs) {
-  DRAKE_ASSERT(num_dofs > 0);
-  DRAKE_ASSERT(mat.rows() == mat.cols());
+  DRAKE_DEMAND(num_dofs > 0);
+  DRAKE_DEMAND(mat.rows() == mat.cols());
   if (mat.rows() == num_dofs) {
     return true;
   } else if (mat.rows() == num_dofs + 1) {

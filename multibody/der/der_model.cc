@@ -35,8 +35,8 @@ DerModel<T>::Builder::AddFirstEdge(
   node_positions_.push_back(x_1);
   d1_0_ = d1_0;
   is_first_edge_added_ = true;
-  DRAKE_ASSERT(node_positions_.size() == 2);
-  DRAKE_ASSERT(edge_angles_.size() == 1);
+  DRAKE_DEMAND(node_positions_.size() == 2);
+  DRAKE_DEMAND(edge_angles_.size() == 1);
   return {DerNodeIndex(0), DerEdgeIndex(0), DerNodeIndex(1)};
 }
 
@@ -195,7 +195,7 @@ std::unique_ptr<DerModel<T>> DerModel<T>::Builder::Build() {
         DerStructuralProperty<T>::FromEllipticalCrossSection(par[0], par[1], E,
                                                              G, rho);
   }
-  DRAKE_ASSERT(der_structural_property.has_value());
+  DRAKE_DEMAND(der_structural_property.has_value());
 
   is_built_ = true;
   return std::unique_ptr<DerModel<T>>(new DerModel<T>(
@@ -382,7 +382,7 @@ DerModel<T>::ComputeTangentMatrix(const internal::DerState<T>& state,
 
   /* If tangent_matrix is larger than num_dofs() by one, set the last diagonal
    entry to one. */
-  DRAKE_ASSERT(tangent_matrix.rows() ==
+  DRAKE_DEMAND(tangent_matrix.rows() ==
                (has_closed_ends() ? num_dofs() : num_dofs() + 1));
   if (tangent_matrix.rows() == num_dofs() + 1) {
     const int i = tangent_matrix.block_rows() - 1;
