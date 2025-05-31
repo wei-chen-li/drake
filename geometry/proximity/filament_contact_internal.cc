@@ -229,7 +229,7 @@ class Geometries::Impl {
   }
 
   bool is_filament(GeometryId id) const {
-    return id_to_filament_data_.find(id) != id_to_filament_data_.end();
+    return id_to_filament_data_.contains(id);
   }
 
   std::unique_ptr<Impl, ImplDeleter> Clone() const {
