@@ -14,6 +14,7 @@ drake_cc_package_library(
     deps = [
         ":contact_surface",
         ":deformable_contact",
+        ":filament_contact",
         ":penetration_as_point_pair",
         ":signed_distance_pair",
         ":signed_distance_to_point",
@@ -77,12 +78,30 @@ drake_cc_library(
     ],
 )
 
+drake_cc_library(
+    name = "filament_contact",
+    srcs = ["filament_contact.cc"],
+    hdrs = ["filament_contact.h"],
+    deps = [
+        "//common:essential",
+        "//geometry:geometry_ids",
+    ],
+)
+
 drake_cc_googletest(
     name = "deformable_contact_test",
     deps = [
         ":deformable_contact",
         "//common/test_utilities:eigen_matrix_compare",
         "//geometry/proximity:make_box_mesh",
+    ],
+)
+
+drake_cc_googletest(
+    name = "filament_contact_test",
+    deps = [
+        ":filament_contact",
+        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
 
