@@ -30,6 +30,7 @@ drake_cc_package_library(
         ":detect_zero_simplex",
         ":field_intersection",
         ":filament_contact_internal",
+        ":filament_self_contact_filter",
         ":hydroelastic_internal",
         ":inflate_mesh",
         ":make_box_field",
@@ -366,6 +367,7 @@ drake_cc_library(
     hdrs = ["filament_contact_internal.h"],
     deps = [
         ":collision_filter",
+        ":filament_self_contact_filter",
         "//common:essential",
         "//common:overloaded",
         "//common:type_safe_index",
@@ -376,6 +378,18 @@ drake_cc_library(
     ],
     implementation_deps = [
         "@fcl_internal//:fcl",
+    ],
+)
+
+drake_cc_library(
+    name = "filament_self_contact_filter",
+    srcs = ["filament_self_contact_filter.cc"],
+    hdrs = ["filament_self_contact_filter.h"],
+    deps = [
+        "//common:overloaded",
+        "//geometry:shape_specification",
+        "//solvers:mathematical_program",
+        "//solvers:solve",
     ],
 )
 
@@ -1334,6 +1348,13 @@ drake_cc_googletest(
     deps = [
         ":filament_contact_internal",
         "//geometry:proximity_engine",
+    ],
+)
+
+drake_cc_googletest(
+    name = "filament_self_contact_filter_test",
+    deps = [
+        ":filament_self_contact_filter",
     ],
 )
 
