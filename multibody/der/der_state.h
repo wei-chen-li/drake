@@ -236,9 +236,9 @@ class DerState {
    computed via autodiff. Some components of the analytical derivatives are
    intentionally omitted due to their complexity. Hence, we call this function
    to zero out the corresponding parts in the autodiff-based derivatives. */
-  template <typename U = T,
-            std::enable_if_t<std::is_same_v<U, AutoDiffXd>, bool> = true>
-  void FixReferenceFrameDuringAutoDiff() {
+  template <typename T1 = T>
+  std::enable_if_t<std::is_same_v<T1, AutoDiffXd>, void>
+  FixReferenceFrameDuringAutoDiff() {
     der_state_system_->FixReferenceFrameDuringAutoDiff(context_.get_mutable());
   }
 
