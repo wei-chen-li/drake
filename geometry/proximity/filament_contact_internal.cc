@@ -1,6 +1,7 @@
 #include "drake/geometry/proximity/filament_contact_internal.h"
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -65,6 +66,19 @@ std::unique_ptr<fcl::CollisionObjectd> CloneFclObject(
   return object_clone;
 }
 
+/*Helper functions to facilitate exercising FCL's broadphase code. FCL has
+ inconsistent usage of `const`. As such, even though the broadphase structures
+ do not change during collision and distance queries, they are nevertheless
+ declared non-const, requiring Drake to do some const casting in what would
+ otherwise be a const context. */
+template <typename T>
+void FclCollide(const fcl::DynamicAABBTreeCollisionManager<T>& tree1,
+                const fcl::DynamicAABBTreeCollisionManager<T>& tree2,
+                void* cdata, fcl::CollisionCallBack<T> callback) {
+  tree1.collide(const_cast<fcl::DynamicAABBTreeCollisionManager<T>*>(&tree2),
+                cdata, callback);
+}
+
 /* Each filament is represented by a FilamentData struct, which contains the
  collision objects and the AABB tree. Because Drake compiles FCL using hidden
  symbol visibility, keep this struct inside anonymous namespace to avoid
@@ -81,6 +95,7 @@ struct FilamentData {
   const bool closed{};
   const int num_nodes{};
   const int num_edges{};
+  Eigen::Matrix3Xd node_positions;
   fcl::DynamicAABBTreeCollisionManagerd tree;
   std::vector<std::unique_ptr<fcl::CollisionObjectd>> objects;
   std::unordered_set<const fcl::CollisionObjectd*> object_pointers;
@@ -91,36 +106,112 @@ struct FilamentData {
 using FilamentIndex = TypeSafeIndex<class FilamentTag>;
 
 /* A struct holding metadata of a filament edge. */
-struct FilamentEdgeData {
-  FilamentEdgeData(FilamentIndex filament_index_in, int edge_index_in)
-      : filament_index(filament_index_in), edge_index(edge_index_in) {
+class FilamentEdgeData {
+ public:
+  FilamentEdgeData(FilamentIndex filament_index, int edge_index)
+      : filament_index_(filament_index), edge_index_(edge_index) {
     DRAKE_THROW_UNLESS(edge_index >= 0);
   }
 
-  void write_to(fcl::CollisionObjectd* object) {
+  void write_to(fcl::CollisionObjectd* object) const {
     static_assert(sizeof(FilamentIndex) + sizeof(int) == sizeof(intptr_t));
-    const intptr_t data =
-        (intptr_t{filament_index} << (sizeof(int) * 8)) | intptr_t{edge_index};
+    const intptr_t data = (intptr_t{filament_index_} << (sizeof(int) * 8)) |
+                          intptr_t{edge_index_};
     static_assert(sizeof(intptr_t) == sizeof(void*));
     object->setUserData(reinterpret_cast<void*>(data));
   }
 
   static FilamentEdgeData read_from(const fcl::CollisionObjectd& object) {
-    // A mask 0x00000000FFFFFFFF.
-    constexpr intptr_t kEdgeIndexMask = (intptr_t{1} << (sizeof(int) * 8)) - 1;
     const intptr_t data = reinterpret_cast<intptr_t>(object.getUserData());
-    const FilamentIndex filament_index(data >> (sizeof(int) * 8));
-    const int edge_index = static_cast<int>(data & kEdgeIndexMask);
+    FilamentIndex filament_index(data >> (sizeof(int) * 8));
+    constexpr intptr_t kEdgeIndexMask = (intptr_t{1} << (sizeof(int) * 8)) - 1;
+    int edge_index = static_cast<int>(data & kEdgeIndexMask);
     return FilamentEdgeData(filament_index, edge_index);
   }
 
-  const FilamentIndex filament_index{};
-  const int edge_index{};
+  FilamentIndex filament_index() const { return filament_index_; }
+  int edge_index() const { return edge_index_; }
+
+  void swap(FilamentEdgeData& other) {
+    std::swap(filament_index_, other.filament_index_);
+    std::swap(edge_index_, other.edge_index_);
+  }
+
+ private:
+  FilamentIndex filament_index_;
+  int edge_index_;
 };
+
+template <typename T>
+struct FilamentFilamentCollisionCallbackData {
+  FilamentFilamentCollisionCallbackData(
+      const std::vector<GeometryId>* filament_index_to_id_in,
+      const FilamentSelfContactFilter* self_contact_filter_in = nullptr)
+      : filament_index_to_id(filament_index_to_id_in),
+        self_contact_filter(self_contact_filter_in) {
+    DRAKE_THROW_UNLESS(filament_index_to_id != nullptr);
+    request.num_max_contacts = 1;
+    request.enable_contact = true;
+    request.gjk_tolerance = 2e-12;
+    request.gjk_solver_type = fcl::GJKSolverType::GST_LIBCCD;
+  }
+
+  /* Request passed to fcl::collide(). */
+  fcl::CollisionRequestd request;
+  /* Mapping from FilamentIndex to GeometryId. */
+  const std::vector<GeometryId>* const filament_index_to_id;
+  /* Self-contact filter to detemine if two edges of the same filament should
+   detect collision. Is nullptr if two edges belong to different filaments. */
+  const FilamentSelfContactFilter* const self_contact_filter;
+
+  /* Write the contact result to these fields. */
+  std::vector<Vector3<T>> p_WCs;
+  std::vector<Vector3<T>> nhats_BA_W;
+  std::vector<T> signed_distances;
+  std::vector<int> contact_edge_indexes_A;
+  std::vector<int> contact_edge_indexes_B;
+};
+
+template <typename T>
+bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
+                                       fcl::CollisionObjectd* object_B,
+                                       void* callback_data_in) {
+  auto callback_data =
+      static_cast<FilamentFilamentCollisionCallbackData<T>*>(callback_data_in);
+  const std::vector<GeometryId>& filament_index_to_id =
+      *callback_data->filament_index_to_id;
+
+  auto data_A = FilamentEdgeData::read_from(*object_A);
+  auto data_B = FilamentEdgeData::read_from(*object_B);
+  if (filament_index_to_id.at(data_A.filament_index()).get_value() >
+      filament_index_to_id.at(data_B.filament_index()).get_value()) {
+    std::swap(object_A, object_B);
+    std::swap(data_A, data_B);
+  }
+
+  if (data_A.filament_index() == data_B.filament_index()) {
+    DRAKE_DEMAND(callback_data->self_contact_filter != nullptr);
+    if (!callback_data->self_contact_filter->ShouldCollide(
+            data_A.edge_index(), data_B.edge_index())) {
+      return true;
+    }
+  }
+  fcl::CollisionResultd result;
+  fcl::collide(object_A, object_B, callback_data->request, result);
+  if (!result.isCollision()) {
+    return true;
+  }
+  const fcl::Contactd& contact = result.getContact(0);
+  callback_data->p_WCs.emplace_back(contact.pos);
+  callback_data->nhats_BA_W.emplace_back(-contact.normal);
+  callback_data->signed_distances.emplace_back(-contact.penetration_depth);
+  callback_data->contact_edge_indexes_A.push_back(data_A.edge_index());
+  callback_data->contact_edge_indexes_B.push_back(data_B.edge_index());
+  return true;
+}
 
 }  // namespace
 
-/* Geometries::Impl class. */
 class Geometries::Impl {
  public:
   Impl() = default;
@@ -136,6 +227,8 @@ class Geometries::Impl {
         id_to_filament_data_
             .emplace(id, FilamentData(filament.closed(), num_nodes, num_edges))
             .first->second;
+
+    filament_data.node_positions = node_pos;
     filament_data.objects.resize(num_edges);
 
     filament_index_to_id_.push_back(id);
@@ -190,6 +283,9 @@ class Geometries::Impl {
     const int num_edges = filament_data.num_edges;
     /* `q_WG` should hold the node positions and edge m1 directors. */
     DRAKE_DEMAND(q_WG.size() == num_nodes * 3 + num_edges * 3);
+    filament_data.node_positions =
+        Eigen::Map<const Eigen::Matrix3Xd>(q_WG.data(), 3, num_nodes);
+
     for (int i = 0; i < num_edges; ++i) {
       const int ip1 = (i + 1) % num_nodes;
       const Vector3d node_i = q_WG.template segment<3>(3 * i);
@@ -242,8 +338,25 @@ class Geometries::Impl {
           static_cast<const fcl::DynamicAABBTreeCollisionManagerd*>(
               rigid_body_tree));
     }
+    std::map<int64_t, GeometryId> ids;
+    for (const auto& pair : id_to_filament_data_) {
+      GeometryId id = pair.first;
+      ids.emplace(id.get_value(), id);
+    }
     FilamentContact<double> filament_contact;
-    unused(collision_filter);
+    for (auto iter = ids.cbegin(); iter != ids.cend(); ++iter) {
+      GeometryId id = iter->second;
+      AddFilamentSelfContact(id, &filament_contact);
+    }
+    for (auto iter_A = ids.cbegin(); iter_A != ids.cend(); ++iter_A) {
+      for (auto iter_B = std::next(iter_A); iter_B != ids.cend(); ++iter_B) {
+        GeometryId id_A = iter_A->second;
+        GeometryId id_B = iter_B->second;
+        if (!collision_filter.CanCollideWith(id_A, id_B)) continue;
+        AddFilamentFilamentContact(id_A, id_B, &filament_contact);
+      }
+    }
+    // TODO(wei-chen): Implement filament-rigid collision.
     return filament_contact;
   }
 
@@ -283,16 +396,53 @@ class Geometries::Impl {
   }
 
  private:
+  void AddFilamentSelfContact(GeometryId id,
+                              FilamentContact<double>* filament_contact) const {
+    DRAKE_THROW_UNLESS(filament_contact != nullptr);
+    const FilamentData& filament_data = id_to_filament_data_.at(id);
+    FilamentFilamentCollisionCallbackData<double> callback_data(
+        &filament_index_to_id_, &filament_data.self_contact_filter.value());
+    filament_data.tree.collide(&callback_data,
+                               &FilamentFilamentCollisionCallback<double>);
+    if (callback_data.p_WCs.empty()) return;
+    filament_contact->AddFilamentFilamentContact(
+        id, id, std::move(callback_data.p_WCs),
+        std::move(callback_data.nhats_BA_W),
+        std::move(callback_data.signed_distances),
+        std::move(callback_data.contact_edge_indexes_A),
+        std::move(callback_data.contact_edge_indexes_B),
+        filament_data.node_positions, filament_data.node_positions);
+  }
+
+  void AddFilamentFilamentContact(
+      GeometryId id_A, GeometryId id_B,
+      FilamentContact<double>* filament_contact) const {
+    DRAKE_THROW_UNLESS(id_A.get_value() < id_B.get_value());
+    DRAKE_THROW_UNLESS(filament_contact != nullptr);
+    const FilamentData& filament_data_A = id_to_filament_data_.at(id_A);
+    const FilamentData& filament_data_B = id_to_filament_data_.at(id_B);
+    FilamentFilamentCollisionCallbackData<double> callback_data(
+        &filament_index_to_id_);
+    FclCollide(filament_data_A.tree, filament_data_B.tree, &callback_data,
+               &FilamentFilamentCollisionCallback<double>);
+    if (callback_data.p_WCs.empty()) return;
+    filament_contact->AddFilamentFilamentContact(
+        id_A, id_A, std::move(callback_data.p_WCs),
+        std::move(callback_data.nhats_BA_W),
+        std::move(callback_data.signed_distances),
+        std::move(callback_data.contact_edge_indexes_A),
+        std::move(callback_data.contact_edge_indexes_B),
+        filament_data_A.node_positions, filament_data_B.node_positions);
+  }
+
   std::unordered_map<GeometryId, FilamentData> id_to_filament_data_;
   std::vector<GeometryId> filament_index_to_id_;
 };
 
-/* Deleter for Geometries::Impl class. */
 void Geometries::ImplDeleter::operator()(Geometries::Impl* ptr) {
   delete ptr;
 }
 
-/* Geometries class functions delegate to corresponding Impl functions. */
 Geometries::Geometries() {
   impl_ = std::unique_ptr<Impl, ImplDeleter>(new Impl());
 }
