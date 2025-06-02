@@ -1,6 +1,7 @@
 #include "drake/geometry/proximity/filament_contact_internal.h"
 
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -8,6 +9,7 @@
 
 #include "drake/common/overloaded.h"
 #include "drake/common/type_safe_index.h"
+#include "drake/geometry/proximity/filament_self_contact_filter.h"
 #include "drake/math/unit_vector.h"
 
 namespace drake {
@@ -82,6 +84,7 @@ struct FilamentData {
   fcl::DynamicAABBTreeCollisionManagerd tree;
   std::vector<std::unique_ptr<fcl::CollisionObjectd>> objects;
   std::unordered_set<const fcl::CollisionObjectd*> object_pointers;
+  std::optional<FilamentSelfContactFilter> self_contact_filter;
 };
 
 /* Each added filament to Geometries is indexed by a FilamentIndex. */
@@ -174,6 +177,7 @@ class Geometries::Impl {
       filament_data.tree.registerObject(filament_data.objects[i].get());
     }
     filament_data.tree.setup();
+    filament_data.self_contact_filter = FilamentSelfContactFilter(filament);
   }
 
   void RemoveGeometry(GeometryId id) { id_to_filament_data_.erase(id); }
@@ -256,6 +260,8 @@ class Geometries::Impl {
             filament_data_clone.objects[i].get());
       }
       filament_data_clone.tree.setup();
+      filament_data_clone.self_contact_filter =
+          filament_data_source.self_contact_filter;
     }
     clone->filament_index_to_id_ = this->filament_index_to_id_;
     return clone;
