@@ -178,6 +178,20 @@ QueryObject<T>::ComputeDeformableContact(
 }
 
 template <typename T>
+template <typename T1>
+typename std::enable_if_t<std::is_same_v<T1, double>, void>
+QueryObject<T>::ComputeFilamentContact(
+    internal::FilamentContact<T>* filament_contact) const {
+  DRAKE_DEMAND(filament_contact != nullptr);
+  ThrowIfNotCallable();
+
+  FullPoseAndConfigurationUpdate();
+
+  const GeometryState<T>& state = geometry_state();
+  state.ComputeDeformableContact(filament_contact);
+}
+
+template <typename T>
 std::vector<SignedDistancePair<T>>
 QueryObject<T>::ComputeSignedDistancePairwiseClosestPoints(
     const double max_distance) const {

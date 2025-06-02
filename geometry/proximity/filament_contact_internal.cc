@@ -232,6 +232,21 @@ class Geometries::Impl {
     filament_data.tree.update();
   }
 
+  FilamentContact<double> ComputeFilamentContact(
+      const CollisionFilter& collision_filter,
+      const std::vector<const void*>& rigid_body_trees_in) const {
+    std::vector<const fcl::DynamicAABBTreeCollisionManagerd*> rigid_body_trees;
+    for (const void* rigid_body_tree : rigid_body_trees_in) {
+      DRAKE_THROW_UNLESS(rigid_body_tree != nullptr);
+      rigid_body_trees.push_back(
+          static_cast<const fcl::DynamicAABBTreeCollisionManagerd*>(
+              rigid_body_tree));
+    }
+    FilamentContact<double> filament_contact;
+    unused(collision_filter);
+    return filament_contact;
+  }
+
   bool is_filament(GeometryId id) const {
     return id_to_filament_data_.contains(id);
   }
@@ -309,6 +324,13 @@ void Geometries::UpdateFilamentConfigurationVector(
     GeometryId id, const Eigen::Ref<const Eigen::VectorXd>& q_WG) {
   DRAKE_DEMAND(impl_ != nullptr);
   impl_->UpdateFilamentConfigurationVector(id, q_WG);
+}
+
+FilamentContact<double> Geometries::ComputeFilamentContact(
+    const CollisionFilter& collision_filter,
+    const std::vector<const void*>& rigid_body_trees) const {
+  DRAKE_DEMAND(impl_ != nullptr);
+  return impl_->ComputeFilamentContact(collision_filter, rigid_body_trees);
 }
 
 bool Geometries::is_filament(GeometryId id) const {

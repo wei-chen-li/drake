@@ -602,6 +602,13 @@ class GeometryState {
     return geometry_engine_->ComputeDeformableContact(deformable_contact);
   }
 
+  /** Implementation of QueryObject::ComputeFilamentContact().  */
+  template <typename T1 = T>
+  typename std::enable_if_t<std::is_same_v<T1, double>, void>
+  ComputeFilamentContact(internal::FilamentContact<T>* filament_contact) const {
+    return geometry_engine_->ComputeFilamentContact(filament_contact);
+  }
+
   /** Implementation of QueryObject::FindCollisionCandidates().  */
   std::vector<SortedPair<GeometryId>> FindCollisionCandidates() const {
     return geometry_engine_->FindCollisionCandidates();

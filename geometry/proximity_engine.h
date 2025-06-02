@@ -326,6 +326,13 @@ class ProximityEngine {
   typename std::enable_if_t<std::is_same_v<T1, double>, void>
   ComputeDeformableContact(DeformableContact<T>* deformable_contact) const;
 
+  /* Implementation of GeometryState::ComputeFilamentContact(). Assumes
+   the poses of rigid bodies and the configuration of the filament bodies
+   are up-to-date. */
+  template <typename T1 = T>
+  typename std::enable_if_t<std::is_same_v<T1, double>, void>
+  ComputeFilamentContact(FilamentContact<T>* filament_contact) const;
+
   /* Implementation of GeometryState::FindCollisionCandidates().  */
   std::vector<SortedPair<GeometryId>> FindCollisionCandidates() const;
 

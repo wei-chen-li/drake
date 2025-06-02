@@ -1,8 +1,11 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "drake/geometry/geometry_ids.h"
+#include "drake/geometry/proximity/collision_filter.h"
+#include "drake/geometry/query_results/filament_contact.h"
 #include "drake/geometry/shape_specification.h"
 
 namespace drake {
@@ -42,6 +45,19 @@ class Geometries {
    @pre `q_WG` has the correct size. */
   void UpdateFilamentConfigurationVector(
       GeometryId id, const Eigen::Ref<const Eigen::VectorXd>& q_WG);
+
+  /* For each registered filament geometry, computes the contact data including
+   self-contact, contact with other filament geometries and, and contact with
+   rigid body geometries. Assumes the configuration vector of all filament
+   geometries are up to date.
+   @param collision_filter  The collision filter used to determine if two
+                            geometries can collide, with the exception that
+                            filament self-contact is always enabled.
+   @param rigid_body_trees  Pointers to fcl::DynamicAABBTreeCollisionManagerd
+                            trees containing rigid body geometries. */
+  FilamentContact<double> ComputeFilamentContact(
+      const CollisionFilter& collision_filter,
+      const std::vector<const void*>& rigid_body_trees) const;
 
   /* Returns true if a filament geometry with the given `id` exists. */
   bool is_filament(GeometryId id) const;

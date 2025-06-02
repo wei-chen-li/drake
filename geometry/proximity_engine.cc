@@ -897,6 +897,12 @@ class ProximityEngine<T>::Impl : public ShapeReifier {
             collision_filter_);
   }
 
+  void ComputeFilamentContact(FilamentContact<double>* filament_contact) const {
+    DRAKE_THROW_UNLESS(filament_contact != nullptr);
+    *filament_contact = filament_geometries_.ComputeFilamentContact(
+        collision_filter_, {&dynamic_tree_, &anchored_tree_});
+  }
+
   // Testing utilities
 
   bool IsDeepCopy(const Impl& other) const {
@@ -1523,6 +1529,14 @@ ProximityEngine<T>::ComputeDeformableContact(
 }
 
 template <typename T>
+template <typename T1>
+typename std::enable_if_t<std::is_same_v<T1, double>, void>
+ProximityEngine<T>::ComputeFilamentContact(
+    FilamentContact<T>* filament_contact) const {
+  impl_->ComputeFilamentContact(filament_contact);
+}
+
+template <typename T>
 std::vector<SortedPair<GeometryId>>
 ProximityEngine<T>::FindCollisionCandidates() const {
   return impl_->FindCollisionCandidates();
@@ -1583,6 +1597,8 @@ DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
 
 template void ProximityEngine<double>::ComputeDeformableContact<double>(
     DeformableContact<double>*) const;
+template void ProximityEngine<double>::ComputeFilamentContact<double>(
+    FilamentContact<double>*) const;
 
 }  // namespace internal
 }  // namespace geometry

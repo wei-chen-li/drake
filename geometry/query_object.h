@@ -7,6 +7,7 @@
 
 #include "drake/geometry/query_results/contact_surface.h"
 #include "drake/geometry/query_results/deformable_contact.h"
+#include "drake/geometry/query_results/filament_contact.h"
 #include "drake/geometry/query_results/penetration_as_point_pair.h"
 #include "drake/geometry/query_results/signed_distance_pair.h"
 #include "drake/geometry/query_results/signed_distance_to_point.h"
@@ -445,6 +446,19 @@ class QueryObject {
   typename std::enable_if_t<std::is_same_v<T1, double>, void>
   ComputeDeformableContact(
       internal::DeformableContact<T>* deformable_contact) const;
+
+  /** Reports contact information among all filament geometries. It includes
+   contacts between two filament geometries or contacts between a
+   filament geometry and a non-deformable geometry. This function only
+   supports double as the scalar type.
+   @param[out] filament_contact
+     Contains all filament contact data on output. Any data passed in is
+     cleared before the computation.
+   @pre filament_contact != nullptr.
+   @experimental */
+  template <typename T1 = T>
+  typename std::enable_if_t<std::is_same_v<T1, double>, void>
+  ComputeFilamentContact(internal::FilamentContact<T>* filament_contact) const;
 
   /** Applies a conservative culling mechanism to create a subset of all
    possible geometry pairs based on non-zero intersections. A geometry pair

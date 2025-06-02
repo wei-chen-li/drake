@@ -12,7 +12,8 @@ namespace {
 
 GTEST_TEST(hello, world) {
   ProximityEngine<double> engine;
-  unused(engine);
+  FilamentContact<double> filament_contact;
+  engine.ComputeFilamentContact(&filament_contact);
 }
 
 }  // namespace
