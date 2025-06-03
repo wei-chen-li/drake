@@ -15,16 +15,7 @@ using Eigen::Vector3d;
 const GeometryId kIdA = GeometryId::get_new_id();
 const GeometryId kIdB = GeometryId::get_new_id();
 
-GTEST_TEST(FilamentContactGeometryPairTest, EmptyFilamentFilamentContact) {
-  FilamentContactGeometryPair<double> pair(kIdA, kIdB, {}, {}, {}, {}, {}, {},
-                                           {});
-  EXPECT_EQ(pair.id_A().get_value(), kIdA.get_value());
-  EXPECT_EQ(pair.id_B().get_value(), kIdB.get_value());
-  EXPECT_TRUE(pair.is_B_filament());
-  EXPECT_EQ(pair.num_contacts(), 0);
-}
-
-GTEST_TEST(FilamentContactTest, AddFilamentFilamentContact) {
+GTEST_TEST(FilamentContactTest, AddFilamentFilamentContactGeometryPair) {
   const std::vector<Vector3d> p_WCs = {Vector3d(0, 0, 0)};
   const std::vector<Vector3d> nhats_BA_W = {Vector3d(0, 0, 1)};
   const std::vector<double> signed_distances = {-1e-3};
@@ -38,7 +29,7 @@ GTEST_TEST(FilamentContactTest, AddFilamentFilamentContact) {
   node_positions_B.col(1) = Vector3d(0, 1, 0.01);
 
   FilamentContact<double> filament_contact;
-  filament_contact.AddFilamentFilamentContact(
+  filament_contact.AddFilamentFilamentContactGeometryPair(
       kIdA, kIdB, p_WCs, nhats_BA_W, signed_distances, contact_edge_indexes_A,
       contact_edge_indexes_B, node_positions_A, node_positions_B);
   EXPECT_EQ(filament_contact.contact_geometry_pairs().size(), 1);

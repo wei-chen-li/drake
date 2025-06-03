@@ -349,6 +349,7 @@ class Geometries::Impl {
               rigid_body_tree));
     }
     FilamentContact<double> filament_contact;
+
     const auto cbegin = id_to_filament_data_.cbegin();
     const auto cend = id_to_filament_data_.cend();
     for (auto iter_A = cbegin; iter_A != cend; ++iter_A) {
@@ -356,7 +357,7 @@ class Geometries::Impl {
         GeometryId id_A = iter_A->first;
         GeometryId id_B = iter_B->first;
         if (id_A == id_B || collision_filter.CanCollideWith(id_A, id_B))
-          AddFilamentFilamentContact(id_A, id_B, &filament_contact);
+          AddFilamentFilamentContactGeometryPair(id_A, id_B, &filament_contact);
       }
     }
     // TODO(wei-chen): Implement filament-rigid collision.
@@ -399,7 +400,7 @@ class Geometries::Impl {
   }
 
  private:
-  void AddFilamentFilamentContact(
+  void AddFilamentFilamentContactGeometryPair(
       GeometryId id_A, GeometryId id_B,
       FilamentContact<double>* filament_contact) const {
     DRAKE_THROW_UNLESS(filament_contact != nullptr);
@@ -413,7 +414,7 @@ class Geometries::Impl {
     FclCollide(filament_data_A.tree, filament_data_B.tree, &callback_data,
                &FilamentFilamentCollisionCallback<double>);
     if (callback_data.p_WCs.empty()) return;
-    filament_contact->AddFilamentFilamentContact(
+    filament_contact->AddFilamentFilamentContactGeometryPair(
         id_A, id_B, std::move(callback_data.p_WCs),
         std::move(callback_data.nhats_BA_W),
         std::move(callback_data.signed_distances),

@@ -53,7 +53,7 @@ class FilamentContactGeometryPair {
    @pre `id_A < id_B`.
    @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`,
       `kinematic_coordinates_A`, `contact_edge_indexes_B`, and
-      `kinematic_coordinates_B` have the same size. */
+      `kinematic_coordinates_B` have the same size and not empty. */
   FilamentContactGeometryPair(
       GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
       std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
@@ -157,13 +157,15 @@ class FilamentContact {
    @param[in] contact_edge_indexes_B
       The indexes of filament B edges under contact for each contact point.
    @param[in] node_positions_A
-      The position of the nodes of filament A.
+      The position of the nodes of filament A. The is used to compute the
+      kinematic coordinates
    @param[in] node_positions_B
-      The position of the nodes of filament B.
+      The position of the nodes of filament B. The is used to compute the
+      kinematic coordinates
    @pre `id_A < id_B`.
    @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`, and
-      `contact_edge_indexes_B` have the same size. */
-  void AddFilamentFilamentContact(
+      `contact_edge_indexes_B` have the same size and not empty. */
+  void AddFilamentFilamentContactGeometryPair(
       GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
       std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
       std::vector<int> contact_edge_indexes_A,

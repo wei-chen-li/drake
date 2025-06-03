@@ -58,10 +58,11 @@ FilamentContactGeometryPair<T>::FilamentContactGeometryPair(
   DRAKE_THROW_UNLESS(p_WCs_.size() == kinematic_coordinates_A_.size());
   DRAKE_THROW_UNLESS(p_WCs_.size() == contact_edge_indexes_B_->size());
   DRAKE_THROW_UNLESS(p_WCs_.size() == kinematic_coordinates_B_->size());
+  DRAKE_THROW_UNLESS(!p_WCs_.empty());
 }
 
 template <typename T>
-void FilamentContact<T>::AddFilamentFilamentContact(
+void FilamentContact<T>::AddFilamentFilamentContactGeometryPair(
     GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
     std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
     std::vector<int> contact_edge_indexes_A,
