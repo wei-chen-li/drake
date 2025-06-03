@@ -75,8 +75,12 @@ template <typename T>
 void FclCollide(const fcl::DynamicAABBTreeCollisionManager<T>& tree1,
                 const fcl::DynamicAABBTreeCollisionManager<T>& tree2,
                 void* cdata, fcl::CollisionCallBack<T> callback) {
-  tree1.collide(const_cast<fcl::DynamicAABBTreeCollisionManager<T>*>(&tree2),
-                cdata, callback);
+  if (&tree1 == &tree2) {
+    tree1.collide(cdata, callback);
+  } else {
+    tree1.collide(const_cast<fcl::DynamicAABBTreeCollisionManager<T>*>(&tree2),
+                  cdata, callback);
+  }
 }
 
 /* Each filament is represented by a FilamentData struct, which contains the
@@ -146,7 +150,7 @@ template <typename T>
 struct FilamentFilamentCollisionCallbackData {
   FilamentFilamentCollisionCallbackData(
       const std::vector<GeometryId>* filament_index_to_id_in,
-      const FilamentSelfContactFilter* self_contact_filter_in = nullptr)
+      const FilamentSelfContactFilter* self_contact_filter_in)
       : filament_index_to_id(filament_index_to_id_in),
         self_contact_filter(self_contact_filter_in) {
     DRAKE_THROW_UNLESS(filament_index_to_id != nullptr);
@@ -340,22 +344,15 @@ class Geometries::Impl {
           static_cast<const fcl::DynamicAABBTreeCollisionManagerd*>(
               rigid_body_tree));
     }
-    std::map<int64_t, GeometryId> ids;
-    for (const auto& pair : id_to_filament_data_) {
-      GeometryId id = pair.first;
-      ids.emplace(id.get_value(), id);
-    }
     FilamentContact<double> filament_contact;
-    for (auto iter = ids.cbegin(); iter != ids.cend(); ++iter) {
-      GeometryId id = iter->second;
-      AddFilamentSelfContact(id, &filament_contact);
-    }
-    for (auto iter_A = ids.cbegin(); iter_A != ids.cend(); ++iter_A) {
-      for (auto iter_B = std::next(iter_A); iter_B != ids.cend(); ++iter_B) {
-        GeometryId id_A = iter_A->second;
-        GeometryId id_B = iter_B->second;
-        if (!collision_filter.CanCollideWith(id_A, id_B)) continue;
-        AddFilamentFilamentContact(id_A, id_B, &filament_contact);
+    const auto cbegin = id_to_filament_data_.cbegin();
+    const auto cend = id_to_filament_data_.cend();
+    for (auto iter_A = cbegin; iter_A != cend; ++iter_A) {
+      for (auto iter_B = iter_A; iter_B != cend; ++iter_B) {
+        GeometryId id_A = iter_A->first;
+        GeometryId id_B = iter_B->first;
+        if (id_A == id_B || collision_filter.CanCollideWith(id_A, id_B))
+          AddFilamentFilamentContact(id_A, id_B, &filament_contact);
       }
     }
     // TODO(wei-chen): Implement filament-rigid collision.
@@ -398,33 +395,17 @@ class Geometries::Impl {
   }
 
  private:
-  void AddFilamentSelfContact(GeometryId id,
-                              FilamentContact<double>* filament_contact) const {
-    DRAKE_THROW_UNLESS(filament_contact != nullptr);
-    const FilamentData& filament_data = id_to_filament_data_.at(id);
-    FilamentFilamentCollisionCallbackData<double> callback_data(
-        &filament_index_to_id_, &filament_data.self_contact_filter.value());
-    filament_data.tree.collide(&callback_data,
-                               &FilamentFilamentCollisionCallback<double>);
-    if (callback_data.p_WCs.empty()) return;
-    filament_contact->AddFilamentFilamentContact(
-        id, id, std::move(callback_data.p_WCs),
-        std::move(callback_data.nhats_BA_W),
-        std::move(callback_data.signed_distances),
-        std::move(callback_data.contact_edge_indexes_A),
-        std::move(callback_data.contact_edge_indexes_B),
-        filament_data.node_positions, filament_data.node_positions);
-  }
-
   void AddFilamentFilamentContact(
       GeometryId id_A, GeometryId id_B,
       FilamentContact<double>* filament_contact) const {
-    DRAKE_THROW_UNLESS(id_A.get_value() < id_B.get_value());
     DRAKE_THROW_UNLESS(filament_contact != nullptr);
+    if (id_A.get_value() > id_B.get_value()) std::swap(id_A, id_B);
     const FilamentData& filament_data_A = id_to_filament_data_.at(id_A);
     const FilamentData& filament_data_B = id_to_filament_data_.at(id_B);
     FilamentFilamentCollisionCallbackData<double> callback_data(
-        &filament_index_to_id_);
+        &filament_index_to_id_,
+        (id_A == id_B) ? &filament_data_A.self_contact_filter.value()
+                       : nullptr);
     FclCollide(filament_data_A.tree, filament_data_B.tree, &callback_data,
                &FilamentFilamentCollisionCallback<double>);
     if (callback_data.p_WCs.empty()) return;
