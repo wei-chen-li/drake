@@ -368,7 +368,7 @@ drake_cc_library(
     deps = [
         ":collision_filter",
         ":filament_self_contact_filter",
-        "//common:essential",
+        ":proximity_utilities",
         "//common:overloaded",
         "//common:type_safe_index",
         "//geometry:geometry_ids",
