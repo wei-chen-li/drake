@@ -92,6 +92,7 @@ struct FilamentData {
       : closed(closed_in), num_nodes(num_nodes_in), num_edges(num_edges_in) {
     DRAKE_THROW_UNLESS(num_nodes >= 2);
     DRAKE_THROW_UNLESS(num_edges == (closed ? num_nodes : num_nodes - 1));
+    tree.clear();
     objects.reserve(num_edges);
     object_pointers.reserve(num_edges);
   }
@@ -199,14 +200,17 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
     DRAKE_DEMAND(callback_data->self_contact_filter != nullptr);
     if (!callback_data->self_contact_filter->ShouldCollide(
             data_A.edge_index(), data_B.edge_index())) {
-      return true;
+      /* NOTE: Here and below, false is returned regardless of whether collision
+       is detected or not because true tells the broadphase manager to
+       terminate. Since we want *all* collisions, we return false. */
+      return false;
     }
   }
 
   fcl::CollisionResultd result;
   fcl::collide(object_A, object_B, callback_data->request, result);
   if (!result.isCollision()) {
-    return true;
+    return false;
   }
   const fcl::Contactd& contact = result.getContact(0);
   callback_data->p_WCs.emplace_back(contact.pos);
@@ -214,7 +218,7 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
   callback_data->signed_distances.emplace_back(-contact.penetration_depth);
   callback_data->contact_edge_indexes_A.push_back(data_A.edge_index());
   callback_data->contact_edge_indexes_B.push_back(data_B.edge_index());
-  return true;
+  return false;
 }
 
 }  // namespace
@@ -330,8 +334,8 @@ class Geometries::Impl {
       shape->computeLocalAABB();
       object.setTransform(R_WM, p_WM);
       object.computeAABB();
-      filament_data.tree.update(&object);
     }
+    filament_data.tree.update();
   }
 
   FilamentContact<double> ComputeFilamentContact(
