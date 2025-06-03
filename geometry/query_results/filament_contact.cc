@@ -62,6 +62,26 @@ FilamentContactGeometryPair<T>::FilamentContactGeometryPair(
 }
 
 template <typename T>
+FilamentContactGeometryPair<T>::FilamentContactGeometryPair(
+    GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
+    std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
+    std::vector<int> contact_edge_indexes_A,
+    std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A)
+    : id_A_(id_A),
+      id_B_(id_B),
+      p_WCs_(std::move(p_WCs)),
+      nhats_BA_W_(std::move(nhats_BA_W)),
+      signed_distances_(std::move(signed_distances)),
+      contact_edge_indexes_A_(std::move(contact_edge_indexes_A)),
+      kinematic_coordinates_A_(std::move(kinematic_coordinates_A)) {
+  DRAKE_THROW_UNLESS(p_WCs_.size() == nhats_BA_W_.size());
+  DRAKE_THROW_UNLESS(p_WCs_.size() == signed_distances_.size());
+  DRAKE_THROW_UNLESS(p_WCs_.size() == contact_edge_indexes_A_.size());
+  DRAKE_THROW_UNLESS(p_WCs_.size() == kinematic_coordinates_A_.size());
+  DRAKE_THROW_UNLESS(!p_WCs_.empty());
+}
+
+template <typename T>
 void FilamentContact<T>::AddFilamentFilamentContactGeometryPair(
     GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
     std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
@@ -80,6 +100,21 @@ void FilamentContact<T>::AddFilamentFilamentContactGeometryPair(
       std::move(signed_distances), std::move(contact_edge_indexes_A),
       std::move(kinematic_coordinates_A), std::move(contact_edge_indexes_B),
       std::move(kinematic_coordinates_B));
+}
+
+template <typename T>
+void FilamentContact<T>::AddFilamentRigidContactGeometryPair(
+    GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
+    std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
+    std::vector<int> contact_edge_indexes_A,
+    const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_A) {
+  std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A =
+      ComputeKinematicCoordinates(p_WCs, contact_edge_indexes_A,
+                                  node_positions_A);
+  contact_geometry_pairs_.emplace_back(
+      id_A, id_B, std::move(p_WCs), std::move(nhats_BA_W),
+      std::move(signed_distances), std::move(contact_edge_indexes_A),
+      std::move(kinematic_coordinates_A));
 }
 
 template class FilamentContactGeometryPair<double>;

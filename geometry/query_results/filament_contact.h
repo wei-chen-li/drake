@@ -62,6 +62,33 @@ class FilamentContactGeometryPair {
       std::vector<int> contact_edge_indexes_B,
       std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_B);
 
+  /* Constructs a filament-rigid contact geometry pair with the given data.
+   @param[in] id_A
+      The GeometryId of the filament geometry A.
+   @param[in] id_B
+      The GeometryId of the rigid geometry B.
+   @param[in] p_WCs
+      The contact points expressed in the world frame.
+   @param[in] nhats_BA_W
+      The contact normals pointing from geometry B into geometry A expressed in
+      the world frame.
+   @param[in] signed_distances
+      The signed distances of the contacts.
+   @param[in] contact_edge_indexes_A
+      The indexes of filament A edges participating in contact, listed in the
+      order in accordance with p_WCs and nhats_BA_W.
+   @param[in] kinematic_coordinates_A
+      Tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Ac coincident with
+      the contact point C and affixed to geometry A, denoted as v_WAc, equals
+      𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+   @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`, and
+      `kinematic_coordinates_A` have the same size and not empty. */
+  FilamentContactGeometryPair(
+      GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
+      std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
+      std::vector<int> contact_edge_indexes_A,
+      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A);
+
   /* Returns the GeometryId of geometry A. If `is_B_filament()` is true, this
    is guaranteed to be less than or equal to id_B(). */
   GeometryId id_A() const { return id_A_; }
@@ -70,7 +97,7 @@ class FilamentContactGeometryPair {
    is guaranteed to be greater than or equal to id_A(). */
   GeometryId id_B() const { return id_B_; }
 
-  /* Returns true if geometry B is a filament. */
+  /* Returns true if geometry B is a filament, false if geometry B is rigid. */
   bool is_B_filament() const { return contact_edge_indexes_B_.has_value(); }
 
   /* Returns the total number of contacts between this geometry pair. */
@@ -157,11 +184,11 @@ class FilamentContact {
    @param[in] contact_edge_indexes_B
       The indexes of filament B edges under contact for each contact point.
    @param[in] node_positions_A
-      The position of the nodes of filament A. The is used to compute the
-      kinematic coordinates
+      The position of the nodes of filament A. This is used to compute the
+      kinematic coordinates.
    @param[in] node_positions_B
-      The position of the nodes of filament B. The is used to compute the
-      kinematic coordinates
+      The position of the nodes of filament B. This is used to compute the
+      kinematic coordinates.
    @pre `id_A < id_B`.
    @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`, and
       `contact_edge_indexes_B` have the same size and not empty. */
@@ -172,6 +199,31 @@ class FilamentContact {
       std::vector<int> contact_edge_indexes_B,
       const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_A,
       const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_B);
+
+  /* Adds a filament-rigid contact geometry pair to this FilamentContact.
+   @param[in] id_A
+      The GeometryId of the filament geometry A.
+   @param[in] id_B
+      The GeometryId of the rigid geometry B.
+   @param[in] p_WCs
+      The contact points expressed in the world frame.
+   @param[in] nhats_BA_W
+      The contact normals pointing from geometry B into geometry A expressed in
+      the world frame.
+   @param[in] signed_distances
+      The signed distances of the contacts.
+   @param[in] contact_edge_indexes_A
+      The indexes of filament A edges under contact for each contact point.
+   @param[in] node_positions_A
+      The position of the nodes of filament A. This is used to compute the
+      kinematic coordinates.
+   @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, and `contact_edge_indexes_A`
+      have the same size and not empty. */
+  void AddFilamentRigidContactGeometryPair(
+      GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
+      std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
+      std::vector<int> contact_edge_indexes_A,
+      const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_A);
 
   /* Returns a list of geometry pairs that are in contact, where at least one of
    the geometries is a filament. Each pair includes associated contact
