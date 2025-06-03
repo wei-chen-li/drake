@@ -1348,6 +1348,7 @@ drake_cc_googletest(
     name = "filament_contact_internal_test",
     deps = [
         ":filament_contact_internal",
+        "//common/test_utilities:eigen_matrix_compare",
         "//geometry:proximity_engine",
     ],
 )
