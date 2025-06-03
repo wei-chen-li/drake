@@ -89,6 +89,11 @@ void FilamentContact<T>::AddFilamentFilamentContactGeometryPair(
     std::vector<int> contact_edge_indexes_B,
     const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_A,
     const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_B) {
+  id_to_participating_edges_[id_A].insert(contact_edge_indexes_A.begin(),
+                                          contact_edge_indexes_A.end());
+  id_to_participating_edges_[id_B].insert(contact_edge_indexes_B.begin(),
+                                          contact_edge_indexes_B.end());
+
   std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A =
       ComputeKinematicCoordinates(p_WCs, contact_edge_indexes_A,
                                   node_positions_A);
@@ -108,6 +113,9 @@ void FilamentContact<T>::AddFilamentRigidContactGeometryPair(
     std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
     std::vector<int> contact_edge_indexes_A,
     const Eigen::Ref<const Eigen::Matrix3X<T>>& node_positions_A) {
+  id_to_participating_edges_[id_A].insert(contact_edge_indexes_A.begin(),
+                                          contact_edge_indexes_A.end());
+
   std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A =
       ComputeKinematicCoordinates(p_WCs, contact_edge_indexes_A,
                                   node_positions_A);
@@ -115,6 +123,18 @@ void FilamentContact<T>::AddFilamentRigidContactGeometryPair(
       id_A, id_B, std::move(p_WCs), std::move(nhats_BA_W),
       std::move(signed_distances), std::move(contact_edge_indexes_A),
       std::move(kinematic_coordinates_A));
+}
+
+template <typename T>
+const std::unordered_set<int>& FilamentContact<T>::get_participating_edges(
+    GeometryId id) const {
+  const auto iter = id_to_participating_edges_.find(id);
+  if (iter != id_to_participating_edges_.end()) {
+    return iter->second;
+  } else {
+    static const std::unordered_set<int> empty_set_;
+    return empty_set_;
+  }
 }
 
 template class FilamentContactGeometryPair<double>;

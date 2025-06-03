@@ -1,5 +1,6 @@
 #include "drake/geometry/proximity/filament_contact_internal.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
@@ -13,6 +14,7 @@ namespace {
 
 using Eigen::Vector3d;
 using Eigen::VectorXd;
+using testing::UnorderedElementsAre;
 
 GTEST_TEST(FilamentContactInternalTest, FilamentSelfContact) {
   ProximityEngine<double> engine;
@@ -62,6 +64,8 @@ GTEST_TEST(FilamentContactInternalTest, FilamentSelfContact) {
   EXPECT_TRUE(CompareMatrices(pair.p_WCs()[0], Vector3d(0, 0, 0), kTol));
   EXPECT_TRUE(CompareMatrices(pair.nhats_BA_W()[0], Vector3d(0, 0, -1), kTol));
   EXPECT_NEAR(pair.signed_distances()[0], -0.2e-3, kTol);
+
+  EXPECT_THAT(filament_contact.contact_edges(id), UnorderedElementsAre(0, 2));
 }
 
 GTEST_TEST(FilamentContactInternalTest, FilamentFilamentContact) {
@@ -124,6 +128,9 @@ GTEST_TEST(FilamentContactInternalTest, FilamentFilamentContact) {
   EXPECT_TRUE(CompareMatrices(pair.p_WCs()[0], Vector3d(0, 0, 0), kTol));
   EXPECT_TRUE(CompareMatrices(pair.nhats_BA_W()[0], Vector3d(0, 0, -1), kTol));
   EXPECT_NEAR(pair.signed_distances()[0], -0.2e-3, kTol);
+
+  EXPECT_THAT(filament_contact.contact_edges(id_A), UnorderedElementsAre(1));
+  EXPECT_THAT(filament_contact.contact_edges(id_B), UnorderedElementsAre(0));
 }
 
 GTEST_TEST(FilamentContactInternalTest, FilamentRigidContact) {
@@ -161,6 +168,7 @@ GTEST_TEST(FilamentContactInternalTest, FilamentRigidContact) {
   engine.UpdateFilamentConfigurationVector({{id_A, q_WA}});
 
   engine.ComputeFilamentContact(&filament_contact);
+  EXPECT_THAT(filament_contact.contact_edges(id_A), UnorderedElementsAre(0));
   ASSERT_EQ(filament_contact.contact_geometry_pairs().size(), 1);
 
   const FilamentContactGeometryPair<double>* pair =
@@ -183,6 +191,7 @@ GTEST_TEST(FilamentContactInternalTest, FilamentRigidContact) {
   engine.UpdateFilamentConfigurationVector({{id_A, q_WA}});
 
   engine.ComputeFilamentContact(&filament_contact);
+  EXPECT_THAT(filament_contact.contact_edges(id_A), UnorderedElementsAre(1));
   ASSERT_EQ(filament_contact.contact_geometry_pairs().size(), 1);
 
   pair = &filament_contact.contact_geometry_pairs()[0];

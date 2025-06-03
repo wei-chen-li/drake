@@ -2,6 +2,8 @@
 
 #include <optional>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -233,7 +235,13 @@ class FilamentContact {
     return contact_geometry_pairs_;
   }
 
+  /* Returns the set of edge indexes for a filament geometry with `id` that are
+   under contact. */
+  const std::unordered_set<int>& get_participating_edges(GeometryId id) const;
+
  private:
+  std::unordered_map<GeometryId, std::unordered_set<int>>
+      id_to_participating_edges_;
   std::vector<FilamentContactGeometryPair<T>> contact_geometry_pairs_;
 };
 

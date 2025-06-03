@@ -1,5 +1,6 @@
 #include "drake/geometry/query_results/filament_contact.h"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "drake/common/ssize.h"
@@ -11,6 +12,7 @@ namespace internal {
 namespace {
 
 using Eigen::Vector3d;
+using testing::UnorderedElementsAre;
 
 const GeometryId kIdA = GeometryId::get_new_id();
 const GeometryId kIdB = GeometryId::get_new_id();
@@ -49,6 +51,9 @@ GTEST_TEST(FilamentContactTest, AddFilamentFilamentContactGeometryPair) {
   EXPECT_NEAR(std::get<2>(pair.kinematic_coordinates_B()[0]), 3 / 4.0, kTol);
   EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_coordinates_B()[0]),
                               Vector3d(-0.01, 0, 0), kTol));
+
+  EXPECT_THAT(filament_contact.contact_edges(kIdA), UnorderedElementsAre(0));
+  EXPECT_THAT(filament_contact.contact_edges(kIdB), UnorderedElementsAre(0));
 }
 
 GTEST_TEST(FilamentContactTest, AddFilamentRigidContactGeometryPair) {
@@ -77,6 +82,8 @@ GTEST_TEST(FilamentContactTest, AddFilamentRigidContactGeometryPair) {
   EXPECT_NEAR(std::get<2>(pair.kinematic_coordinates_A()[0]), 2 / 3.0, kTol);
   EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_coordinates_A()[0]),
                               Vector3d(0, -0.01, 0), kTol));
+
+  EXPECT_THAT(filament_contact.contact_edges(kIdA), UnorderedElementsAre(0));
 }
 
 }  // namespace
