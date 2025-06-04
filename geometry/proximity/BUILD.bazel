@@ -367,17 +367,16 @@ drake_cc_library(
     hdrs = ["filament_contact_internal.h"],
     deps = [
         ":collision_filter",
+        "//geometry:geometry_ids",
+        "//geometry:shape_specification",
+        "//geometry/query_results:filament_contact",
+    ],
+    implementation_deps = [
         ":filament_self_contact_filter",
         ":proximity_utilities",
         "//common:overloaded",
         "//common:type_safe_index",
-        "//geometry:geometry_ids",
-        "//geometry:geometry_instance",
-        "//geometry:shape_specification",
-        "//geometry/query_results:filament_contact",
         "//math:vector3_util",
-    ],
-    implementation_deps = [
         "@fcl_internal//:fcl",
     ],
 )
