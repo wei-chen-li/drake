@@ -188,7 +188,7 @@ QueryObject<T>::ComputeFilamentContact(
   FullPoseAndConfigurationUpdate();
 
   const GeometryState<T>& state = geometry_state();
-  state.ComputeDeformableContact(filament_contact);
+  state.ComputeFilamentContact(filament_contact);
 }
 
 template <typename T>
@@ -287,6 +287,8 @@ DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
 
 template void QueryObject<double>::ComputeDeformableContact<double>(
     internal::DeformableContact<double>*) const;
+template void QueryObject<double>::ComputeFilamentContact<double>(
+    internal::FilamentContact<double>*) const;
 
 }  // namespace geometry
 }  // namespace drake

@@ -6,6 +6,7 @@
 #include "drake/common/drake_copyable.h"
 #include "drake/geometry/query_results/contact_surface.h"
 #include "drake/geometry/query_results/deformable_contact.h"
+#include "drake/geometry/query_results/filament_contact.h"
 #include "drake/geometry/query_results/penetration_as_point_pair.h"
 
 namespace drake {
@@ -30,6 +31,7 @@ struct NestedGeometryContactData {
   std::vector<geometry::PenetrationAsPointPair<T>> point_pairs;
   std::vector<geometry::ContactSurface<T>> surfaces;
   geometry::internal::DeformableContact<T> deformable;
+  geometry::internal::FilamentContact<T> filament;
 };
 
 /* Full specialization of NestedGeometryContactData for T = AutoDiffXd.

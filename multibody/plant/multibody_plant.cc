@@ -2956,6 +2956,11 @@ void MultibodyPlant<T>::CalcGeometryContactData(
       }
     }
   }
+  if constexpr (std::is_same_v<T, double>) {
+    if (is_discrete()) {
+      query_object.ComputeFilamentContact(&storage.filament);
+    }
+  }
 
   // Filter out irrelevant contacts due to joint locking, i.e., between bodies
   // that belong to trees with 0 degrees of freedom. For a contact to remain in

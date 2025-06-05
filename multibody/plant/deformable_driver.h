@@ -369,6 +369,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   const geometry::internal::DeformableContact<T>& EvalDeformableContact(
       const systems::Context<T>& context) const;
 
+  /* Eval the FilamentContact in MultibodyPlant's GeometryContactData cache. */
+  const geometry::internal::FilamentContact<T>& EvalFilamentContact(
+      const systems::Context<T>& context) const;
+
   /* Calc version of EvalConstraintParticipation.
    @pre constraint_participation != nullptr. */
   void CalcConstraintParticipation(

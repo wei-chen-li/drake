@@ -25,6 +25,8 @@ using drake::geometry::GeometryId;
 using drake::geometry::internal::ContactParticipation;
 using drake::geometry::internal::DeformableContact;
 using drake::geometry::internal::DeformableContactSurface;
+using drake::geometry::internal::FilamentContact;
+using drake::geometry::internal::FilamentContactGeometryPair;
 using drake::multibody::contact_solvers::internal::Block3x3SparseMatrix;
 using drake::multibody::contact_solvers::internal::ContactConfiguration;
 using drake::multibody::contact_solvers::internal::ContactSolverResults;
@@ -1227,6 +1229,12 @@ template <typename T>
 const DeformableContact<T>& DeformableDriver<T>::EvalDeformableContact(
     const Context<T>& context) const {
   return manager_->EvalGeometryContactData(context).get().deformable;
+}
+
+template <typename T>
+const FilamentContact<T>& DeformableDriver<T>::EvalFilamentContact(
+    const Context<T>& context) const {
+  return manager_->EvalGeometryContactData(context).get().filament;
 }
 
 template <typename T>
