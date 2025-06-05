@@ -666,7 +666,7 @@ TEST_F(DeformableDriverContactKinematicsTest,
     const ContactParticipation& participation =
         driver_->EvalFemConstraintParticipation(plant_context, body_index);
     EXPECT_EQ(participation.num_vertices(),
-              model_->GetFemModel(deformable_id).num_nodes());
+              model_->GetFemModel(deformable_id)->num_nodes());
     EXPECT_EQ(participation.num_vertices_in_contact(), 0);
   }
 
@@ -698,7 +698,7 @@ class DeformableDriverTest {
   static const PartialPermutation& EvalVertexPermutation(
       const DeformableDriver<double>& driver, const Context<double>& context,
       GeometryId id) {
-    return driver.EvalVertexPermutation(context, id);
+    return driver.EvalFemVertexPermutation(context, id);
   }
 };
 

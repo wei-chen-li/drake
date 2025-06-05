@@ -87,7 +87,7 @@ TEST_F(DeformableBodyTest, Accessors) {
   EXPECT_EQ(body_->config().mass_density(),
             default_body_config_.mass_density());
   /* FEM model accessor. */
-  const fem::FemModel<double>& fem_model = body_->fem_model();
+  const fem::FemModel<double>& fem_model = *body_->fem_model();
   EXPECT_EQ(fem_model.num_dofs(), body_->num_dofs());
   /* External forces. */
   const std::vector<const ForceDensityFieldBase<double>*>& external_forces =
@@ -138,7 +138,7 @@ TEST_F(DeformableBodyTest, SetGetPositions) {
 
 TEST_F(DeformableBodyTest, Parallelism) {
   mutable_body_->set_parallelism(Parallelism(4));
-  EXPECT_EQ(body_->fem_model().parallelism().num_threads(), 4);
+  EXPECT_EQ(body_->fem_model()->parallelism().num_threads(), 4);
 }
 
 }  // namespace

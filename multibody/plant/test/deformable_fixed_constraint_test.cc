@@ -185,7 +185,7 @@ TEST_F(DeformableFixedConstraintTest, SteadyState) {
           .get_discrete_state(
               model_->GetDiscreteStateIndex(deformable_body_id_))
           .value();
-  const int num_nodes = model_->GetFemModel(deformable_body_id_).num_nodes();
+  const int num_nodes = model_->GetFemModel(deformable_body_id_)->num_nodes();
   const VectorXd q = discrete_state.head(3 * num_nodes);
   const VectorXd v = discrete_state.segment(3 * num_nodes, 3 * num_nodes);
   constexpr double kVelocityThreshold = 1e-6;  // unit: m/s.

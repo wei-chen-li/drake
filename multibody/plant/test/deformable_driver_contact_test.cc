@@ -129,7 +129,7 @@ class DeformableDriverContactTest : public ::testing::Test {
   MatrixXd EvalFreeMotionTangentMatrix(const systems::Context<double>& context,
                                        DeformableBodyIndex index) const {
     DeformableBodyId body_id = model_->GetBodyId(index);
-    const FemModel<double>& fem_model = model_->GetFemModel(body_id);
+    const FemModel<double>& fem_model = *model_->GetFemModel(body_id);
     std::unique_ptr<contact_solvers::internal::Block3x3SparseSymmetricMatrix>
         fem_tangent_matrix = fem_model.MakeTangentMatrix();
     const FemState<double>& free_motion_state =
@@ -244,7 +244,7 @@ TEST_F(DeformableDriverContactTest, EvalDofPermutation) {
  EvalParticipatingVelocityMultiplexer. */
 TEST_F(DeformableDriverContactTest, EvalParticipatingVelocities) {
   /* Set states for both bodies so that they have different velocities. */
-  const int num_dofs = model_->GetFemModel(body_id0_).num_dofs();
+  const int num_dofs = model_->GetFemModel(body_id0_)->num_dofs();
   const auto v0 = VectorXd::Zero(num_dofs);
   const auto v1 = VectorXd::Ones(num_dofs);
   SetVelocities(body_id0_, v0);
@@ -265,7 +265,7 @@ TEST_F(DeformableDriverContactTest, EvalParticipatingVelocities) {
 
 TEST_F(DeformableDriverContactTest, EvalParticipatingFreeMotionVelocities) {
   /* Set states for both bodies so that they have different velocities. */
-  const int num_dofs = model_->GetFemModel(body_id0_).num_dofs();
+  const int num_dofs = model_->GetFemModel(body_id0_)->num_dofs();
   const auto v0 = VectorXd::LinSpaced(num_dofs, 0.0, 1.0);
   const auto v1 = VectorXd::LinSpaced(num_dofs, 1.0, 2.0);
   SetVelocities(body_id0_, v0);
@@ -521,7 +521,7 @@ TEST_F(DeformableDriverContactTest, AppendDiscreteContactPairsDisabled) {
 TEST_F(DeformableDriverContactTest, CalcNextFemStateWithContact) {
   /* Set states for both bodies so that they have non-trivial initial
    velocities. */
-  const int num_dofs = model_->GetFemModel(body_id0_).num_dofs();
+  const int num_dofs = model_->GetFemModel(body_id0_)->num_dofs();
   const auto v0 = VectorXd::LinSpaced(num_dofs, 0.0, 1.0);
   SetVelocities(body_id0_, v0);
 
