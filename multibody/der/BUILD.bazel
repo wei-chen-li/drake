@@ -15,6 +15,7 @@ drake_cc_package_library(
     visibility = ["//visibility:public"],
     deps = [
         ":acceleration_newmark_scheme",
+        ":constraint_participation",
         ":damping_model",
         ":der_indexes",
         ":der_model",
@@ -38,6 +39,15 @@ drake_cc_library(
     hdrs = ["acceleration_newmark_scheme.h"],
     deps = [
         ":discrete_time_integrator",
+    ],
+)
+
+drake_cc_library(
+    name = "constraint_participation",
+    srcs = ["constraint_participation.cc"],
+    hdrs = ["constraint_participation.h"],
+    deps = [
+        "//multibody/contact_solvers/sap:partial_permutation",
     ],
 )
 
@@ -202,6 +212,13 @@ drake_cc_googletest(
         ":velocity_newmark_scheme",
         "//common/test_utilities:eigen_matrix_compare",
         "//common/test_utilities:limit_malloc",
+    ],
+)
+
+drake_cc_googletest(
+    name = "constraint_participation_test",
+    deps = [
+        ":constraint_participation",
     ],
 )
 
