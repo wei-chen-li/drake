@@ -85,7 +85,7 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
         "with the MultibodyPlant owning the deformable model.",
         body_B.name()));
   }
-  // TODO(wei-chen): Implement this function for DerModel.
+  // TODO(wei-chen): Implement DeformableBody::AddFixedConstraint for DerModel.
   /* X_WG is the pose of this body's reference mesh in the world frame. In the
    scope of this function, we call that the A frame and G is used to denote
    the rigid body's geometry, so we rename X_WG_ to X_WA here to avoid

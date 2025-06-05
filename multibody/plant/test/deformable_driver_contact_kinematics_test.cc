@@ -502,7 +502,7 @@ class DeformableDriverContactKinematicsTest
       const std::vector<int>& expected_permutation) {
     const DeformableBodyIndex body_index = model_->GetBodyIndex(body_id);
     const ContactParticipation& participation =
-        driver_->EvalConstraintParticipation(
+        driver_->EvalFemConstraintParticipation(
             plant_->GetMyContextFromRoot(*context_), body_index);
     EXPECT_EQ(participation.num_vertices_in_contact(), num_vertices_in_contact);
     PartialPermutation full_permutation =
@@ -664,7 +664,7 @@ TEST_F(DeformableDriverContactKinematicsTest,
        {deformable_body_id_, deformable_body_id2_}) {
     const DeformableBodyIndex body_index = model_->GetBodyIndex(deformable_id);
     const ContactParticipation& participation =
-        driver_->EvalConstraintParticipation(plant_context, body_index);
+        driver_->EvalFemConstraintParticipation(plant_context, body_index);
     EXPECT_EQ(participation.num_vertices(),
               model_->GetFemModel(deformable_id).num_nodes());
     EXPECT_EQ(participation.num_vertices_in_contact(), 0);
@@ -769,7 +769,7 @@ GTEST_TEST(DeformableDriverContactKinematicsWithBcTest,
   }
 }
 
-/* Tests that DeformableDriver::EvalConstraintParticipation gives the correct
+/* Tests that DeformableDriver::EvalFemConstraintParticipation gives the correct
  result when no contact is present. */
 GTEST_TEST(DeformableDriverConstraintParticipation, ConstraintWithoutContact) {
   systems::DiagramBuilder<double> builder;
@@ -794,8 +794,8 @@ GTEST_TEST(DeformableDriverConstraintParticipation, ConstraintWithoutContact) {
 
   const Context<double>& plant_context = plant.GetMyContextFromRoot(*context);
   const ContactParticipation& participation =
-      driver->EvalConstraintParticipation(plant_context,
-                                          DeformableBodyIndex(0));
+      driver->EvalFemConstraintParticipation(plant_context,
+                                             DeformableBodyIndex(0));
   /* We know that the deformable octahedron has exactly 7 vertices, and they
    should all participate in constraints. */
   EXPECT_EQ(participation.num_vertices_in_contact(), 7);

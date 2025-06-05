@@ -235,7 +235,7 @@ class DeformableBody final : public MultibodyElement<T> {
    @param weights         The integrator weights for the deformable body used to
                           combine the stiffness, damping, and mass matrices to
                           form the tangent matrix.
- */
+   */
   DeformableBody(DeformableBodyIndex index, DeformableBodyId id,
                  std::string name, geometry::GeometryId geometry_id,
                  ModelInstanceIndex model_instance,
@@ -256,7 +256,7 @@ class DeformableBody final : public MultibodyElement<T> {
    @param weights         The integrator weights for the deformable body used to
                           combine the stiffness, damping, and mass matrices to
                           form the tangent matrix.
- */
+   */
   DeformableBody(DeformableBodyIndex index, DeformableBodyId id,
                  std::string name, geometry::GeometryId geometry_id,
                  ModelInstanceIndex model_instance,

@@ -12,6 +12,7 @@
 #include "drake/multibody/contact_solvers/sap/partial_permutation.h"
 #include "drake/multibody/contact_solvers/sap/sap_fixed_constraint.h"
 #include "drake/multibody/contact_solvers/schur_complement.h"
+#include "drake/multibody/der/constraint_participation.h"
 #include "drake/multibody/der/der_solver.h"
 #include "drake/multibody/fem/fem_solver.h"
 #include "drake/multibody/plant/deformable_contact_info.h"
@@ -184,8 +185,9 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
 
   /* Evaluates the constraint participation information of the deformable body
    with the given `index`. See geometry::internal::ContactParticipation. */
-  const geometry::internal::ContactParticipation& EvalConstraintParticipation(
-      const systems::Context<T>& context, DeformableBodyIndex index) const;
+  const geometry::internal::ContactParticipation&
+  EvalFemConstraintParticipation(const systems::Context<T>& context,
+                                 DeformableBodyIndex index) const;
 
   /* Computes the contact information for all registered deformable bodies.
    This is used by MbP to populate the GeometryContactData summary along with
@@ -209,8 +211,7 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     std::vector<systems::CacheIndex> solvers;
     std::vector<systems::CacheIndex> next_states;
     std::vector<systems::CacheIndex> constraint_participations;
-    std::unordered_map<geometry::GeometryId, systems::CacheIndex>
-        vertex_permutations;
+    std::vector<systems::CacheIndex> permutations;
     systems::CacheIndex participating_velocity_mux;
     systems::CacheIndex participating_velocities;
     systems::CacheIndex participating_free_motion_velocities;
@@ -373,31 +374,50 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   const geometry::internal::FilamentContact<T>& EvalFilamentContact(
       const systems::Context<T>& context) const;
 
-  /* Calc version of EvalConstraintParticipation.
+  /* Calc version of EvalFemConstraintParticipation.
    @pre constraint_participation != nullptr. */
-  void CalcConstraintParticipation(
+  void CalcFemConstraintParticipation(
       const systems::Context<T>& context, DeformableBodyIndex index,
       geometry::internal::ContactParticipation* constraint_participation) const;
 
-  /* Evaluates the partial permutation that maps dof indices of the
-   deformable geometry with the given `id` to their corresponding values in the
-   constraint problem. */
-  const contact_solvers::internal::PartialPermutation& EvalDofPermutation(
+  /* Calculates the constraint participation information of the filament body
+   with the given `index`.
+   @pre constraint_participation != nullptr. */
+  void CalcDerConstraintParticipation(
+      const systems::Context<T>& context, DeformableBodyIndex index,
+      der::internal::ConstraintParticipation* constraint_participation) const;
+
+  /* Eval version of CalcDerConstraintParticipation. */
+  const der::internal::ConstraintParticipation& EvalDerConstraintParticipation(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Computes the partial permutation that maps vertex/dof indices of the
-   deformable geometry with the given `id` to their corresponding values in the
+   deformable body with `index` to their corresponding values in the
    constraint problem.
    @pre result != nullptr. */
-  void CalcPermutation(
-      const systems::Context<T>& context, geometry::GeometryId id,
+  void CalcFemVertexPermutation(
+      const systems::Context<T>& context, DeformableBodyIndex index,
       contact_solvers::internal::VertexPartialPermutation* result) const;
 
   /* Evaluates the partial permutation that maps vertex indices of the
    deformable geometry with the given `id` to their corresponding values in the
    constraint problem. */
-  const contact_solvers::internal::PartialPermutation& EvalVertexPermutation(
+  const contact_solvers::internal::PartialPermutation& EvalFemVertexPermutation(
       const systems::Context<T>& context, geometry::GeometryId id) const;
+
+  /* Computes the partial permutation that maps dof indices of the DER modeled
+   deformable body with `index` to their corresponding values in the
+   constraint problem.
+   @pre result != nullptr. */
+  void CalcDerDofPermutation(
+      const systems::Context<T>& context, DeformableBodyIndex index,
+      contact_solvers::internal::PartialPermutation* result) const;
+
+  /* Evaluates the partial permutation that maps dof indices of the
+   deformable body with `index` to their corresponding values in the
+   constraint problem. */
+  const contact_solvers::internal::PartialPermutation& EvalDofPermutation(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Calc version of EvalParticipatingVelocityMultiplexer(). */
   void CalcParticipatingVelocityMultiplexer(const systems::Context<T>& context,
