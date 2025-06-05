@@ -107,9 +107,10 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
               body_index, body_id, name, geometry_id, model_instance, *mesh_G,
               X_WG, config, fem_integrator_->GetWeights())));
     } else {
-      body = &deformable_bodies_.Add(std::unique_ptr<DeformableBody<T>>(
-          new DeformableBody<T>(body_index, body_id, name, geometry_id,
-                                model_instance, *filament_G, X_WG, config)));
+      body = &deformable_bodies_.Add(  //
+          std::unique_ptr<DeformableBody<T>>(new DeformableBody<T>(
+              body_index, body_id, name, geometry_id, model_instance,
+              *filament_G, X_WG, config)));
     }
     body->set_parent_tree(&this->internal_tree(), body->index());
     body->set_parallelism(parallelism_);
@@ -442,14 +443,14 @@ void DeformableModel<T>::DoDeclareSceneGraphPorts() {
               },
               [this](const systems::Context<T>& context,
                      AbstractValue* output) {
-                this->CopyConfigurationVectors(context, output);
+                this->ComputeConfigurationVector(context, output);
               },
               {systems::System<double>::xd_ticket()})
           .get_index();
 }
 
 template <typename T>
-void DeformableModel<T>::CopyConfigurationVectors(
+void DeformableModel<T>::ComputeConfigurationVector(
     const systems::Context<T>& context, AbstractValue* output) const {
   auto& output_value =
       output->get_mutable_value<geometry::GeometryConfigurationVector<T>>();
@@ -459,9 +460,9 @@ void DeformableModel<T>::CopyConfigurationVectors(
   for (const DeformableBodyIndex& index : body_indices) {
     const DeformableBody<T>& body = deformable_bodies_.get_element(index);
     const GeometryId geometry_id = body.geometry_id();
-    const int num_dofs = body.fem_model()->num_dofs();
     const auto& discrete_state_index = body.discrete_state_index();
     if (body.fem_model()) {
+      const int num_dofs = body.fem_model()->num_dofs();
       VectorX<T> vertex_positions =
           context.get_discrete_state(discrete_state_index)
               .value()
@@ -473,8 +474,8 @@ void DeformableModel<T>::CopyConfigurationVectors(
       auto der_state = body.der_model()->CreateDerState();
       der_state->Deserialize(
           context.get_discrete_state(discrete_state_index).value());
-      /* The configuration vector contains the position of all nodes and m₁ of
-       all frames. */
+      /* The configuration vector contains the node positions and edge m₁
+       directors. */
       VectorX<T> configuration(der_state->num_nodes() * 3 +
                                der_state->num_edges() * 3);
       for (int i = 0; i < der_state->num_nodes(); ++i) {

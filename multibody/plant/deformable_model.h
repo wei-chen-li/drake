@@ -476,10 +476,10 @@ class DeformableModel final : public multibody::PhysicalModel<T> {
 
   void DoDeclareSceneGraphPorts() final;
 
-  /* Copies the configuration vector of all deformable bodies to the output port
-   value which is guaranteed to be of type GeometryConfigurationVector. */
-  void CopyConfigurationVectors(const systems::Context<T>& context,
-                                AbstractValue* output) const;
+  /* Computes the configuration vector of all deformable bodies to the output
+   port value which is guaranteed to be of type GeometryConfigurationVector. */
+  void ComputeConfigurationVector(const systems::Context<T>& context,
+                                  AbstractValue* output) const;
 
   /* Helper to throw a useful message if a deformable body with the given `id`
    doesn't exist. */

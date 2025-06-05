@@ -120,7 +120,7 @@ TEST_F(DeformableDriverTest, ScalarConversion) {
 }
 
 TEST_F(DeformableDriverTest, FemState) {
-  const int num_dofs = model_->GetFemModel(body_id_).num_dofs();
+  const int num_dofs = model_->GetFemModel(body_id_)->num_dofs();
   const auto q = 2.0 * VectorX<double>::Ones(num_dofs);
   const auto v = VectorX<double>::Ones(num_dofs);
   const auto a = VectorX<double>::Zero(num_dofs);
@@ -204,7 +204,7 @@ TEST_F(DeformableDriverTest, CalcDiscreteStates) {
       model_->GetDiscreteStateIndex(body_id_);
   const VectorX<double>& discrete_state =
       plant_context_->get_discrete_state(state_index).value();
-  const int num_dofs = model_->GetFemModel(body_id_).num_dofs();
+  const int num_dofs = model_->GetFemModel(body_id_)->num_dofs();
   const FemState<double>& fem_state =
       EvalFemState(*plant_context_, DeformableBodyIndex(0));
   EXPECT_EQ(discrete_state.head(num_dofs), fem_state.GetPositions());

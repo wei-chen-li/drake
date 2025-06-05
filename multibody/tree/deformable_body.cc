@@ -456,6 +456,31 @@ DeformableBody<T>::BuildFilamentDerModel(
   der_model_ = builder.Build();
 }
 
+template <typename T>
+void DeformableBody<T>::DoDeclareDiscreteState(
+    internal::MultibodyTreeSystem<T>* tree_system) {
+  if (fem_model_) {
+    std::unique_ptr<fem::FemState<T>> default_fem_state =
+        fem_model_->MakeFemState();
+    const int num_dofs = default_fem_state->num_dofs();
+    VectorX<T> model_state(num_dofs * 3 /* q, v, and a */);
+    model_state.head(num_dofs) = default_fem_state->GetPositions();
+    model_state.segment(num_dofs, num_dofs) =
+        default_fem_state->GetVelocities();
+    model_state.tail(num_dofs) = default_fem_state->GetAccelerations();
+    discrete_state_index_ =
+        this->DeclareDiscreteState(tree_system, model_state);
+  } else if (der_model_) {
+    std::unique_ptr<der::internal::DerState<T>> default_der_state =
+        der_model_->CreateDerState();
+    VectorX<T> model_state = default_der_state->Serialize();
+    discrete_state_index_ =
+        this->DeclareDiscreteState(tree_system, model_state);
+  } else {
+    DRAKE_UNREACHABLE();
+  }
+}
+
 }  // namespace multibody
 }  // namespace drake
 

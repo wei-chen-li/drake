@@ -100,7 +100,7 @@ class DeformableBody final : public MultibodyElement<T> {
   /** (Internal use only) Configures the parallelism that `this`
    %DeformableBody uses when opportunities for parallel computation arises. */
   void set_parallelism(Parallelism parallelism) {
-    fem_model_->set_parallelism(parallelism);
+    if (fem_model_) fem_model_->set_parallelism(parallelism);
   }
 
   /** Sets wall boundary conditions for this deformable body. All vertices of
@@ -323,18 +323,7 @@ class DeformableBody final : public MultibodyElement<T> {
   }
 
   void DoDeclareDiscreteState(
-      internal::MultibodyTreeSystem<T>* tree_system) final {
-    std::unique_ptr<fem::FemState<T>> default_fem_state =
-        fem_model_->MakeFemState();
-    const int num_dofs = default_fem_state->num_dofs();
-    VectorX<T> model_state(num_dofs * 3 /* q, v, and a */);
-    model_state.head(num_dofs) = default_fem_state->GetPositions();
-    model_state.segment(num_dofs, num_dofs) =
-        default_fem_state->GetVelocities();
-    model_state.tail(num_dofs) = default_fem_state->GetAccelerations();
-    discrete_state_index_ =
-        this->DeclareDiscreteState(tree_system, model_state);
-  }
+      internal::MultibodyTreeSystem<T>* tree_system) final;
 
   void DoDeclareParameters(
       internal::MultibodyTreeSystem<T>* tree_system) final {
