@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "drake/geometry/proximity/volume_mesh.h"
+#include "drake/multibody/der/velocity_newmark_scheme.h"
 #include "drake/multibody/fem/fem_state.h"
 #include "drake/multibody/fem/velocity_newmark_scheme.h"
 #include "drake/multibody/plant/multibody_plant.h"
@@ -30,7 +31,9 @@ DeformableModel<T>::DeformableModel(MultibodyPlant<T>* plant)
    we may create a deformable model for various reasons, but the deformable
    model will always be empty. */
   if (plant->time_step() > 0) {
-    integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
+    fem_integrator_ = std::make_unique<fem::internal::VelocityNewmarkScheme<T>>(
+        plant->time_step(), 1.0, 0.5);
+    der_integrator_ = std::make_unique<der::internal::VelocityNewmarkScheme<T>>(
         plant->time_step(), 1.0, 0.5);
   }
 }
@@ -89,20 +92,29 @@ DeformableBodyId DeformableModel<T>::RegisterDeformableBody(
         scene_graph.model_inspector();
     const geometry::VolumeMesh<double>* mesh_G =
         inspector.GetReferenceMesh(geometry_id);
-    DRAKE_DEMAND(mesh_G != nullptr);
+    const geometry::Filament* filament_G =
+        inspector.GetReferenceFilament(geometry_id);
+    DRAKE_DEMAND(mesh_G != nullptr || filament_G != nullptr);
     const math::RigidTransform<double>& X_WG =
         inspector.GetPoseInFrame(geometry_id);
 
     const DeformableBodyId body_id = DeformableBodyId::get_new_id();
     const DeformableBodyIndex body_index = deformable_bodies_.next_index();
-    DeformableBody<T>& body = deformable_bodies_.Add(
-        std::unique_ptr<DeformableBody<T>>(new DeformableBody<T>(
-            body_index, body_id, name, geometry_id, model_instance, *mesh_G,
-            X_WG, config, integrator_->GetWeights())));
-    body.set_parent_tree(&this->internal_tree(), body.index());
-    body.set_parallelism(parallelism_);
+    DeformableBody<T>* body;
+    if (mesh_G) {
+      body = &deformable_bodies_.Add(
+          std::unique_ptr<DeformableBody<T>>(new DeformableBody<T>(
+              body_index, body_id, name, geometry_id, model_instance, *mesh_G,
+              X_WG, config, fem_integrator_->GetWeights())));
+    } else {
+      body = &deformable_bodies_.Add(std::unique_ptr<DeformableBody<T>>(
+          new DeformableBody<T>(body_index, body_id, name, geometry_id,
+                                model_instance, *filament_G, X_WG, config)));
+    }
+    body->set_parent_tree(&this->internal_tree(), body->index());
+    body->set_parallelism(parallelism_);
     geometry_id_to_body_id_.emplace(geometry_id, body_id);
-    body_id_to_index_.emplace(body_id, body.index());
+    body_id_to_index_.emplace(body_id, body->index());
     return body_id;
   }
   DRAKE_UNREACHABLE();
@@ -192,10 +204,17 @@ void DeformableModel<T>::Enable(DeformableBodyId id,
 }
 
 template <typename T>
-const fem::FemModel<T>& DeformableModel<T>::GetFemModel(
+const fem::FemModel<T>* DeformableModel<T>::GetFemModel(
     DeformableBodyId id) const {
   ThrowUnlessRegistered(__func__, id);
   return GetBody(id).fem_model();
+}
+
+template <typename T>
+const der::DerModel<T>* DeformableModel<T>::GetDerModel(
+    DeformableBodyId id) const {
+  ThrowUnlessRegistered(__func__, id);
+  return GetBody(id).der_model();
 }
 
 template <typename T>
@@ -341,7 +360,8 @@ std::unique_ptr<PhysicalModel<double>> DeformableModel<T>::CloneToDouble(
      because callers to `PhysicalModel::CloneToScalar` are required to
      subsequently call `DeclareSceneGraphPorts`. */
     result->parallelism_ = parallelism_;
-    result->integrator_ = integrator_->Clone();
+    result->fem_integrator_ = fem_integrator_->Clone();
+    result->der_integrator_ = der_integrator_->Clone();
   }
 
   return result;
@@ -422,15 +442,15 @@ void DeformableModel<T>::DoDeclareSceneGraphPorts() {
               },
               [this](const systems::Context<T>& context,
                      AbstractValue* output) {
-                this->CopyVertexPositions(context, output);
+                this->CopyConfigurationVectors(context, output);
               },
               {systems::System<double>::xd_ticket()})
           .get_index();
 }
 
 template <typename T>
-void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
-                                             AbstractValue* output) const {
+void DeformableModel<T>::CopyConfigurationVectors(
+    const systems::Context<T>& context, AbstractValue* output) const {
   auto& output_value =
       output->get_mutable_value<geometry::GeometryConfigurationVector<T>>();
   output_value.clear();
@@ -439,11 +459,37 @@ void DeformableModel<T>::CopyVertexPositions(const systems::Context<T>& context,
   for (const DeformableBodyIndex& index : body_indices) {
     const DeformableBody<T>& body = deformable_bodies_.get_element(index);
     const GeometryId geometry_id = body.geometry_id();
-    const int num_dofs = body.fem_model().num_dofs();
+    const int num_dofs = body.fem_model()->num_dofs();
     const auto& discrete_state_index = body.discrete_state_index();
-    VectorX<T> vertex_positions =
-        context.get_discrete_state(discrete_state_index).value().head(num_dofs);
-    output_value.set_value(geometry_id, std::move(vertex_positions));
+    if (body.fem_model()) {
+      VectorX<T> vertex_positions =
+          context.get_discrete_state(discrete_state_index)
+              .value()
+              .head(num_dofs);
+      output_value.set_value(geometry_id, std::move(vertex_positions));
+    } else if (body.der_model()) {
+      // TODO(wei-chen): Maybe store a DerState in cache to avoid allocating
+      // every time.
+      auto der_state = body.der_model()->CreateDerState();
+      der_state->Deserialize(
+          context.get_discrete_state(discrete_state_index).value());
+      /* The configuration vector contains the position of all nodes and m₁ of
+       all frames. */
+      VectorX<T> configuration(der_state->num_nodes() * 3 +
+                               der_state->num_edges() * 3);
+      for (int i = 0; i < der_state->num_nodes(); ++i) {
+        configuration.template segment<3>(3 * i) =
+            der_state->get_position().template segment<3>(4 * i);
+      }
+      const int offset = der_state->num_nodes() * 3;
+      for (int i = 0; i < der_state->num_edges(); ++i) {
+        configuration.template segment<3>(3 * i + offset) =
+            der_state->get_material_frame_m1().col(i);
+      }
+      output_value.set_value(geometry_id, std::move(configuration));
+    } else {
+      DRAKE_UNREACHABLE();
+    }
   }
 }
 

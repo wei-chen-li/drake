@@ -105,7 +105,7 @@ TEST_F(DeformableModelTest, RegisterDeformableBody) {
 TEST_F(DeformableModelTest, SetWallBoundaryCondition) {
   constexpr double kRezHint = 0.5;
   DeformableBodyId body_id = RegisterSphere(kRezHint);
-  const auto& fem_model = deformable_model_ptr_->GetFemModel(body_id);
+  const auto& fem_model = *deformable_model_ptr_->GetFemModel(body_id);
   const auto& dirichlet_bc = fem_model.dirichlet_boundary_condition();
   /* No boundary condition has been added yet. */
   EXPECT_TRUE(dirichlet_bc.index_to_boundary_state().empty());
@@ -150,7 +150,7 @@ TEST_F(DeformableModelTest, DiscreteStateIndexAndReferencePositions) {
   auto context = plant_->CreateDefaultContext();
   const VectorX<double>& discrete_state =
       context->get_discrete_state(state_index).value();
-  const int num_dofs = deformable_model_ptr_->GetFemModel(body_id).num_dofs();
+  const int num_dofs = deformable_model_ptr_->GetFemModel(body_id)->num_dofs();
   EXPECT_EQ(discrete_state.head(num_dofs),
             deformable_model_ptr_->GetReferencePositions(body_id));
   /* Verify that the velocity and acceleration values in default discrete state
@@ -281,7 +281,7 @@ TEST_F(DeformableModelTest, AddFixedConstraint) {
    that it is discretized as an octahedron. Give it an arbitrary initial pose.
   */
   DeformableBodyId deformable_id = RegisterSphere(100, X_WA);
-  ASSERT_EQ(deformable_model_ptr_->GetFemModel(deformable_id).num_nodes(), 7);
+  ASSERT_EQ(deformable_model_ptr_->GetFemModel(deformable_id)->num_nodes(), 7);
   const RigidBody<double>& rigid_body =
       plant_->AddRigidBody("box", SpatialInertia<double>::NaN());
   geometry::Box box(1.0, 1.0, 1.0);
@@ -518,8 +518,8 @@ TEST_F(DeformableModelTest, NonEmptyClone) {
             deformable_model_ptr_->num_bodies());
   /* We don't compare the result of GetDiscreteStateIndex and GetExternalForces
    since they are set during DeclareSystemResources(). */
-  EXPECT_EQ(double_clone_ptr->GetFemModel(body_id).num_dofs(),
-            deformable_model_ptr_->GetFemModel(body_id).num_dofs());
+  EXPECT_EQ(double_clone_ptr->GetFemModel(body_id)->num_dofs(),
+            deformable_model_ptr_->GetFemModel(body_id)->num_dofs());
   EXPECT_EQ(double_clone_ptr->GetReferencePositions(body_id),
             deformable_model_ptr_->GetReferencePositions(body_id));
   /* We don't compare the result of any function that involves
@@ -570,7 +570,7 @@ TEST_F(DeformableModelTest, EnableDisable) {
   auto model_id = RegisterSphere(0.5);
 
   plant_->Finalize();
-  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id).num_dofs();
+  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id)->num_dofs();
   auto diagram = builder_.Build();
 
   systems::DiscreteStateIndex state_index =
@@ -639,7 +639,7 @@ TEST_F(DeformableModelTest, GetAndSetPositions) {
   auto model_id = RegisterSphere(0.5);
 
   plant_->Finalize();
-  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id).num_dofs();
+  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id)->num_dofs();
   auto diagram = builder_.Build();
 
   auto context = diagram->CreateDefaultContext();
@@ -671,7 +671,7 @@ TEST_F(DeformableModelTest, GetAndSetPositionsThrowConditions) {
   auto context = diagram->CreateDefaultContext();
   systems::Context<double>& plant_context =
       plant_->GetMyMutableContextFromRoot(context.get());
-  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id).num_dofs();
+  const int num_dofs = deformable_model_ptr_->GetFemModel(model_id)->num_dofs();
 
   /* Wrong context. */
   EXPECT_THROW(deformable_model_ptr_->GetPositions(*context, model_id),
@@ -710,7 +710,7 @@ TEST_F(DeformableModelTest, Parallelism) {
   EXPECT_EQ(deformable_model_ptr_->parallelism().num_threads(), 1);
   DeformableBodyId body_id = RegisterSphere(1.0);
   EXPECT_EQ(
-      deformable_model_ptr_->GetFemModel(body_id).parallelism().num_threads(),
+      deformable_model_ptr_->GetFemModel(body_id)->parallelism().num_threads(),
       1);
 
   Parallelism parallelism(2);
@@ -718,7 +718,7 @@ TEST_F(DeformableModelTest, Parallelism) {
   deformable_model_ptr_->SetParallelism(parallelism);
   EXPECT_EQ(deformable_model_ptr_->parallelism().num_threads(), 2);
   EXPECT_EQ(
-      deformable_model_ptr_->GetFemModel(body_id).parallelism().num_threads(),
+      deformable_model_ptr_->GetFemModel(body_id)->parallelism().num_threads(),
       2);
 }
 
