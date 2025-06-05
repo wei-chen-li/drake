@@ -25,6 +25,19 @@ void ConstraintParticipation::ParticipateEdgesAndAdjacentNodes(
   }
 }
 
+std::unordered_set<int> ConstraintParticipation::ComputeParticipatingDofs()
+    const {
+  std::unordered_set<int> participating_dofs;
+  for (int i = 0; i < num_nodes_; ++i) {
+    if (participating_nodes_.contains(i))
+      participating_dofs.insert({4 * i, 4 * i + 1, 4 * i + 2});
+  }
+  for (int i = 0; i < num_edges_; ++i) {
+    if (participating_edges_.contains(i)) participating_dofs.insert(4 * i + 3);
+  }
+  return participating_dofs;
+}
+
 multibody::contact_solvers::internal::PartialPermutation
 ConstraintParticipation::ComputeDofPermutation() const {
   const int num_dofs = num_nodes_ * 3 + num_edges_;
