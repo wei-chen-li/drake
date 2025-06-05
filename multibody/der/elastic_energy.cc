@@ -142,7 +142,10 @@ void ComputeElasticEnergyHessian(const DerStructuralProperty<T>& prop,
 
 template <typename T>
 Block4x4SparseSymmetricMatrix<T> MakeEnergyHessianMatrix(bool has_closed_ends,
-                                                         int num_nodes) {
+                                                         int num_nodes,
+                                                         int num_edges) {
+  DRAKE_THROW_UNLESS(num_edges ==
+                     (has_closed_ends ? num_nodes : num_nodes - 1));
   std::vector<int> block_sizes(num_nodes, 4);
 
   std::vector<std::vector<int>> neighbors(num_nodes);

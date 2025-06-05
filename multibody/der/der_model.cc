@@ -269,11 +269,12 @@ struct DerModel<T>::Scratch {
         residual(model.num_dofs()),
         dEdq(model.num_dofs()),
         tangent_matrix(  //
-            internal::MakeEnergyHessianMatrix<T>(model.has_closed_ends(),
-                                                 model.num_nodes())),
+            internal::MakeEnergyHessianMatrix<T>(
+                model.has_closed_ends(), model.num_nodes(), model.num_edges())),
         state_to_d2Edq2({0, 0,
                          internal::MakeEnergyHessianMatrix<T>(
-                             model.has_closed_ends(), model.num_nodes())}) {}
+                             model.has_closed_ends(), model.num_nodes(),
+                             model.num_edges())}) {}
 };
 
 template <typename T>

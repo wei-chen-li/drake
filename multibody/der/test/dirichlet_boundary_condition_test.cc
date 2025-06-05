@@ -44,6 +44,7 @@ class DirichletBoundaryConditionTest : public ::testing::Test {
   Block4x4SparseSymmetricMatrix<double> MakeTangentMatrix() const {
     Block4x4SparseSymmetricMatrix<double> tangent_matrix =
         MakeEnergyHessianMatrix<double>(state_->has_closed_ends(),
+                                        state_->num_nodes(),
                                         state_->num_edges());
     EXPECT_EQ(tangent_matrix.rows(), kDofs);
     tangent_matrix.SetBlock(0, 0, Matrix4d::Constant(5));

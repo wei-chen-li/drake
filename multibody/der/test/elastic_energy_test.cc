@@ -83,7 +83,7 @@ class ElasticEnergyTest : public ::testing::TestWithParam<bool> {
   void CheckHessian(JacobianCalcFuncType jacobian_calc_func,
                     HessianCalcFuncType hessian_calc_func) const {
     Block4x4SparseSymmetricMatrix<T> hessian = MakeEnergyHessianMatrix<T>(
-        state_->has_closed_ends(), state_->num_nodes());
+        state_->has_closed_ends(), state_->num_nodes(), state_->num_edges());
     hessian_calc_func(*prop_, *undeformed_, *state_, &hessian);
     Eigen::MatrixXd matrix = hessian.MakeDenseMatrix();
     auto d2Edq2 = matrix.topLeftCorner(state_->num_dofs(), state_->num_dofs());
@@ -194,7 +194,7 @@ TEST_P(ElasticEnergyTest, MakeEnergyHessianMatrix) {
   }
 
   Block4x4SparseSymmetricMatrix<T> hessian =
-      MakeEnergyHessianMatrix<T>(has_closed_ends, num_nodes);
+      MakeEnergyHessianMatrix<T>(has_closed_ends, num_nodes, num_edges);
   for (int i = 0; i < ssize(pattern); ++i) {
     std::set<int>& row_pattern = pattern[i];
 
