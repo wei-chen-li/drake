@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "drake/geometry/proximity/volume_mesh.h"
 #include "drake/geometry/shape_specification.h"
 #include "drake/math/rigid_transform.h"
+#include "drake/multibody/der/der_model.h"
 #include "drake/multibody/fem/deformable_body_config.h"
 #include "drake/multibody/fem/fem_model.h"
 #include "drake/multibody/fem/force_density_field_base.h"
@@ -58,7 +60,9 @@ class DeformableBody final : public MultibodyElement<T> {
   const fem::DeformableBodyConfig<T>& config() const { return config_; }
 
   /** Returns the number of degrees of freedom (DoFs) of this body. */
-  int num_dofs() const { return fem_model_->num_dofs(); }
+  int num_dofs() const {
+    return fem_model_ ? fem_model_->num_dofs() : der_model_->num_dofs();
+  }
 
   /** Returns the reference positions of the vertices of the deformable body
    identified by the given `id`.
@@ -70,8 +74,11 @@ class DeformableBody final : public MultibodyElement<T> {
     return reference_positions_;
   }
 
-  /** Returns the FemModel for this deformable body. */
-  const fem::FemModel<T>& fem_model() const { return *fem_model_; }
+  /** Returns the FemModel for this deformable body. May be nullptr. */
+  const fem::FemModel<T>* fem_model() const { return fem_model_.get(); }
+
+  /** Returns the DerModel for this deformable body. May be nullptr. */
+  const der::DerModel<T>* der_model() const { return der_model_.get(); }
 
   /** Returns all the external forces acting on this deformable body. */
   const std::vector<const ForceDensityFieldBase<T>*>& external_forces() const {
@@ -227,7 +234,8 @@ class DeformableBody final : public MultibodyElement<T> {
    @param config          Physical parameters of this body.
    @param weights         The integrator weights for the deformable body used to
                           combine the stiffness, damping, and mass matrices to
-                          form the tangent matrix. */
+                          form the tangent matrix.
+ */
   DeformableBody(DeformableBodyIndex index, DeformableBodyId id,
                  std::string name, geometry::GeometryId geometry_id,
                  ModelInstanceIndex model_instance,
@@ -235,6 +243,26 @@ class DeformableBody final : public MultibodyElement<T> {
                  const math::RigidTransform<double>& X_WG,
                  const fem::DeformableBodyConfig<T>& config,
                  const Vector3<double>& weights);
+
+  /* Private constructor exposed only to DeformableModel.
+   @param index           Unique DeformableBodyIndex
+   @param id              Unique DeformableBodyId
+   @param name            Name of the body
+   @param geometry_id     GeometryId of the simulated geometry.
+   @param model_instance  ModelInstanceIndex for this body.
+   @param filament_G      The simulated filament in the geometry's frame.
+   @param X_WG            The pose of the mesh in the world frame.
+   @param config          Physical parameters of this body.
+   @param weights         The integrator weights for the deformable body used to
+                          combine the stiffness, damping, and mass matrices to
+                          form the tangent matrix.
+ */
+  DeformableBody(DeformableBodyIndex index, DeformableBodyId id,
+                 std::string name, geometry::GeometryId geometry_id,
+                 ModelInstanceIndex model_instance,
+                 const geometry::Filament& filament_G,
+                 const math::RigidTransform<double>& X_WG,
+                 const fem::DeformableBodyConfig<T>& config);
 
   /* Creates a deep copy of this DeformableBody. Called only in DeformableModel
    to support cloning DeformableModel. */
@@ -279,6 +307,16 @@ class DeformableBody final : public MultibodyElement<T> {
                                    const fem::DeformableBodyConfig<T>& config,
                                    const Vector3<double>& weights);
 
+  /* Builds a DER model for this body. The cross-section info as well as the
+   reference node positions and edge m1 directors in the frame G are given by
+   `filament_G`, and is transformed to the world frame using `X_WG`. The
+   physical properties of the body are given by `config`. */
+  template <typename T1 = T>
+  typename std::enable_if_t<std::is_same_v<T1, double>, void>
+  BuildFilamentDerModel(const math::RigidTransform<T>& X_WG,
+                        const geometry::Filament& filament_G,
+                        const fem::DeformableBodyConfig<T>& config);
+
   void DoSetTopology(const internal::MultibodyTreeTopology&) final {
     /* No-op because deformable bodies are not part of the MultibodyTree
      topology. */
@@ -311,7 +349,10 @@ class DeformableBody final : public MultibodyElement<T> {
   geometry::GeometryId geometry_id_{};
   /* The mesh of the deformable geometry (in its reference configuration) in
    its geometry frame. */
-  geometry::VolumeMesh<double> mesh_G_;
+  std::optional<geometry::VolumeMesh<double>> mesh_G_;
+  /* The filament geometry (in its reference configuration) in its geometry
+   frame. */
+  std::optional<geometry::Filament> filament_G_;
   /* The pose of the deformable geometry (in its reference configuration) in
    the world frame. */
   math::RigidTransform<double> X_WG_;
@@ -320,6 +361,7 @@ class DeformableBody final : public MultibodyElement<T> {
    configuration measured and expressed in the world frame. */
   VectorX<double> reference_positions_;
   copyable_unique_ptr<fem::FemModel<T>> fem_model_;
+  copyable_unique_ptr<der::DerModel<T>> der_model_;
   systems::DiscreteStateIndex discrete_state_index_{};
   systems::AbstractParameterIndex is_enabled_parameter_index_{};
   std::vector<internal::DeformableRigidFixedConstraintSpec>

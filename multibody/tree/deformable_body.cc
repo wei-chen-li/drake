@@ -1,6 +1,9 @@
 #include "drake/multibody/tree/deformable_body.h"
 
+#include "drake/common/overloaded.h"
 #include "drake/geometry/scene_graph.h"
+#include "drake/math/axis_angle.h"
+#include "drake/math/frame_transport.h"
 #include "drake/multibody/fem/corotated_model.h"
 #include "drake/multibody/fem/dirichlet_boundary_condition.h"
 #include "drake/multibody/fem/linear_constitutive_model.h"
@@ -28,24 +31,48 @@ void DeformableBody<T>::SetWallBoundaryCondition(const Vector3<T>& p_WQ,
   DRAKE_THROW_UNLESS(n_W.norm() > 1e-10);
   const Vector3<T> nhat_W = n_W.normalized();
 
-  const int num_nodes = fem_model_->num_nodes();
   constexpr int kDim = 3;
   auto is_inside_wall = [&p_WQ, &nhat_W](const Vector3<T>& p_WV) {
     const T distance_to_wall = (p_WV - p_WQ).dot(nhat_W);
     return distance_to_wall < 0;
   };
 
-  fem::internal::DirichletBoundaryCondition<T> bc;
-  for (int n = 0; n < num_nodes; ++n) {
-    const int dof_index = kDim * n;
-    const auto p_WV = reference_positions_.template segment<kDim>(dof_index);
-    if (is_inside_wall(p_WV)) {
-      /* Set this node to be subject to zero Dirichlet BC. */
-      bc.AddBoundaryCondition(fem::FemNodeIndex(n),
-                              {p_WV, Vector3<T>::Zero(), Vector3<T>::Zero()});
+  if (fem_model_) {
+    const int num_nodes = fem_model_->num_nodes();
+    fem::internal::DirichletBoundaryCondition<T> bc;
+    for (int n = 0; n < num_nodes; ++n) {
+      const int dof_index = kDim * n;
+      const auto p_WV = reference_positions_.template segment<kDim>(dof_index);
+      if (is_inside_wall(p_WV)) {
+        /* Set this node to be subject to zero Dirichlet BC. */
+        bc.AddBoundaryCondition(fem::FemNodeIndex(n),
+                                {p_WV, Vector3<T>::Zero(), Vector3<T>::Zero()});
+      }
     }
+    fem_model_->SetDirichletBoundaryCondition(bc);
+  } else if (der_model_) {
+    const int num_nodes = der_model_->num_nodes();
+    /* Fix the nodes that are inside the wall. */
+    std::vector<int> fixed_node_indexes;
+    for (int i = 0; i < num_nodes; ++i) {
+      const auto p_WV = reference_positions_.template segment<kDim>(kDim * i);
+      if (is_inside_wall(p_WV)) {
+        der_model_->FixPositionOrAngle(der::DerNodeIndex(i));
+        fixed_node_indexes.push_back(i);
+      }
+    }
+    /* If node i and node i+1 are fixed, also fix edge i. */
+    for (int k = 0; k < ssize(fixed_node_indexes); ++k) {
+      const int i = fixed_node_indexes[k];
+      const int ip1 =
+          der_model_->has_closed_ends() ? (i + 1) % num_nodes : (i + 1);
+      if (ip1 == fixed_node_indexes[(k + 1) % ssize(fixed_node_indexes)]) {
+        der_model_->FixPositionOrAngle(der::DerEdgeIndex(i));
+      }
+    }
+  } else {
+    DRAKE_UNREACHABLE();
   }
-  fem_model_->SetDirichletBoundaryCondition(bc);
 }
 
 template <typename T>
@@ -58,6 +85,7 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
         "with the MultibodyPlant owning the deformable model.",
         body_B.name()));
   }
+  // TODO(wei-chen): Implement this function for DerModel.
   /* X_WG is the pose of this body's reference mesh in the world frame. In the
    scope of this function, we call that the A frame and G is used to denote
    the rigid body's geometry, so we rename X_WG_ to X_WA here to avoid
@@ -118,16 +146,28 @@ void DeformableBody<T>::SetPositions(
     const Eigen::Ref<const Matrix3X<T>>& q) const {
   DRAKE_THROW_UNLESS(context != nullptr);
   this->GetParentTreeSystem().ValidateContext(*context);
-  const int num_nodes = fem_model_->num_nodes();
-  DRAKE_THROW_UNLESS(q.cols() == num_nodes);
-  auto all_finite = [](const Matrix3X<T>& positions) {
-    return positions.array().isFinite().all();
-  };
-  DRAKE_THROW_UNLESS(all_finite(q));
+  if (fem_model_) {
+    const int num_nodes = fem_model_->num_nodes();
+    DRAKE_THROW_UNLESS(q.cols() == num_nodes);
+    auto all_finite = [](const Matrix3X<T>& positions) {
+      return positions.array().isFinite().all();
+    };
+    DRAKE_THROW_UNLESS(all_finite(q));
 
-  context->get_mutable_discrete_state(discrete_state_index_)
-      .get_mutable_value()
-      .head(num_nodes * 3) = Eigen::Map<const VectorX<T>>(q.data(), q.size());
+    context->get_mutable_discrete_state(discrete_state_index_)
+        .get_mutable_value()
+        .head(num_nodes * 3) = Eigen::Map<const VectorX<T>>(q.data(), q.size());
+  } else if (der_model_) {
+    const int num_nodes = der_model_->num_nodes();
+    DRAKE_THROW_UNLESS(q.cols() == num_nodes);
+    Eigen::VectorBlock<VectorX<T>> discrete_state_vector =
+        context->get_mutable_discrete_state(discrete_state_index_)
+            .get_mutable_value();
+    for (int i = 0; i < num_nodes; ++i)
+      discrete_state_vector.template segment<3>(4 * i) = q.col(i);
+  } else {
+    DRAKE_UNREACHABLE();
+  }
 }
 
 template <typename T>
@@ -135,11 +175,24 @@ Matrix3X<T> DeformableBody<T>::GetPositions(
     const systems::Context<T>& context) const {
   this->GetParentTreeSystem().ValidateContext(context);
 
-  const int num_nodes = fem_model_->num_nodes();
-  const VectorX<T>& q = context.get_discrete_state(discrete_state_index_)
-                            .get_value()
-                            .head(num_nodes * 3);
-  return Eigen::Map<const Matrix3X<T>>(q.data(), 3, num_nodes);
+  if (fem_model_) {
+    const int num_nodes = fem_model_->num_nodes();
+    const VectorX<T>& q = context.get_discrete_state(discrete_state_index_)
+                              .get_value()
+                              .head(num_nodes * 3);
+    return Eigen::Map<const Matrix3X<T>>(q.data(), 3, num_nodes);
+  } else if (der_model_) {
+    const VectorX<T>& discrete_state_vector =
+        context.get_discrete_state(discrete_state_index_).get_value();
+    const int num_nodes = der_model_->num_nodes();
+    Matrix3X<T> node_positions(3, num_nodes);
+    for (int i = 0; i < num_nodes; ++i) {
+      node_positions.col(i) = discrete_state_vector.template segment<3>(4 * i);
+    }
+    return node_positions;
+  } else {
+    DRAKE_UNREACHABLE();
+  }
 }
 
 template <typename T>
@@ -159,7 +212,7 @@ void DeformableBody<T>::Disable(systems::Context<T>* context) const {
    dofs are stored in the order of q, v, and then a. */
   context->get_mutable_discrete_state(discrete_state_index_)
       .get_mutable_value()
-      .tail(2 * num_dofs())
+      .segment(num_dofs(), 2 * num_dofs())
       .setZero();
 }
 
@@ -199,22 +252,57 @@ DeformableBody<T>::DeformableBody(
 }
 
 template <typename T>
+DeformableBody<T>::DeformableBody(DeformableBodyIndex index,
+                                  DeformableBodyId id, std::string name,
+                                  geometry::GeometryId geometry_id,
+                                  ModelInstanceIndex model_instance,
+                                  const geometry::Filament& filament_G,
+                                  const math::RigidTransform<double>& X_WG,
+                                  const fem::DeformableBodyConfig<T>& config)
+    : MultibodyElement<T>(model_instance, index),
+      id_(id),
+      name_(std::move(name)),
+      geometry_id_(geometry_id),
+      filament_G_(filament_G),
+      X_WG_(X_WG),
+      config_(config) {
+  if constexpr (std::is_same_v<T, double>) {
+    BuildFilamentDerModel(X_WG, filament_G, config);
+    reference_positions_ = (X_WG * filament_G.node_pos()).reshaped();
+  } else {
+    throw std::runtime_error(
+        "DeformableBody<T>::DeformableBody(): T must be double.");
+  }
+}
+
+template <typename T>
 std::unique_ptr<DeformableBody<double>> DeformableBody<T>::CloneToDouble()
     const {
   if constexpr (!std::is_same_v<T, double>) {
     /* A non-double body shouldn't exist in the first place. */
     DRAKE_UNREACHABLE();
   } else {
-    auto clone =
-        std::unique_ptr<DeformableBody<double>>(new DeformableBody<double>(
-            this->index(), id_, name_, geometry_id_, this->model_instance(),
-            mesh_G_, X_WG_, config_, fem_model_->tangent_matrix_weights()));
+    std::unique_ptr<DeformableBody<double>> clone;
+    if (mesh_G_.has_value()) {
+      clone =
+          std::unique_ptr<DeformableBody<double>>(new DeformableBody<double>(
+              this->index(), id_, name_, geometry_id_, this->model_instance(),
+              *mesh_G_, X_WG_, config_, fem_model_->tangent_matrix_weights()));
+    } else if (filament_G_.has_value()) {
+      clone =
+          std::unique_ptr<DeformableBody<double>>(new DeformableBody<double>(
+              this->index(), id_, name_, geometry_id_, this->model_instance(),
+              *filament_G_, X_WG_, config_));
+    } else {
+      DRAKE_UNREACHABLE();
+    }
     /* We go through all data member one by one in order, and either copy them
      over or explain why they don't need to be copied. */
     /* id_ is copied in the constructor above. */
     /* name_ is copied in the constructor above. */
     /* geometry_id_ is copied in the constructor above. */
     /* mesh_G_ is copied in the constructor above. */
+    /* filament_G_ is copied in the constructor above. */
     /* X_WG_ is copied in the constructor above. */
     /* config_ is copied in the constructor above. */
     /* Copy over reference_positions_. */
@@ -313,6 +401,59 @@ DeformableBody<T>::BuildLinearVolumetricModelHelper(
                                        config.mass_density(), damping_model);
   builder.Build();
   fem_model_ = std::move(concrete_fem_model);
+}
+
+template <typename T>
+template <typename T1>
+typename std::enable_if_t<std::is_same_v<T1, double>, void>
+DeformableBody<T>::BuildFilamentDerModel(
+    const math::RigidTransform<T>& X_WG, const geometry::Filament& filament_G,
+    const fem::DeformableBodyConfig<T>& config) {
+  const Eigen::Matrix3X<T> node_pos = X_WG * filament_G.node_pos();
+  const Eigen::Matrix3X<T> edge_m1 = X_WG.rotation() * filament_G.edge_m1();
+  const int num_nodes = node_pos.cols();
+  const int num_edges = edge_m1.cols();
+  DRAKE_THROW_UNLESS(num_nodes >= 2);
+  DRAKE_THROW_UNLESS(num_edges ==
+                     (filament_G.closed() ? num_nodes : num_nodes - 1));
+  Eigen::Matrix3X<T> edge_t(3, num_edges);
+  for (int i = 0; i < num_edges; ++i) {
+    const int ip1 = (i + 1) % num_nodes;
+    edge_t.col(i) = math::internal::NormalizeOrThrow<T>(
+        node_pos.col(ip1) - node_pos.col(i), __func__);
+  }
+  Eigen::Matrix3X<T> edge_d1(3, num_edges);
+  math::SpaceParallelFrameTransport<T>(edge_t, edge_m1.col(0), &edge_d1);
+
+  typename der::DerModel<T>::Builder builder;
+  builder.AddFirstEdge(node_pos.col(0), 0.0, node_pos.col(1), edge_m1.col(0));
+  for (int i = 1; i < num_edges; ++i) {
+    const T gamma_i = math::SignedAngleAroundAxis<T>(
+        edge_d1.col(i), edge_m1.col(i), edge_t.col(i));
+    const int ip1 = (i + 1) % num_nodes;
+    builder.AddEdge(gamma_i, node_pos.col(ip1));
+  }
+
+  builder.SetUndeformedStateToInitialState();
+
+  const T E = config.youngs_modulus();
+  const T G = E / (2 * (1 + config.poissons_ratio()));
+  const T rho = config.mass_density();
+  builder.SetMaterialProperties(E, G, rho);
+  builder.SetDampingCoefficients(config.mass_damping_coefficient(),
+                                 config.stiffness_damping_coefficient());
+
+  std::visit(
+      overloaded{
+          [&builder](const geometry::Filament::CircularCrossSection& cs) {
+            builder.SetCircularCrossSection(cs.diameter / 2);
+          },
+          [&builder](const geometry::Filament::RectangularCrossSection& cs) {
+            builder.SetRectangularCrossSection(cs.width, cs.height);
+          }},
+      filament_G.cross_section());
+
+  der_model_ = builder.Build();
 }
 
 }  // namespace multibody
