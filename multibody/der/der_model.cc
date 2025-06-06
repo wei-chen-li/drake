@@ -147,20 +147,6 @@ void DerModel<T>::Builder::SetDampingCoefficients(
 }
 
 template <typename T>
-void DerModel<T>::Builder::AddBoundaryCondition(
-    DerNodeIndex node_index, const internal::NodeState<T>& boundary_state) {
-  DRAKE_THROW_UNLESS(0 <= node_index && node_index < ssize(node_positions_));
-  boundary_condition_.AddBoundaryCondition(node_index, boundary_state);
-}
-
-template <typename T>
-void DerModel<T>::Builder::AddBoundaryCondition(
-    DerEdgeIndex edge_index, const internal::EdgeState<T>& boundary_state) {
-  DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < ssize(edge_angles_));
-  boundary_condition_.AddBoundaryCondition(edge_index, boundary_state);
-}
-
-template <typename T>
 std::unique_ptr<DerModel<T>> DerModel<T>::Builder::Build() {
   using internal::DerStructuralProperty;
 

@@ -159,21 +159,6 @@ class DerModel {
     // @}
 
     /** @{
-     @name Adding Boundary Condition
-     These methods are used to specify the boundary condition of the DER. */
-
-    /** Add boundary condition for the node indexed by `node_index`.
-     @pre The node indexed by `node_index` is already added to this builder. */
-    void AddBoundaryCondition(DerNodeIndex node_index,
-                              const internal::NodeState<T>& boundary_state);
-
-    /** Add boundary condition for the edge indexed by `edge_index`.
-     @pre The edge indexed by `edge_index` is already added to this builder. */
-    void AddBoundaryCondition(DerEdgeIndex edge_index,
-                              const internal::EdgeState<T>& boundary_state);
-    // @}
-
-    /** @{
      @name Building the DER Model
      This method is used to build the DER model. */
 
