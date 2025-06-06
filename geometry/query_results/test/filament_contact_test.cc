@@ -41,6 +41,7 @@ GTEST_TEST(FilamentContactTest, AddFilamentFilamentContactGeometryPair) {
   EXPECT_EQ(pair.id_B().get_value(), kIdB.get_value());
   EXPECT_TRUE(pair.is_B_filament());
   EXPECT_EQ(pair.num_contacts(), 1);
+  EXPECT_EQ(pair.R_WCs()[0].col(2), -nhats_BA_W[0]);
 
   constexpr double kTol = 1e-16;
   EXPECT_NEAR(std::get<0>(pair.kinematic_coordinates_A()[0]), 1 / 3.0, kTol);
@@ -76,6 +77,7 @@ GTEST_TEST(FilamentContactTest, AddFilamentRigidContactGeometryPair) {
   EXPECT_EQ(pair.id_B().get_value(), kIdB.get_value());
   EXPECT_FALSE(pair.is_B_filament());
   EXPECT_EQ(pair.num_contacts(), 1);
+  EXPECT_EQ(pair.R_WCs()[0].col(2), -nhats_BA_W[0]);
 
   constexpr double kTol = 1e-16;
   EXPECT_NEAR(std::get<0>(pair.kinematic_coordinates_A()[0]), 1 / 3.0, kTol);

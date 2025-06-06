@@ -10,6 +10,7 @@
 #include "drake/common/eigen_types.h"
 #include "drake/common/ssize.h"
 #include "drake/geometry/geometry_ids.h"
+#include "drake/math/rotation_matrix.h"
 
 namespace drake {
 namespace geometry {
@@ -112,11 +113,20 @@ class FilamentContactGeometryPair {
    expressed in the world frame. */
   const std::vector<Vector3<T>>& nhats_BA_W() const { return nhats_BA_W_; }
 
-  /* Returns the signed distances of the contacts. */
+  /* Returns rotation matrices that transform the basis of frame W into the
+   basis of an arbitrary frame C. In this transformation, the z-axis of frame,
+   Cz, is aligned with the vector n̂. The vector n̂ represents the normal as
+   opposite to the one reported in `nhats_BA_W()`. Cx and Cy are arbitrary but
+   sufficient to form the right-handed basis. The ordering is same as p_WCs() or
+   nhats_BA_W(). */
+  const std::vector<math::RotationMatrix<T>>& R_WCs() const { return R_WCs_; }
+
+  /* Returns the signed distances of the contacts. The ordering is same as
+   p_WCs() or nhats_BA_W(). */
   const std::vector<T>& signed_distances() const { return signed_distances_; }
 
-  /* Returns the indexes of filament A edges participating in contact, listed in
-   the order in accordance with p_WCs() and nhats_BA_W(). */
+  /* Returns the indexes of filament A edges participating in contact. The
+   ordering is same as p_WCs() or nhats_BA_W(). */
   const std::vector<int>& contact_edge_indexes_A() const {
     return contact_edge_indexes_A_;
   }
@@ -129,8 +139,8 @@ class FilamentContactGeometryPair {
     return kinematic_coordinates_A_;
   }
 
-  /* Returns the indexes of filament B edges participating in contact, listed in
-   the order in accordance with p_WCs() and nhats_BA_W().
+  /* Returns the indexes of filament B edges participating in contact. The
+   ordering is same as p_WCs() or nhats_BA_W().
    @pre `is_B_filament()`. */
   const std::vector<int>& contact_edge_indexes_B() const {
     DRAKE_THROW_UNLESS(is_B_filament());
@@ -152,6 +162,7 @@ class FilamentContactGeometryPair {
   GeometryId id_B_;
   std::vector<Vector3<T>> p_WCs_;
   std::vector<Vector3<T>> nhats_BA_W_;
+  std::vector<math::RotationMatrix<T>> R_WCs_;
   std::vector<T> signed_distances_;
   std::vector<int> contact_edge_indexes_A_;
   std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A_;
