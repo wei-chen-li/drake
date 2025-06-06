@@ -1013,8 +1013,8 @@ Eigen::Ref<VectorX<T>> Multiplexer<T>::Demultiplex(EigenPtr<VectorX<T>> input,
   DRAKE_THROW_UNLESS(0 <= index && index < num_vectors());
   DRAKE_THROW_UNLESS(input->size() == num_entries_);
   /* We prefer Eigen::Ref<VectorX<T>> to
-   Eigen::VectorBlock<Eigen::Ref<VectorX<T>>> for readability and encapsulation
-   of the implementation of EigenPtr. */
+   Eigen::VectorBlock<Eigen::Ref<VectorX<T>>> for readability and
+   encapsulation of the implementation of EigenPtr. */
   return input->segment(offsets_[index], sizes_[index]);
 }
 
@@ -1239,9 +1239,54 @@ void DeformableDriver<T>::CalcNextDerState(const systems::Context<T>& context,
         EvalFreeMotionDerState(context, index);
     next_der_state->CopyFrom(free_motion_state);
   } else {
-    // TODO(wei-chen): Implement CalcNextDerState() when there are constraints.
-    throw std::logic_error(
-        "CalcNextDerState() not implemented for constraints.");
+    const ContactSolverResults<T>& results =
+        manager_->EvalContactSolverResults(context);
+    /* Get the next time step velocities and free motion velocities for *all*
+     participating deformable dofs (belonging to *all* deformable bodies). */
+    const int num_all_participating_dofs =
+        results.v_next.size() - manager_->plant().num_velocities();
+    const auto participating_v_next =
+        results.v_next.tail(num_all_participating_dofs);
+    const VectorX<T>& participating_v_star =
+        EvalParticipatingFreeMotionVelocities(context);
+    /* The next time step velocities and free motion velocities for *this*
+     body. */
+    const Multiplexer<T>& mux = EvalParticipatingVelocityMultiplexer(context);
+    const Eigen::Ref<const VectorX<T>> body_participating_v_star =
+        mux.Demultiplex(participating_v_star, index);
+    const Eigen::Ref<const VectorX<T>> body_participating_v_next =
+        mux.Demultiplex(participating_v_next, index);
+    const VectorX<T> body_participating_dv =
+        body_participating_v_next - body_participating_v_star;
+    /* Compute the value of the post-constraint non-participating
+     velocities using Schur complement. */
+    const der::internal::SchurComplement<T>& schur_complement =
+        EvalFreeMotionDerTangentMatrixSchurComplement(context, index);
+    const VectorX<T> body_nonparticipating_dv =
+        schur_complement.SolveForY(body_participating_dv);
+    /* Concatenate the participating and non-participating velocities and
+     then apply the inverse permutation to put the dofs in their original
+     order. */
+    PartialPermutation full_velocity_permutation =
+        EvalDofPermutation(context, index);
+    full_velocity_permutation.ExtendToFullPermutation();
+    const int num_dofs = full_velocity_permutation.domain_size();
+    const int num_nonparticipating_dofs =
+        num_dofs - body_participating_dv.size();
+    DRAKE_DEMAND(body_nonparticipating_dv.size() == num_nonparticipating_dofs ||
+                 body_nonparticipating_dv.size() ==
+                     num_nonparticipating_dofs + 1);
+    VectorX<T> permuted_dv(num_dofs);
+    permuted_dv << body_participating_dv,
+        body_nonparticipating_dv.head(num_nonparticipating_dofs);
+    VectorX<T> dv(num_dofs);
+    full_velocity_permutation.ApplyInverse(permuted_dv, &dv);
+    /* v_next = v_star + dv */
+    VectorX<T>& v_next = dv;
+    v_next += EvalFreeMotionDerState(context, index).get_velocity();
+    const DerState<T>& der_state = EvalDerState(context, index);
+    deformable_model_->der_integrator().AdvanceOneTimeStep(der_state, v_next,
+                                                           next_der_state);
   }
 }
 
