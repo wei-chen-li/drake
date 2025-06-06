@@ -312,8 +312,8 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   const contact_solvers::internal::SchurComplement&
-  EvalFreeMotionTangentMatrixSchurComplement(const systems::Context<T>& context,
-                                             DeformableBodyIndex index) const;
+  EvalFreeMotionFemTangentMatrixSchurComplement(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Given the state of the deformable body with `index` in the given `context`,
    computes its "free motion" state (the state the body would have at the next
@@ -329,6 +329,10 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   const der::internal::DerState<T>& EvalFreeMotionDerState(
+      const systems::Context<T>& context, DeformableBodyIndex index) const;
+
+  const der::internal::SchurComplement<T>&
+  EvalFreeMotionDerTangentMatrixSchurComplement(
       const systems::Context<T>& context, DeformableBodyIndex index) const;
 
   /* Given the state of the deformable body with `index` in the given `context`,

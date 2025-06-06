@@ -238,6 +238,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
           /* Free motion velocities can depend on user defined external forces
            which in turn depends on input ports. */
           {der_state_cache_entry.ticket(),
+           constraint_participation_cache_entry.ticket(),
            systems::System<T>::all_input_ports_ticket(),
            systems::System<T>::all_parameters_ticket()});
       cache_indexes_.solvers.emplace_back(der_solver_cache_entry.cache_index());
@@ -315,14 +316,17 @@ void DeformableDriver<T>::AppendLinearDynamicsMatrix(
     }
     if (deformable_model_->GetFemModel(body_id)) {
       const SchurComplement& schur_complement =
-          EvalFreeMotionTangentMatrixSchurComplement(context, index);
+          EvalFreeMotionFemTangentMatrixSchurComplement(context, index);
       /* The schur complement is of the tangent matrix of the force balance
        whereas the linear dynamics matrix requires the tangent matrix of the
        momentum balance. Hence, we scale by dt here. */
       A->push_back(schur_complement.get_D_complement() *
                    manager_->plant().time_step());
     } else if (deformable_model_->GetDerModel(body_id)) {
-      // TODO(wei-chen): Implement AppendLinearDynamicsMatrix() for DerModel.
+      const der::internal::SchurComplement<T>& schur_complement =
+          EvalFreeMotionDerTangentMatrixSchurComplement(context, index);
+      A->push_back(schur_complement.get_D_complement() *
+                   manager_->plant().time_step());
     } else {
       DRAKE_UNREACHABLE();
     }
@@ -493,6 +497,7 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
     const systems::Context<T>& context,
     DiscreteContactData<DiscreteContactPair<T>>* result) const {
   DRAKE_DEMAND(result != nullptr);
+  // TODO(wei-chen): Implement AppendDiscreteContactPairs() for DER.
 
   /* Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
      Jv_v_AcBc_W = Jv_v_WBc_W - Jv_v_WAc_W.
@@ -1106,7 +1111,7 @@ const FemState<T>& DeformableDriver<T>::EvalFreeMotionFemState(
 
 template <typename T>
 const SchurComplement&
-DeformableDriver<T>::EvalFreeMotionTangentMatrixSchurComplement(
+DeformableDriver<T>::EvalFreeMotionFemTangentMatrixSchurComplement(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   const FemSolver<T>& fem_solver = EvalFreeMotionFemSolver(context, index);
   return fem_solver.next_schur_complement();
@@ -1125,6 +1130,11 @@ void DeformableDriver<T>::CalcFreeMotionDerSolver(
   const der::internal::ExternalForceField<T> external_force_field{
       &context, deformable_model_->GetExternalForces(body_id)};
   der_solver->AdvanceOneTimeStep(der_state, external_force_field);
+
+  const der::internal::ConstraintParticipation& participation =
+      EvalDerConstraintParticipation(context, index);
+  der_solver->ComputeTangentMatrixSchurComplement(
+      participation.ComputeParticipatingDofs());
 }
 
 template <typename T>
@@ -1140,6 +1150,14 @@ const DerState<T>& DeformableDriver<T>::EvalFreeMotionDerState(
     const systems::Context<T>& context, DeformableBodyIndex index) const {
   const DerSolver<T>& der_solver = EvalFreeMotionDerSolver(context, index);
   return der_solver.get_state();
+}
+
+template <typename T>
+const der::internal::SchurComplement<T>&
+DeformableDriver<T>::EvalFreeMotionDerTangentMatrixSchurComplement(
+    const systems::Context<T>& context, DeformableBodyIndex index) const {
+  const DerSolver<T>& der_solver = EvalFreeMotionDerSolver(context, index);
+  return der_solver.get_tangent_matrix_schur_complement();
 }
 
 template <typename T>
@@ -1179,7 +1197,7 @@ void DeformableDriver<T>::CalcNextFemState(const systems::Context<T>& context,
     /* Compute the value of the post-constraint non-participating
      velocities using Schur complement. */
     const SchurComplement& schur_complement =
-        EvalFreeMotionTangentMatrixSchurComplement(context, index);
+        EvalFreeMotionFemTangentMatrixSchurComplement(context, index);
     const VectorX<T> body_nonparticipating_dv =
         schur_complement.SolveForX(body_participating_dv);
     /* Concatenate the participating and non-participating velocities and

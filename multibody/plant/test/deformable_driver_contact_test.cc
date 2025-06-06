@@ -138,10 +138,11 @@ class DeformableDriverContactTest : public ::testing::Test {
     return fem_tangent_matrix->MakeDenseMatrix();
   }
 
-  const SchurComplement& EvalFreeMotionTangentMatrixSchurComplement(
+  const SchurComplement& EvalFreeMotionFemTangentMatrixSchurComplement(
       const systems::Context<double>& context,
       DeformableBodyIndex index) const {
-    return driver_->EvalFreeMotionTangentMatrixSchurComplement(context, index);
+    return driver_->EvalFreeMotionFemTangentMatrixSchurComplement(context,
+                                                                  index);
   }
 
   /* @} */
@@ -300,7 +301,7 @@ TEST_F(DeformableDriverContactTest, EvalParticipatingFreeMotionVelocities) {
 }
 
 TEST_F(DeformableDriverContactTest,
-       EvalFreeMotionTangentMatrixSchurComplement) {
+       EvalFreeMotionFemTangentMatrixSchurComplement) {
   DeformableBodyIndex body_index(1);
   const Context<double>& plant_context =
       plant_->GetMyContextFromRoot(*context_);
@@ -333,7 +334,7 @@ TEST_F(DeformableDriverContactTest,
       A - B.transpose() * D.llt().solve(B);
   EXPECT_TRUE(CompareMatrices(
       expected_complement_matrix,
-      EvalFreeMotionTangentMatrixSchurComplement(plant_context, body_index)
+      EvalFreeMotionFemTangentMatrixSchurComplement(plant_context, body_index)
           .get_D_complement(),
       1e-14, MatrixCompareType::relative));
 }
@@ -346,12 +347,12 @@ TEST_F(DeformableDriverContactTest, AppendLinearDynamicsMatrix) {
   ASSERT_EQ(A.size(), 2);
   DeformableBodyIndex body_index0(0);
   DeformableBodyIndex body_index1(1);
-  EXPECT_EQ(A[0], EvalFreeMotionTangentMatrixSchurComplement(plant_context,
-                                                             body_index0)
+  EXPECT_EQ(A[0], EvalFreeMotionFemTangentMatrixSchurComplement(plant_context,
+                                                                body_index0)
                           .get_D_complement() *
                       plant_->time_step());
-  EXPECT_EQ(A[1], EvalFreeMotionTangentMatrixSchurComplement(plant_context,
-                                                             body_index1)
+  EXPECT_EQ(A[1], EvalFreeMotionFemTangentMatrixSchurComplement(plant_context,
+                                                                body_index1)
                           .get_D_complement() *
                       plant_->time_step());
 }
@@ -379,8 +380,8 @@ TEST_F(DeformableDriverContactTest, AppendLinearDynamicsMatrixDisabled) {
   EXPECT_EQ(A[0].cols(), 0);
   /* The linear dynamics matrix for body1 remains unchanged. */
   DeformableBodyIndex body_index1(1);
-  EXPECT_EQ(A[1], EvalFreeMotionTangentMatrixSchurComplement(plant_context,
-                                                             body_index1)
+  EXPECT_EQ(A[1], EvalFreeMotionFemTangentMatrixSchurComplement(plant_context,
+                                                                body_index1)
                           .get_D_complement() *
                       plant_->time_step());
 
