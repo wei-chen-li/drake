@@ -20,6 +20,8 @@ DEFINE_double(width, 0.05, "Width of the cantilever beam [m].");
 DEFINE_double(height, 0.015, "Width of the cantilever beam [m].");
 DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
+DEFINE_double(ball_mass, 1, "Mass of the ball [kg].");
+DEFINE_double(ball_radius, 0.03, "Radius of the ball [m].");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
               "multibody::DiscreteContactApproximation for details. Options "
@@ -31,23 +33,27 @@ namespace {
 
 using drake::geometry::Filament;
 using drake::geometry::SceneGraph;
+using drake::geometry::Sphere;
 using drake::multibody::AddMultibodyPlant;
+using drake::multibody::CoulombFriction;
 using drake::multibody::DeformableBodyId;
 using drake::multibody::DeformableModel;
 using drake::multibody::ForceDensityField;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
+using drake::multibody::RigidBody;
+using drake::multibody::SpatialInertia;
 using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
 using drake::systems::Simulator;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
 using Eigen::VectorXd;
-using math::RigidTransform;
-using math::RotationMatrix;
+using math::RigidTransformd;
+using math::RotationMatrixd;
 
 DeformableBodyId RegisterCantileverBeam(
-    DeformableModel<double>* deformable_model, bool circular = false) {
+    DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
   /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
@@ -63,8 +69,7 @@ DeformableBodyId RegisterCantileverBeam(
                     first_edge_m1);
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
-  const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
-                                    Vector3d(0, 0, 0.5));
+  const RigidTransformd X_WG(RotationMatrixd::Identity(), Vector3d(0, 0, 0.5));
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
       X_WG, filament, "cantilever beam");
 
@@ -99,6 +104,21 @@ DeformableBodyId RegisterCantileverBeam(
   return body_id;
 }
 
+void RegisterBall(MultibodyPlant<double>* plant) {
+  const RigidBody<double>& ball =
+      plant->AddRigidBody("ball", SpatialInertia<double>::SolidSphereWithMass(
+                                      FLAGS_ball_mass, FLAGS_ball_radius));
+  plant->SetDefaultFreeBodyPose(
+      ball, RigidTransformd(RotationMatrixd(),
+                            Vector3d(FLAGS_length * 0.9, -FLAGS_width / 2, 2)));
+  plant->RegisterVisualGeometry(ball, RigidTransformd::Identity(),
+                                Sphere(FLAGS_ball_radius), "ball",
+                                Vector4d(0, 0, 1.0, 1.0));
+  plant->RegisterCollisionGeometry(ball, RigidTransformd::Identity(),
+                                   Sphere(FLAGS_ball_radius), "ball",
+                                   CoulombFriction(0.5, 0.5));
+}
+
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
@@ -109,6 +129,7 @@ int do_main() {
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
   RegisterCantileverBeam(&deformable_model);
+  RegisterBall(&plant);
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */

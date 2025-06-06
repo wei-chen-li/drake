@@ -41,8 +41,8 @@ using drake::systems::Simulator;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
 using Eigen::VectorXd;
-using math::RigidTransform;
-using math::RotationMatrix;
+using math::RigidTransformd;
+using math::RotationMatrixd;
 
 DeformableBodyId RegisterCantileverRing(
     DeformableModel<double>* deformable_model) {
@@ -65,8 +65,7 @@ DeformableBodyId RegisterCantileverRing(
                     first_edge_m1);
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
-  const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
-                                    Vector3d(0, 0, 0.5));
+  const RigidTransformd X_WG(RotationMatrixd(), Vector3d(0, 0, 0.5));
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
       X_WG, filament, "cantilever ring");
 
