@@ -42,28 +42,28 @@ class FilamentContactGeometryPair {
    @param[in] contact_edge_indexes_A
       The indexes of filament A edges participating in contact, listed in the
       order in accordance with p_WCs and nhats_BA_W.
-   @param[in] kinematic_coordinates_A
-      Tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Ac coincident with
+   @param[in] kinematic_weights_A
+      Tuples (𝑤₀, w₁, 𝑤₂) so that the velocity of a point Ac coincident with
       the contact point C and affixed to geometry A, denoted as v_WAc, equals
-      𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+      𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
    @param[in] contact_edge_indexes_B
       The indexes of filament B edges participating in contact, listed in the
       order in accordance with p_WCs and nhats_BA_W.
-   @param[in] kinematic_coordinates_B
-      Tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Bc coincident with
+   @param[in] kinematic_weights_B
+      Tuples (𝑤₀, w₁, 𝑤₂) so that the velocity of a point Bc coincident with
       the contact point C and affixed to geometry B, denoted as v_WBc, equals
-      𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+      𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
    @pre `id_A < id_B`.
    @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`,
-      `kinematic_coordinates_A`, `contact_edge_indexes_B`, and
-      `kinematic_coordinates_B` have the same size and not empty. */
+      `kinematic_weights_A`, `contact_edge_indexes_B`, and
+      `kinematic_weights_B` have the same size and not empty. */
   FilamentContactGeometryPair(
       GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
       std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
       std::vector<int> contact_edge_indexes_A,
-      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A,
+      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_weights_A,
       std::vector<int> contact_edge_indexes_B,
-      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_B);
+      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_weights_B);
 
   /* Constructs a filament-rigid contact geometry pair with the given data.
    @param[in] id_A
@@ -80,17 +80,17 @@ class FilamentContactGeometryPair {
    @param[in] contact_edge_indexes_A
       The indexes of filament A edges participating in contact, listed in the
       order in accordance with p_WCs and nhats_BA_W.
-   @param[in] kinematic_coordinates_A
-      Tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Ac coincident with
+   @param[in] kinematic_weights_A
+      Tuples (𝑤₀, w₁, 𝑤₂) so that the velocity of a point Ac coincident with
       the contact point C and affixed to geometry A, denoted as v_WAc, equals
-      𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+      𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
    @pre `p_WCs`, `nhats_BA_W`, `signed_distances`, `contact_edge_indexes_A`, and
-      `kinematic_coordinates_A` have the same size and not empty. */
+      `kinematic_weights_A` have the same size and not empty. */
   FilamentContactGeometryPair(
       GeometryId id_A, GeometryId id_B, std::vector<Vector3<T>> p_WCs,
       std::vector<Vector3<T>> nhats_BA_W, std::vector<T> signed_distances,
       std::vector<int> contact_edge_indexes_A,
-      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A);
+      std::vector<std::tuple<T, Vector3<T>, T>> kinematic_weights_A);
 
   /* Returns the GeometryId of geometry A. If `is_B_filament()` is true, this
    is guaranteed to be less than or equal to id_B(). */
@@ -131,12 +131,11 @@ class FilamentContactGeometryPair {
     return contact_edge_indexes_A_;
   }
 
-  /* Returns tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Ac coincident
+  /* Returns tuples (𝑤₀, w₁, 𝑤₂) so that the velocity of a point Ac coincident
     with the contact point C and affixed to geometry A, denoted as v_WAc, equals
-    𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁. */
-  const std::vector<std::tuple<T, Vector3<T>, T>>& kinematic_coordinates_A()
-      const {
-    return kinematic_coordinates_A_;
+    𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁ */
+  const std::vector<std::tuple<T, Vector3<T>, T>>& kinematic_weights_A() const {
+    return kinematic_weights_A_;
   }
 
   /* Returns the indexes of filament B edges participating in contact. The
@@ -147,14 +146,13 @@ class FilamentContactGeometryPair {
     return *contact_edge_indexes_B_;
   }
 
-  /* Returns tuples (𝑤₁, r, 𝑤₂) so that the velocity of a point Bc coincident
+  /* Returns tuples (𝑤₀, w₁, 𝑤₂) so that the velocity of a point Bc coincident
     with the contact point C and affixed to geometry B, denoted as v_WBc, equals
-    𝑤₁ ẋᵢ + r γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+    𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
     @pre `is_B_filament()`. */
-  const std::vector<std::tuple<T, Vector3<T>, T>>& kinematic_coordinates_B()
-      const {
+  const std::vector<std::tuple<T, Vector3<T>, T>>& kinematic_weights_B() const {
     DRAKE_THROW_UNLESS(is_B_filament());
-    return *kinematic_coordinates_B_;
+    return *kinematic_weights_B_;
   }
 
  private:
@@ -165,10 +163,9 @@ class FilamentContactGeometryPair {
   std::vector<math::RotationMatrix<T>> R_WCs_;
   std::vector<T> signed_distances_;
   std::vector<int> contact_edge_indexes_A_;
-  std::vector<std::tuple<T, Vector3<T>, T>> kinematic_coordinates_A_;
+  std::vector<std::tuple<T, Vector3<T>, T>> kinematic_weights_A_;
   std::optional<std::vector<int>> contact_edge_indexes_B_;
-  std::optional<std::vector<std::tuple<T, Vector3<T>, T>>>
-      kinematic_coordinates_B_;
+  std::optional<std::vector<std::tuple<T, Vector3<T>, T>>> kinematic_weights_B_;
 };
 
 /* Data structure to hold contact information about filaments.

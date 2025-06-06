@@ -44,13 +44,13 @@ GTEST_TEST(FilamentContactTest, AddFilamentFilamentContactGeometryPair) {
   EXPECT_EQ(pair.R_WCs()[0].col(2), -nhats_BA_W[0]);
 
   constexpr double kTol = 1e-16;
-  EXPECT_NEAR(std::get<0>(pair.kinematic_coordinates_A()[0]), 1 / 3.0, kTol);
-  EXPECT_NEAR(std::get<2>(pair.kinematic_coordinates_A()[0]), 2 / 3.0, kTol);
-  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_coordinates_A()[0]),
+  EXPECT_NEAR(std::get<0>(pair.kinematic_weights_A()[0]), 1 / 3.0, kTol);
+  EXPECT_NEAR(std::get<2>(pair.kinematic_weights_A()[0]), 2 / 3.0, kTol);
+  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_weights_A()[0]),
                               Vector3d(0, -0.01, 0), kTol));
-  EXPECT_NEAR(std::get<0>(pair.kinematic_coordinates_B()[0]), 1 / 4.0, kTol);
-  EXPECT_NEAR(std::get<2>(pair.kinematic_coordinates_B()[0]), 3 / 4.0, kTol);
-  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_coordinates_B()[0]),
+  EXPECT_NEAR(std::get<0>(pair.kinematic_weights_B()[0]), 1 / 4.0, kTol);
+  EXPECT_NEAR(std::get<2>(pair.kinematic_weights_B()[0]), 3 / 4.0, kTol);
+  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_weights_B()[0]),
                               Vector3d(-0.01, 0, 0), kTol));
 
   EXPECT_THAT(filament_contact.contact_edges(kIdA), UnorderedElementsAre(0));
@@ -80,9 +80,9 @@ GTEST_TEST(FilamentContactTest, AddFilamentRigidContactGeometryPair) {
   EXPECT_EQ(pair.R_WCs()[0].col(2), -nhats_BA_W[0]);
 
   constexpr double kTol = 1e-16;
-  EXPECT_NEAR(std::get<0>(pair.kinematic_coordinates_A()[0]), 1 / 3.0, kTol);
-  EXPECT_NEAR(std::get<2>(pair.kinematic_coordinates_A()[0]), 2 / 3.0, kTol);
-  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_coordinates_A()[0]),
+  EXPECT_NEAR(std::get<0>(pair.kinematic_weights_A()[0]), 1 / 3.0, kTol);
+  EXPECT_NEAR(std::get<2>(pair.kinematic_weights_A()[0]), 2 / 3.0, kTol);
+  EXPECT_TRUE(CompareMatrices(std::get<1>(pair.kinematic_weights_A()[0]),
                               Vector3d(0, -0.01, 0), kTol));
 
   EXPECT_THAT(filament_contact.contact_edges(kIdA), UnorderedElementsAre(0));
