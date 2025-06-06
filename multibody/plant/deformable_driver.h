@@ -268,6 +268,20 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const geometry::internal::DeformableContactSurface<T>& contact_surface)
       const;
 
+  /* Computes the contact data for a filament geometry G participating in
+   contact.
+   @param[in] context        Context of the MultibodyPlant owning this driver.
+   @param[in] geometry_pair  The geometry pair with one of the geometries being
+                             geometry G
+   @param[in] is_A           True if geometry G is labeled as geometry A in the
+                             given `geometry_pair`. See class documentation for
+                             geometry::internal::FilamentContactGeometryPair for
+                             details. */
+  ContactData ComputeContactDataForFilament(
+      const systems::Context<T>& context,
+      const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair,
+      bool is_A) const;
+
   /* Copies the state of the deformable body with `id` in the given `context`
    to the `fem_state`.
    @pre fem_state != nullptr and has size compatible with the state of the

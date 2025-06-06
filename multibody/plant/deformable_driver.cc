@@ -493,6 +493,94 @@ DeformableDriver<T>::ComputeContactDataForRigid(
 }
 
 template <typename T>
+typename DeformableDriver<T>::ContactData
+DeformableDriver<T>::ComputeContactDataForFilament(
+    const systems::Context<T>& context,
+    const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair,
+    bool is_A) const {
+  const geometry::GeometryId geometry_id =
+      is_A ? geometry_pair.id_A() : geometry_pair.id_B();
+  const DeformableBodyId body_id = deformable_model_->GetBodyId(geometry_id);
+  const DeformableBodyIndex body_index =
+      deformable_model_->GetBodyIndex(body_id);
+  const PartialPermutation& dof_permutation =
+      EvalDofPermutation(context, body_index);
+  const VectorX<T>& deformable_participating_v0 =
+      EvalParticipatingVelocities(context);
+  const Multiplexer<T>& mux = EvalParticipatingVelocityMultiplexer(context);
+  const Eigen::Ref<const VectorX<T>> body_participating_v0 =
+      mux.Demultiplex(deformable_participating_v0, body_index);
+  const DerModel<T>& der_model = *deformable_model_->GetDerModel(body_id);
+
+  ContactData result;
+  /* For filament objects, we use the mean of the contact points as the
+   relative-to point in the configuration. */
+  result.p_WG = std::accumulate(geometry_pair.p_WCs().begin(),
+                                geometry_pair.p_WCs().end(),
+                                Vector3<T>(Vector3<T>::Zero())) /
+                geometry_pair.num_contacts();
+  result.name = fmt::format("deformable id {}", geometry_id);
+  result.v_WGc.reserve(geometry_pair.num_contacts());
+  result.jacobian.reserve(geometry_pair.num_contacts());
+
+  for (int k = 0; k < geometry_pair.num_contacts(); ++k) {
+    /* The contact Jacobian (w.r.t. v) of the velocity of the point affixed to
+     the geometry that coincides with the contact point C in the world frame,
+     expressed in the contact frame C. We scale it by -1 if the body corresponds
+     to body A in contact to get the correct sign. */
+    const double scale = is_A ? -1.0 : 1.0;
+    MatrixX<T> scaled_Jv_v_WGc_C(3, dof_permutation.permuted_domain_size());
+    Vector3<T> v_WGc = Vector3<T>::Zero();
+
+    const int index = is_A ? geometry_pair.contact_edge_indexes_A()[k]
+                           : geometry_pair.contact_edge_indexes_B()[k];
+    const der::DerNodeIndex index0(index);
+    const der::DerEdgeIndex index1(index);
+    const der::DerNodeIndex index2((index + 1) % der_model.num_nodes());
+    const int dof0 = 4 * int{index0};
+    const int dof1 = 4 * int{index1} + 3;
+    const int dof2 = 4 * int{index2};
+    const int permuted_dof0 = dof_permutation.permuted_index(dof0);
+    const int permuted_dof1 = dof_permutation.permuted_index(dof1);
+    const int permuted_dof2 = dof_permutation.permuted_index(dof2);
+
+    const auto& kinematic_weights =
+        is_A ? geometry_pair.kinematic_weights_A()[k]
+             : geometry_pair.kinematic_weights_B()[k];
+    const math::RotationMatrix<T> R_CW = geometry_pair.R_WCs()[k].transpose();
+
+    /* v_WGc = 𝑤₀ ẋᵢ + w₁ γ̇ⁱ + 𝑤₂ ẋᵢ₊₁.
+     If the a node or an edge is under BC, the corresponding jacobian block is
+     zero because the vertex doesn't contribute to the contact velocity. */
+    if (!der_model.IsPositionFixed(index0)) {
+      v_WGc += std::get<0>(kinematic_weights) *
+               body_participating_v0.template segment<3>(permuted_dof0);
+      scaled_Jv_v_WGc_C.template middleCols<3>(permuted_dof0) =
+          scale * std::get<0>(kinematic_weights) * R_CW.matrix();
+    }
+    if (!der_model.IsPositionFixed(index1)) {
+      v_WGc +=
+          std::get<1>(kinematic_weights) * body_participating_v0[permuted_dof1];
+      scaled_Jv_v_WGc_C.template middleCols<1>(permuted_dof0) =
+          scale * (R_CW * std::get<1>(kinematic_weights));
+    }
+    if (!der_model.IsPositionFixed(index2)) {
+      v_WGc += std::get<2>(kinematic_weights) *
+               body_participating_v0.template segment<3>(permuted_dof2);
+      scaled_Jv_v_WGc_C.template middleCols<3>(permuted_dof2) =
+          scale * std::get<2>(kinematic_weights) * R_CW.matrix();
+    }
+
+    result.v_WGc.emplace_back(v_WGc);
+    const TreeIndex tree_index(
+        manager_->internal_tree().get_topology().num_trees() + body_index);
+    result.jacobian.emplace_back(tree_index,
+                                 MatrixBlock<T>(std::move(scaled_Jv_v_WGc_C)));
+  }
+  return result;
+}
+
+template <typename T>
 void DeformableDriver<T>::AppendDiscreteContactPairs(
     const systems::Context<T>& context,
     DiscreteContactData<DiscreteContactPair<T>>* result) const {
