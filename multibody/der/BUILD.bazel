@@ -27,7 +27,7 @@ drake_cc_package_library(
         ":dirichlet_boundary_condition",
         ":discrete_time_integrator",
         ":elastic_energy",
-        ":energy_hessian_matrix_util",
+        ":energy_hessian_matrix_utility",
         ":external_force_field",
         ":velocity_newmark_scheme",
     ],
@@ -80,7 +80,7 @@ drake_cc_library(
         ":der_undeformed_state",
         ":dirichlet_boundary_condition",
         ":elastic_energy",
-        ":energy_hessian_matrix_util",
+        ":energy_hessian_matrix_utility",
         ":external_force_field",
         "//common:pointer_cast",
         "//math:vector3_util",
@@ -145,7 +145,7 @@ drake_cc_library(
     deps = [
         ":der_indexes",
         ":der_state",
-        ":energy_hessian_matrix_util",
+        ":energy_hessian_matrix_utility",
     ],
 )
 
@@ -167,15 +167,15 @@ drake_cc_library(
         ":der_state",
         ":der_structural_property",
         ":der_undeformed_state",
-        ":energy_hessian_matrix_util",
+        ":energy_hessian_matrix_utility",
         "//math:vector3_util",
     ],
 )
 
 drake_cc_library(
-    name = "energy_hessian_matrix_util",
-    srcs = ["energy_hessian_matrix_util.cc"],
-    hdrs = ["energy_hessian_matrix_util.h"],
+    name = "energy_hessian_matrix_utility",
+    srcs = ["energy_hessian_matrix_utility.cc"],
+    hdrs = ["energy_hessian_matrix_utility.h"],
     deps = [
         "//common:default_scalars",
         "//multibody/contact_solvers:block_sparse_lower_triangular_or_symmetric_matrix",  # noqa
@@ -309,10 +309,10 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
-    name = "energy_hessian_matrix_util_test",
+    name = "energy_hessian_matrix_utility_test",
     deps = [
         ":elastic_energy",
-        ":energy_hessian_matrix_util",
+        ":energy_hessian_matrix_utility",
         "//common/test_utilities:eigen_matrix_compare",
         "//common/test_utilities:limit_malloc",
     ],

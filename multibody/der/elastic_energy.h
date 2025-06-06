@@ -5,7 +5,7 @@
 #include "drake/multibody/der/der_state.h"
 #include "drake/multibody/der/der_structural_property.h"
 #include "drake/multibody/der/der_undeformed_state.h"
-#include "drake/multibody/der/energy_hessian_matrix_util.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
 namespace drake {
 namespace multibody {

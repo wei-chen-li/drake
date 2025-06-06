@@ -1,4 +1,4 @@
-#include "drake/multibody/der/energy_hessian_matrix_util.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
 #include "drake/common/default_scalars.h"
 

@@ -15,7 +15,7 @@
 #include "drake/multibody/der/der_structural_property.h"
 #include "drake/multibody/der/der_undeformed_state.h"
 #include "drake/multibody/der/dirichlet_boundary_condition.h"
-#include "drake/multibody/der/energy_hessian_matrix_util.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 #include "drake/multibody/der/external_force_field.h"
 
 namespace drake {

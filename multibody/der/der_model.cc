@@ -6,13 +6,13 @@
 #include "drake/common/pointer_cast.h"
 #include "drake/math/unit_vector.h"
 #include "drake/multibody/der/elastic_energy.h"
-#include "drake/multibody/der/energy_hessian_matrix_util.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
 namespace drake {
 namespace multibody {
 namespace der {
 
-// Import from "energy_hessian_matrix_util.h".
+// Import from "energy_hessian_matrix_utility.h".
 using internal::operator*;
 using internal::AddScaledMatrix;
 
