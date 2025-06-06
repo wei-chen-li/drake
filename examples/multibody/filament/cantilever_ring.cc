@@ -12,14 +12,12 @@ DEFINE_double(simulation_time, 10.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-2,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 4e7, "Young's modulus of the deformable bodies [Pa].");
-DEFINE_double(G, 2e7, "Shear modulus of the deformable bodies [Pa].");
+DEFINE_double(E, 1e7, "Young's modulus of the deformable bodies [Pa].");
+DEFINE_double(G, 1e7, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
-DEFINE_double(length, 1.0, "Length of the cantilever beam [m].");
-DEFINE_double(width, 0.05, "Width of the cantilever beam [m].");
-DEFINE_double(height, 0.015, "Width of the cantilever beam [m].");
-DEFINE_int32(num_edges, 100,
-             "Number of edges the cantilever beam is spatially discretized.");
+DEFINE_double(diameter, 1.0, "Diameter of the ring [m].");
+DEFINE_double(width, 0.02, "Width of the ring corss-section [m].");
+DEFINE_int32(num_edges, 300, "Number of spatially discretized edges.");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
               "multibody::DiscreteContactApproximation for details. Options "
@@ -46,27 +44,31 @@ using Eigen::VectorXd;
 using math::RigidTransform;
 using math::RotationMatrix;
 
-DeformableBodyId RegisterCantileverBeam(
-    DeformableModel<double>* deformable_model, bool circular = false) {
+DeformableBodyId RegisterCantileverRing(
+    DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
 
-  /* The beam has an initial shape of a line from (0,0,0) to (length,0,0). */
-  const bool closed = false;
-  Eigen::Matrix3Xd node_pos(3, 2);
-  node_pos.col(0) = Vector3d(0, 0, 0);
-  node_pos.col(1) = Vector3d(FLAGS_length, 0, 0);
-  const Vector3d first_edge_m1 = Vector3d(0, 1, 0);
+  /* The beam has an initial shape of a circle. */
+  const bool closed = true;
+  const int num_nodes = FLAGS_num_edges;
+  const auto theta =
+      VectorXd::LinSpaced(num_nodes + 1, 0, 2 * M_PI).head(num_nodes).array();
+  Eigen::Matrix3Xd node_pos(3, num_nodes);
+  node_pos.row(0) = 0.5 * FLAGS_diameter * (cos(theta) + 1);
+  node_pos.row(1) = 0.5 * FLAGS_diameter * sin(theta);
+  node_pos.row(2) = VectorXd::Zero(num_nodes);
+  const Vector3d first_edge_m1 = Vector3d(-1, 0, 0);
 
   Filament filament(closed, node_pos,
                     Filament::RectangularCrossSection{.width = FLAGS_width,
-                                                      .height = FLAGS_height},
+                                                      .height = FLAGS_width},
                     first_edge_m1);
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
   const RigidTransform<double> X_WG(RotationMatrix<double>::Identity(),
                                     Vector3d(0, 0, 0.5));
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
-      X_WG, filament, "cantilever beam");
+      X_WG, filament, "cantilever ring");
 
   /* Add a minimal illustration property for visualization. */
   geometry::IllustrationProperties illus_props;
@@ -86,13 +88,13 @@ DeformableBodyId RegisterCantileverBeam(
 
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
-  const double edge_length = FLAGS_length / FLAGS_num_edges;
+  const double edge_length = M_PI * FLAGS_diameter / FLAGS_num_edges;
   DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
       std::move(geometry_instance), config,
       /* resolution_hint = */ edge_length);
 
   /* Fix the first two nodes effectively makes the beam have a clamped end. */
-  const Vector3d wall_position = Vector3d(edge_length * 1.001, 0, 0);
+  const Vector3d wall_position = Vector3d(FLAGS_diameter * 0.01, 0, 0);
   const Vector3d wall_normal = Vector3d(1, 0, 0);
   deformable_model->SetWallBoundaryCondition(body_id, wall_position,
                                              wall_normal);
@@ -108,7 +110,7 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
-  RegisterCantileverBeam(&deformable_model);
+  RegisterCantileverRing(&deformable_model);
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */
@@ -132,7 +134,7 @@ int do_main() {
 
 int main(int argc, char* argv[]) {
   gflags::SetUsageMessage(
-      "This is a demo used to showcase the modeling of a cantilever beam using "
+      "This is a demo used to showcase the modeling of a cantilever ring using "
       "a deformable filament. Refer to README for instructions on meldis as "
       "well as optional flags.");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
