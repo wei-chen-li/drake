@@ -1,5 +1,7 @@
 #include "drake/multibody/der/der_solver.h"
 
+#include <algorithm>
+
 namespace drake {
 namespace multibody {
 namespace der {
@@ -80,6 +82,25 @@ int DerSolver<T>::AdvanceOneTimeStep(
         "smaller timestep or reduce the stiffness of the material.");
   }
   return iter;
+}
+
+template <typename T>
+void DerSolver<T>::ComputeTangentMatrixSchurComplement(
+    const std::unordered_set<int>& participating_dofs) {
+  DRAKE_THROW_UNLESS(std::all_of(participating_dofs.begin(),
+                                 participating_dofs.end(), [&](int dof) {
+                                   return 0 <= dof && dof < model_->num_dofs();
+                                 }));
+  DerState<T>& state = *state_;
+  typename DerModel<T>::Scratch* der_model_scratch =
+      scratch_.der_model_scratch.get();
+  DRAKE_DEMAND(der_model_scratch != nullptr);
+
+  const internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix =
+      model_->ComputeTangentMatrix(state, integrator_->GetWeights(),
+                                   der_model_scratch);
+  tangent_matrix_schur_complement_ =
+      ComputeSchurComplement(tangent_matrix, participating_dofs);
 }
 
 template <typename T>

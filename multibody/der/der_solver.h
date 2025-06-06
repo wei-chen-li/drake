@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <unordered_set>
 
 #include "drake/common/copyable_unique_ptr.h"
 #include "drake/multibody/contact_solvers/block_sparse_cholesky_solver.h"
 #include "drake/multibody/der/der_model.h"
 #include "drake/multibody/der/discrete_time_integrator.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
 namespace drake {
 namespace multibody {
@@ -53,8 +55,22 @@ class DerSolver {
    @pre `state` is created from the model prescribed at construction. */
   void set_state(const DerState<T>& state);
 
-  /* Returns a reference to the internally owned DerState. */
+  /* Returns the internally owned DerState. */
   const DerState<T>& get_state() const { return *state_; }
+
+  /* Computes the Schur complement of the tangent matrix evaluated at the
+   internally owned state.
+   @param[in] participating_dofs The DoFs of the DER model that participate in
+                                 constraint.
+   @pre All DoF indices in `participating_dofs` are greater than or equal to
+        zero and less thant num_dofs(). */
+  void ComputeTangentMatrixSchurComplement(
+      const std::unordered_set<int>& participating_dofs);
+
+  /* Returns the internally owned tangent matrix Schur complement. */
+  const SchurComplement<T>& get_tangent_matrix_schur_complement() const {
+    return tangent_matrix_schur_complement_;
+  }
 
   /* Sets the relative tolerance, unitless. See solver_converged() for how
    the tolerance is used. The default value is 1e-4. */
@@ -93,6 +109,8 @@ class DerSolver {
   const DiscreteTimeIntegrator<T>* const integrator_{};
   /* Owned DerState. */
   copyable_unique_ptr<internal::DerState<T>> state_;
+  /* Owned SchurComplement */
+  SchurComplement<T> tangent_matrix_schur_complement_;
   /* Tolerance for convergence. */
   double relative_tolerance_{1e-4};  // unitless.
   double absolute_tolerance_{1e-6};  // unit N.
