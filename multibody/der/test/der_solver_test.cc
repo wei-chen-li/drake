@@ -191,10 +191,10 @@ class DerSolverCantileverBeamTest : public ::testing::TestWithParam<int> {
     builder.SetDampingCoefficients(0.0, 0.0);
     std::unique_ptr<DerModel<double>> model = builder.Build();
 
-    model->FixPositionOrAngle(DerNodeIndex(0));
+    model->FixPosition(DerNodeIndex(0));
     if (clamp_end) {
-      model->FixPositionOrAngle(DerEdgeIndex(0));
-      model->FixPositionOrAngle(DerNodeIndex(1));
+      model->FixPosition(DerEdgeIndex(0));
+      model->FixPosition(DerNodeIndex(1));
     }
     return model;
   }

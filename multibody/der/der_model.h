@@ -202,7 +202,11 @@ class DerModel {
 
   /** Fixes the node position or the edge angle indexed by `index`.
    @pre `index` is within the node index or edge index range. */
-  void FixPositionOrAngle(std::variant<DerNodeIndex, DerEdgeIndex> index);
+  void FixPosition(std::variant<DerNodeIndex, DerEdgeIndex> index);
+
+  /* Reports if the node position or the edge angle indexed by `index` is fixed.
+   @pre `index` is within the node index or edge index range. */
+  bool IsPositionFixed(std::variant<DerNodeIndex, DerEdgeIndex> index) const;
 
   /** Creates a default DerState compatible with this DER model. */
   std::unique_ptr<internal::DerState<T>> CreateDerState() const;

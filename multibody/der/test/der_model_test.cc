@@ -1,5 +1,7 @@
 #include "drake/multibody/der/der_model.h"
 
+#include <set>
+
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
@@ -296,10 +298,8 @@ class DerModelTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
     if (have_bc) {
       fixed_nodes_ = {DerNodeIndex(0), DerNodeIndex(2)};
       fixed_edges_ = {DerEdgeIndex(0)};
-      for (DerNodeIndex index : fixed_nodes_)
-        der_model_->FixPositionOrAngle(index);
-      for (DerEdgeIndex index : fixed_edges_)
-        der_model_->FixPositionOrAngle(index);
+      for (DerNodeIndex index : fixed_nodes_) der_model_->FixPosition(index);
+      for (DerEdgeIndex index : fixed_edges_) der_model_->FixPosition(index);
     }
 
     const double g = 9.81;
@@ -307,8 +307,8 @@ class DerModelTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
         std::make_unique<GravityForceField<double>>(Vector3d(0, 0, -g), rho);
   }
 
-  std::vector<DerNodeIndex> fixed_nodes_;
-  std::vector<DerEdgeIndex> fixed_edges_;
+  std::set<DerNodeIndex> fixed_nodes_;
+  std::set<DerEdgeIndex> fixed_edges_;
   std::unique_ptr<DerModel<double>> der_model_;
   std::unique_ptr<ForceDensityField<double>> force_density_field_;
 };
@@ -316,6 +316,15 @@ class DerModelTest : public ::testing::TestWithParam<std::tuple<bool, bool>> {
 INSTANTIATE_TEST_SUITE_P(HasClosedEnds_HaveBC, DerModelTest,
                          ::testing::Combine(::testing::Values(false, true),
                                             ::testing::Values(false, true)));
+
+TEST_P(DerModelTest, IsPositionFixed) {
+  for (DerNodeIndex index{0}; index < der_model_->num_nodes(); ++index) {
+    EXPECT_EQ(der_model_->IsPositionFixed(index), fixed_nodes_.contains(index));
+  }
+  for (DerEdgeIndex index{0}; index < der_model_->num_edges(); ++index) {
+    EXPECT_EQ(der_model_->IsPositionFixed(index), fixed_edges_.contains(index));
+  }
+}
 
 TEST_P(DerModelTest, ComputeResidual) {
   auto state = der_model_->CreateDerState();

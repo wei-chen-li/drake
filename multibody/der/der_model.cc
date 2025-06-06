@@ -210,8 +210,7 @@ DerModel<T>::DerModel(
 }
 
 template <typename T>
-void DerModel<T>::FixPositionOrAngle(
-    std::variant<DerNodeIndex, DerEdgeIndex> index) {
+void DerModel<T>::FixPosition(std::variant<DerNodeIndex, DerEdgeIndex> index) {
   if (std::holds_alternative<DerNodeIndex>(index)) {
     DerNodeIndex node_index = std::get<DerNodeIndex>(index);
     DRAKE_THROW_UNLESS(0 <= node_index && node_index < num_nodes());
@@ -230,6 +229,28 @@ void DerModel<T>::FixPositionOrAngle(
             .gamma = der_state_system_->initial_edge_angles()[edge_index],
             .gamma_dot = 0.0,
             .gamma_ddot = 0.0});
+  }
+}
+
+template <typename T>
+bool DerModel<T>::IsPositionFixed(
+    std::variant<DerNodeIndex, DerEdgeIndex> index) const {
+  if (std::holds_alternative<DerNodeIndex>(index)) {
+    DerNodeIndex node_index = std::get<DerNodeIndex>(index);
+    DRAKE_THROW_UNLESS(0 <= node_index && node_index < num_nodes());
+    const internal::NodeState<T>* node_state =
+        boundary_condition_.GetBoundaryCondition(node_index);
+    if (node_state == nullptr) return false;
+    return ExtractDoubleOrThrow(node_state->x_dot).isZero() &&
+           ExtractDoubleOrThrow(node_state->x_ddot).isZero();
+  } else {
+    DerEdgeIndex edge_index = std::get<DerEdgeIndex>(index);
+    DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < num_edges());
+    const internal::EdgeState<T>* edge_state =
+        boundary_condition_.GetBoundaryCondition(edge_index);
+    if (edge_state == nullptr) return false;
+    return ExtractDoubleOrThrow(edge_state->gamma_dot) == 0.0 &&
+           ExtractDoubleOrThrow(edge_state->gamma_ddot) == 0.0;
   }
 }
 

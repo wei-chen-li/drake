@@ -57,7 +57,7 @@ void DeformableBody<T>::SetWallBoundaryCondition(const Vector3<T>& p_WQ,
     for (int i = 0; i < num_nodes; ++i) {
       const auto p_WV = reference_positions_.template segment<kDim>(kDim * i);
       if (is_inside_wall(p_WV)) {
-        der_model_->FixPositionOrAngle(der::DerNodeIndex(i));
+        der_model_->FixPosition(der::DerNodeIndex(i));
         fixed_node_indexes.push_back(i);
       }
     }
@@ -67,7 +67,7 @@ void DeformableBody<T>::SetWallBoundaryCondition(const Vector3<T>& p_WQ,
       const int ip1 =
           der_model_->has_closed_ends() ? (i + 1) % num_nodes : (i + 1);
       if (ip1 == fixed_node_indexes[(k + 1) % ssize(fixed_node_indexes)]) {
-        der_model_->FixPositionOrAngle(der::DerEdgeIndex(i));
+        der_model_->FixPosition(der::DerEdgeIndex(i));
       }
     }
   } else {
