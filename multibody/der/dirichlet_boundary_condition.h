@@ -59,12 +59,22 @@ class DirichletBoundaryCondition {
   void AddBoundaryCondition(DerNodeIndex index,
                             const NodeState<T>& boundary_state);
 
+  /* Retrieves the boundary condition associated with the given `index`. Returns
+   nullptr is none exists.
+   @pre `index` is valid. */
+  const NodeState<T>* GetBoundaryCondition(DerNodeIndex index) const;
+
   /* Sets the edge with the given `index` to be subject to the prescribed
    `boundary_state`. If multiple boundary conditions are specified for the same
     edge, the last one will be used.
    @pre `index` is valid and `boundary_state` values are finite. */
   void AddBoundaryCondition(DerEdgeIndex index,
                             const EdgeState<T>& boundary_state);
+
+  /* Retrieves the boundary condition associated with the given `index`. Returns
+   nullptr is none exists.
+   @pre `index` is valid. */
+  const EdgeState<T>* GetBoundaryCondition(DerEdgeIndex index) const;
 
   /* Modifies the given `der_state` to comply with this boundary condition.
    @pre der_state != nullptr.

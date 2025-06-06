@@ -12,9 +12,29 @@ void DirichletBoundaryCondition<T>::AddBoundaryCondition(
 }
 
 template <typename T>
+const NodeState<T>* DirichletBoundaryCondition<T>::GetBoundaryCondition(
+    DerNodeIndex index) const {
+  auto iter = node_to_boundary_state_.find(index);
+  if (iter == node_to_boundary_state_.end())
+    return nullptr;
+  else
+    return &iter->second;
+}
+
+template <typename T>
 void DirichletBoundaryCondition<T>::AddBoundaryCondition(
     DerEdgeIndex index, const EdgeState<T>& boundary_state) {
   edge_to_boundary_state_[index] = boundary_state;
+}
+
+template <typename T>
+const EdgeState<T>* DirichletBoundaryCondition<T>::GetBoundaryCondition(
+    DerEdgeIndex index) const {
+  auto iter = edge_to_boundary_state_.find(index);
+  if (iter == edge_to_boundary_state_.end())
+    return nullptr;
+  else
+    return &iter->second;
 }
 
 template <typename T>

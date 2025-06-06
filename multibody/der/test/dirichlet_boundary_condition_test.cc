@@ -32,13 +32,14 @@ class DirichletBoundaryConditionTest : public ::testing::Test {
 
     state_ = std::make_unique<DerState<double>>(der_state_system_.get());
 
-    bc_.AddBoundaryCondition(
-        DerNodeIndex(0), NodeState<double>{.x = Vector3d::Constant(0.1),
-                                           .x_dot = Vector3d::Constant(0.2),
-                                           .x_ddot = Vector3d::Constant(0.3)});
-    bc_.AddBoundaryCondition(
-        DerEdgeIndex(1),
-        EdgeState<double>{.gamma = 0.4, .gamma_dot = 0.5, .gamma_ddot = 0.6});
+    node_state_ = NodeState<double>{.x = Vector3d::Constant(0.1),
+                                    .x_dot = Vector3d::Constant(0.2),
+                                    .x_ddot = Vector3d::Constant(0.3)};
+    bc_.AddBoundaryCondition(DerNodeIndex(0), node_state_);
+
+    edge_state_ =
+        EdgeState<double>{.gamma = 0.4, .gamma_dot = 0.5, .gamma_ddot = 0.6};
+    bc_.AddBoundaryCondition(DerEdgeIndex(1), edge_state_);
   }
 
   Block4x4SparseSymmetricMatrix<double> MakeTangentMatrix() const {
@@ -60,7 +61,30 @@ class DirichletBoundaryConditionTest : public ::testing::Test {
   std::unique_ptr<DerStateSystem<double>> der_state_system_;
   std::unique_ptr<DerState<double>> state_;
   DirichletBoundaryCondition<double> bc_;
+  NodeState<double> node_state_;
+  EdgeState<double> edge_state_;
 };
+
+TEST_F(DirichletBoundaryConditionTest, GetBoundaryCondition) {
+  EXPECT_NE(bc_.GetBoundaryCondition(DerNodeIndex(0)), nullptr);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerNodeIndex(0))->x, node_state_.x);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerNodeIndex(0))->x_dot,
+            node_state_.x_dot);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerNodeIndex(0))->x_ddot,
+            node_state_.x_ddot);
+
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerNodeIndex(1)), nullptr);
+
+  EXPECT_NE(bc_.GetBoundaryCondition(DerEdgeIndex(1)), nullptr);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerEdgeIndex(1))->gamma,
+            edge_state_.gamma);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerEdgeIndex(1))->gamma_dot,
+            edge_state_.gamma_dot);
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerEdgeIndex(1))->gamma_ddot,
+            edge_state_.gamma_ddot);
+
+  EXPECT_EQ(bc_.GetBoundaryCondition(DerEdgeIndex(2)), nullptr);
+}
 
 /* Tests that the DirichletBoundaryCondition under test successfully modifies
  a given state. */
