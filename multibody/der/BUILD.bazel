@@ -179,6 +179,8 @@ drake_cc_library(
     deps = [
         "//common:default_scalars",
         "//multibody/contact_solvers:block_sparse_lower_triangular_or_symmetric_matrix",  # noqa
+        "//multibody/contact_solvers/sap:partial_permutation",
+        "//multibody/fem:schur_complement",
     ],
 )
 
