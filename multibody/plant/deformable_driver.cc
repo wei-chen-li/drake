@@ -529,7 +529,7 @@ DeformableDriver<T>::ComputeContactDataForFilament(
      expressed in the contact frame C. We scale it by -1 if the body corresponds
      to body A in contact to get the correct sign. */
     const double scale = is_A ? -1.0 : 1.0;
-    MatrixX<T> scaled_Jv_v_WGc_C(3, dof_permutation.permuted_domain_size());
+    Matrix3X<T> scaled_Jv_v_WGc_C(3, dof_permutation.permuted_domain_size());
     Vector3<T> v_WGc = Vector3<T>::Zero();
 
     const int index = is_A ? geometry_pair.contact_edge_indexes_A()[k]
@@ -576,6 +576,53 @@ DeformableDriver<T>::ComputeContactDataForFilament(
         manager_->internal_tree().get_topology().num_trees() + body_index);
     result.jacobian.emplace_back(tree_index,
                                  MatrixBlock<T>(std::move(scaled_Jv_v_WGc_C)));
+  }
+  return result;
+}
+
+template <typename T>
+typename DeformableDriver<T>::ContactData
+DeformableDriver<T>::ComputeContactDataForRigid(
+    const systems::Context<T>& context,
+    const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair)
+    const {
+  ContactData result;
+  /* Rigid geometry is guaranteed to be body B in a deformable rigid contact. */
+  const geometry::GeometryId geometry_id = geometry_pair.id_B();
+  const BodyIndex body_index = manager_->FindBodyByGeometryId(geometry_id);
+  const RigidBody<T>& rigid_body = manager_->plant().get_body(body_index);
+  result.name = rigid_body.name();
+  /* For rigid body, we use the origin of the body frame as the relative-to
+   point. */
+  result.p_WG =
+      manager_->plant()
+          .EvalBodyPoseInWorld(context, manager_->plant().get_body(body_index))
+          .translation();
+  const MultibodyTreeTopology& tree_topology =
+      manager_->internal_tree().get_topology();
+  const TreeIndex tree_index = tree_topology.body_to_tree_index(body_index);
+  /* If the body is welded to world, then everything is trivially zero (as
+   indicated by empty jacobian and velocity vectors). */
+  if (!tree_topology.tree_has_dofs(tree_index)) {
+    return result;
+  }
+
+  const Eigen::VectorBlock<const VectorX<T>> rigid_v0 =
+      manager_->plant().GetVelocities(context);
+  const Frame<T>& frame_W = manager_->plant().world_frame();
+  const int nv = manager_->plant().num_velocities();
+  Matrix3X<T> Jv_v_WGc_W(3, nv);
+  for (int k = 0; k < geometry_pair.num_contacts(); ++k) {
+    const Vector3<T>& p_WC = geometry_pair.p_WCs()[k];
+    manager_->internal_tree().CalcJacobianTranslationalVelocity(
+        context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
+        p_WC, frame_W, frame_W, &Jv_v_WGc_W);
+    result.v_WGc.emplace_back(Jv_v_WGc_W * rigid_v0);
+    Matrix3X<T> J = geometry_pair.R_WCs()[k].matrix().transpose() *
+                    Jv_v_WGc_W.middleCols(
+                        tree_topology.tree_velocities_start_in_v(tree_index),
+                        tree_topology.num_tree_velocities(tree_index));
+    result.jacobian.emplace_back(tree_index, MatrixBlock<T>(std::move(J)));
   }
   return result;
 }

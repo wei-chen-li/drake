@@ -282,8 +282,21 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair,
       bool is_A) const;
 
-  /* Copies the state of the deformable body with `id` in the given `context`
-   to the `fem_state`.
+  /* Computes the contact data for a rigid geometry G participating in contact.
+   @param[in] context        Context of the MultibodyPlant owning this driver.
+   @param[in] geometry_pair  The geometry pair with one of the geometries being
+                             geometry G
+   @note Unlike ComputeContactDataForFilament where we need to determine whether
+   geometry G is labeled as geometry A or B in FilamentContactGeometryPair, by
+   convention, a rigid geometry is always labeled as geometry B in
+   FilamentContactGeometryPair if it participates in filament contact. */
+  ContactData ComputeContactDataForRigid(
+      const systems::Context<T>& context,
+      const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair)
+      const;
+
+  /* Copies the state of the deformable body with `id` in the given
+   `context` to the `fem_state`.
    @pre fem_state != nullptr and has size compatible with the state of the
         deformable body with the given `index`.
    @pre `index` is valid and less than the number of deformable bodies. */
