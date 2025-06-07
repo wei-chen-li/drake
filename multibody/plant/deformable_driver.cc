@@ -632,7 +632,6 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
     const systems::Context<T>& context,
     DiscreteContactData<DiscreteContactPair<T>>* result) const {
   DRAKE_DEMAND(result != nullptr);
-  // TODO(wei-chen): Implement AppendDiscreteContactPairs() for DER.
 
   /* Since v_AcBc_W = v_WBc - v_WAc the relative velocity Jacobian will be:
      Jv_v_AcBc_W = Jv_v_WBc_W - Jv_v_WAc_W.
@@ -845,6 +844,138 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
           .friction_coefficient = mu,
           .surface_index = surface_index,
           .face_index = i};
+      result->AppendDeformableData(std::move(contact_pair));
+    }
+  }
+
+  const FilamentContact<T>& filament_contact = EvalFilamentContact(context);
+  const std::vector<FilamentContactGeometryPair<T>>& contact_geometry_pairs =
+      filament_contact.contact_geometry_pairs();
+
+  for (int pair_index = 0; pair_index < ssize(contact_geometry_pairs);
+       ++pair_index) {
+    const FilamentContactGeometryPair<T>& geometry_pair =
+        contact_geometry_pairs[pair_index];
+    /* Skip this geometry pair if either body in contact is a disabled filament
+     body. */
+    const DeformableBodyId body_id_A =
+        deformable_model_->GetBodyId(geometry_pair.id_A());
+    const bool is_A_disabled =
+        !deformable_model_->is_enabled(body_id_A, context);
+    const bool is_B_disabled =
+        geometry_pair.is_B_filament() &&
+        !deformable_model_->is_enabled(
+            deformable_model_->GetBodyId(geometry_pair.id_B()), context);
+    if (is_A_disabled || is_B_disabled) {
+      continue;
+    }
+    /* Write the contact jacobian and velocity for all contact points for body
+     A. */
+    ContactData contact_data_A =
+        ComputeContactDataForFilament(context, geometry_pair, true);
+    const Vector3<T>& p_WA = contact_data_A.p_WG;
+
+    ContactData contact_data_B =
+        geometry_pair.is_B_filament()
+            ? ComputeContactDataForFilament(context, geometry_pair, false)
+            : ComputeContactDataForRigid(context, geometry_pair);
+    const Vector3<T>& p_WB = contact_data_B.p_WG;
+
+    const GeometryId id_A = geometry_pair.id_A();
+    const GeometryId id_B = geometry_pair.id_B();
+    const std::string& name_A = inspector.GetName(id_A);
+    const std::string& name_B = inspector.GetName(id_B);
+    /* Body A is guaranteed to be filament. */
+    const int body_index_A =
+        deformable_model_->GetBodyIndex(deformable_model_->GetBodyId(id_A));
+    /* Body B may be rigid or deformable. We first get its body index. */
+    const int body_index_B =
+        geometry_pair.is_B_filament()
+            ? static_cast<int>(deformable_model_->GetBodyIndex(
+                  deformable_model_->GetBodyId(id_B)))
+            : static_cast<int>(manager_->FindBodyByGeometryId(id_B));
+    /* By convention, the object index of a rigid body is just its body index.
+     All deformable bodies come after all rigid bodies, and the object index of
+     a deformable body is its deformable body index + the number of rigid bodies
+     in the plant. */
+    const int object_A =
+        body_index_A + manager_->plant().num_bodies();  // Deformable body.
+    const int object_B =
+        geometry_pair.is_B_filament()
+            ? body_index_B + manager_->plant().num_bodies()  // Deformable body.
+            : body_index_B;                                  // Rigid body.
+
+    /* We reuse `jacobian_blocks` for the Jacobian blocks for each contact point
+     and clear the vector repeatedly in the loop over the contact points. */
+    std::vector<typename DiscreteContactPair<T>::JacobianTreeBlock>
+        jacobian_blocks;
+    for (int i = 0; i < geometry_pair.num_contacts(); ++i) {
+      jacobian_blocks.clear();
+      const Vector3<T>& v_WAc = contact_data_A.v_WGc[i];
+      jacobian_blocks.push_back(std::move(contact_data_A.jacobian[i]));
+
+      Vector3<T> v_WBc = Vector3<T>::Zero();
+      /* Empty contact data indicates that the body is welded and we don't need
+       to record the Jacobian. */
+      if (!contact_data_B.jacobian.empty()) {
+        v_WBc = contact_data_B.v_WGc[i];
+        jacobian_blocks.push_back(std::move(contact_data_B.jacobian[i]));
+      }
+
+      const math::RotationMatrix<T>& R_WC = geometry_pair.R_WCs()[i];
+
+      const Vector3<T>& p_WC = geometry_pair.p_WCs()[i];
+      // Contact point position relative to object A and B.
+      const Vector3<T> p_AC_W = p_WC - p_WA;
+      const Vector3<T> p_BC_W = p_WC - p_WB;
+
+      const Vector3<T>& nhat_BA_W = geometry_pair.nhats_BA_W()[i];
+
+      const Vector3<T> nhat_AB_W = -nhat_BA_W;
+      const T v_AcBc_Cz = nhat_AB_W.dot(v_WBc - v_WAc);
+
+      const T phi0 = geometry_pair.signed_distances()[i];
+
+      const double default_stiffness = manager_->default_contact_stiffness();
+      const T stiffness_A =
+          GetPointContactStiffness(id_A, default_stiffness, inspector);
+      const T stiffness_B =
+          GetPointContactStiffness(id_B, default_stiffness, inspector);
+      const T k = GetCombinedPointContactStiffness(stiffness_A, stiffness_B);
+
+      const T fn0 = -k * phi0;
+
+      const double default_dissipation =
+          manager_->default_contact_dissipation();
+      const T d = GetCombinedHuntCrossleyDissipation(
+          id_A, id_B, stiffness_A, stiffness_B, default_dissipation, inspector);
+
+      const double default_dissipation_time_constant = 0.1;
+      const T tau = GetCombinedDissipationTimeConstant(
+          id_A, id_B, default_dissipation_time_constant, name_A, name_B,
+          inspector);
+
+      const double mu =
+          GetCombinedDynamicCoulombFriction(id_A, id_B, inspector);
+
+      DiscreteContactPair<T> contact_pair{
+          .jacobian = std::move(jacobian_blocks),
+          .id_A = id_A,
+          .object_A = object_A,
+          .id_B = id_B,
+          .object_B = object_B,
+          .R_WC = R_WC,
+          .p_WC = p_WC,
+          .p_ApC_W = p_AC_W,
+          .p_BqC_W = p_BC_W,
+          .nhat_BA_W = nhat_BA_W,
+          .phi0 = phi0,
+          .vn0 = v_AcBc_Cz,
+          .fn0 = fn0,
+          .stiffness = k,
+          .damping = d,
+          .dissipation_time_scale = tau,
+          .friction_coefficient = mu};
       result->AppendDeformableData(std::move(contact_pair));
     }
   }
