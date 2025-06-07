@@ -3,14 +3,15 @@
 #include <gflags/gflags.h>
 
 #include "drake/geometry/drake_visualizer.h"
+#include "drake/geometry/proximity_properties.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 10.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-2,
+DEFINE_double(time_step, 1e-3,
               "Discrete time step for the system [s]. Must be positive.");
 DEFINE_double(E, 4e7, "Young's modulus of the deformable bodies [Pa].");
 DEFINE_double(G, 2e7, "Shear modulus of the deformable bodies [Pa].");
@@ -20,7 +21,7 @@ DEFINE_double(width, 0.05, "Width of the cantilever beam [m].");
 DEFINE_double(height, 0.015, "Width of the cantilever beam [m].");
 DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
-DEFINE_double(ball_mass, 1, "Mass of the ball [kg].");
+DEFINE_double(ball_mass, 1e-3, "Mass of the ball [kg].");
 DEFINE_double(ball_radius, 0.03, "Radius of the ball [m].");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
@@ -80,6 +81,8 @@ DeformableBodyId RegisterCantileverBeam(
 
   /* Add a minimal proximity property for collision detection. */
   geometry::ProximityProperties proximity_props;
+  const CoulombFriction<double> surface_friction(0.8, 0.8);
+  AddContactMaterial({}, {}, surface_friction, &proximity_props);
   geometry_instance->set_proximity_properties(proximity_props);
 
   /* Set the material properties. Notice G = E / 2(1+𝜈). */
@@ -116,7 +119,7 @@ void RegisterBall(MultibodyPlant<double>* plant) {
                                 Vector4d(0, 0, 1.0, 1.0));
   plant->RegisterCollisionGeometry(ball, RigidTransformd::Identity(),
                                    Sphere(FLAGS_ball_radius), "ball",
-                                   CoulombFriction(0.5, 0.5));
+                                   CoulombFriction(0.8, 0.8));
 }
 
 int do_main() {
