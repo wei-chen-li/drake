@@ -1,0 +1,284 @@
+#include "drake/geometry/proximity/filament_soft_geometry.h"
+
+#include <tuple>
+
+#include "drake/common/overloaded.h"
+#include "drake/geometry/proximity/meshing_utilities.h"
+#include "drake/geometry/proximity/volume_mesh.h"
+#include "drake/math/axis_angle.h"
+#include "drake/math/frame_transport.h"
+#include "drake/math/rigid_transform.h"
+#include "drake/math/rotation_matrix.h"
+#include "drake/math/unit_vector.h"
+
+namespace drake {
+namespace geometry {
+namespace internal {
+namespace filament {
+
+using Eigen::Vector3d;
+
+namespace {
+
+/* Makes the cross-section vertices and the elements enough to represent the
+ mesh of the filament segment.
+ @returns A tuple (p_CVs, num_cross_sections, elements).
+          p_CVs               The vertices of a cross-section in the
+                              cross-section frame
+          num_cross_sections  The number of cross section that make
+                              up the mesh.
+          elements            The connectivity of the mesh. */
+std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
+MakeFilamentSegmentMesh(const Filament::CircularCrossSection& cross_section,
+                        double segment_length, double hydroelastic_margin,
+                        double resolution_hint) {
+  DRAKE_THROW_UNLESS(cross_section.diameter > 0);
+  const double d = cross_section.diameter + 2 * hydroelastic_margin;
+
+  int num_thetas = M_PI * d / resolution_hint;
+  num_thetas = std::min(std::max(num_thetas, 3), 20);
+
+  const int num_verts_per_cross_section = 1 + num_thetas;
+  Eigen::Matrix3Xd p_CVs(3, num_verts_per_cross_section);
+  auto theta = Eigen::VectorXd::LinSpaced(num_thetas + 1, 0, 2 * M_PI)
+                   .head(num_thetas)
+                   .array();
+  p_CVs.col(0).setZero();
+  p_CVs.rightCols(num_thetas).row(0) = 0.5 * d * cos(theta);
+  p_CVs.rightCols(num_thetas).row(1) = 0.5 * d * sin(theta);
+  p_CVs.rightCols(num_thetas).row(2).setZero();
+
+  int num_cross_sections = std::round(segment_length / resolution_hint);
+  num_cross_sections = std::min(std::max(num_cross_sections, 2), 1000);
+
+  std::vector<VolumeElement> elements;
+  for (int k = 1; k < num_cross_sections; ++k) {
+    const int offset0 = num_verts_per_cross_section * (k - 1);
+    const int offset1 = num_verts_per_cross_section * k;
+    for (int i = 0; i < num_thetas; ++i) {
+      const int ip1 = (i + 1) % num_thetas;
+      Append(SplitTriangularPrismToTetrahedra(
+                 offset0, offset0 + 1 + i, offset0 + 1 + ip1, offset1,
+                 offset1 + 1 + i, offset1 + 1 + ip1),
+             &elements);
+    }
+  }
+  return {std::move(p_CVs), num_cross_sections, std::move(elements)};
+}
+
+/* Makes the hydroelastic pressure for the mesh vertices. */
+std::vector<double> MakeFilamentSegmentPressureField(
+    const Filament::CircularCrossSection& cross_section,
+    double hydroelastic_margin, double hydroelastic_pressure,
+    const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
+  std::vector<double> pressures;
+  pressures.reserve(p_CVs.cols() * num_cross_sections);
+  const double pressure_max = hydroelastic_pressure;
+  const double pressure_min =
+      -hydroelastic_pressure / cross_section.diameter * hydroelastic_margin;
+  for (int k = 0; k < num_cross_sections; ++k) {
+    pressures.push_back(pressure_max);
+    for (int i = 1; i < p_CVs.cols(); ++i) {
+      pressures.push_back(pressure_min);
+    }
+  }
+  return pressures;
+}
+
+/* Makes the cross-section vertices and the elements enough to represent the
+ mesh of the filament segment. */
+std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
+MakeFilamentSegmentMesh(const Filament::RectangularCrossSection& cross_section,
+                        double segment_length, double hydroelastic_margin,
+                        double resolution_hint) {
+  unused(cross_section, segment_length, hydroelastic_margin, resolution_hint);
+  throw std::logic_error(
+      "MakeFilamentSegmentMesh() not implemented for RectangularCrossSection "
+      "yet.");
+}
+
+std::vector<double> MakeFilamentSegmentPressureField(
+    const Filament::RectangularCrossSection& cross_section,
+    double hydroelastic_margin, double hydroelastic_pressure,
+    const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
+  unused(cross_section, hydroelastic_margin, hydroelastic_pressure, p_CVs,
+         num_cross_sections);
+  throw std::logic_error(
+      "MakeFilamentSegmentPressureField() not implemented for "
+      "RectangularCrossSection yet.");
+}
+
+Vector3d LinearInterpolate(const Eigen::Ref<const Vector3d>& vec_0,
+                           const Eigen::Ref<const Vector3d>& vec_1,
+                           double alpha) {
+  DRAKE_THROW_UNLESS(0 <= alpha && alpha <= 1);
+  return vec_0 * (1 - alpha) + vec_1 * alpha;
+}
+
+Vector3d SphericalInterpolate(const Eigen::Ref<const Vector3d>& vec_0,
+                              const Eigen::Ref<const Vector3d>& vec_1,
+                              double alpha) {
+  DRAKE_THROW_UNLESS(0 <= alpha && alpha <= 1);
+  Vector3d axis = vec_0.cross(vec_1);
+  const double axis_norm = axis.norm();
+  if (axis_norm < 1e-14)
+    return LinearInterpolate(vec_0, vec_1, alpha).normalized();
+  axis /= axis_norm;
+  const double angle = math::SignedAngleAroundAxis<double>(vec_0, vec_1, axis);
+  return math::RotateAxisAngle<double>(vec_0, axis, alpha * angle);
+}
+
+template <typename T>
+void Append(const Eigen::Matrix3X<T>& new_vertices,
+            std::vector<Vector3<T>>* mesh_vertices) {
+  DRAKE_THROW_UNLESS(mesh_vertices != nullptr);
+  for (int i = 0; i < new_vertices.cols(); ++i)
+    mesh_vertices->emplace_back(new_vertices.col(i));
+}
+
+}  // namespace
+
+FilamentSoftGeometrySegment::FilamentSoftGeometrySegment(
+    const std::variant<Filament::CircularCrossSection,
+                       Filament::RectangularCrossSection>& cross_section,
+    double segment_length, double hydroelastic_margin, double resolution_hint,
+    double hydroelastic_pressure) {
+  std::visit(
+      [&](auto&& cs) {
+        std::tie(p_CVs_, num_cross_sections_, elements_) =
+            MakeFilamentSegmentMesh(cs, segment_length, hydroelastic_margin,
+                                    resolution_hint);
+        pressures_ = MakeFilamentSegmentPressureField(
+            cs, hydroelastic_margin, hydroelastic_pressure, p_CVs_,
+            num_cross_sections_);
+      },
+      cross_section);
+}
+
+hydroelastic::SoftGeometry FilamentSoftGeometrySegment::MakeSoftGeometry(
+    const Eigen::Ref<const Eigen::Vector3d>& node_0,
+    const Eigen::Ref<const Eigen::Vector3d>& node_1,
+    const Eigen::Ref<const Eigen::Vector3d>& t_0,
+    const Eigen::Ref<const Eigen::Vector3d>& t_1,
+    const Eigen::Ref<const Eigen::Vector3d>& m1_0,
+    const Eigen::Ref<const Eigen::Vector3d>& m1_1) const {
+  std::unique_ptr<VolumeMesh<double>> mesh =
+      MakeVolumeMesh(node_0, node_1, t_0, t_1, m1_0, m1_1);
+  std::vector<double> values = pressures_;
+  // TODO(wei-chen): Try to reduce the need to compute pressure gradient, and
+  // other SoftMesh quantities every time this function is called.
+  auto pressure = std::make_unique<VolumeMeshFieldLinear<double, double>>(
+      std::move(values), mesh.get());
+  hydroelastic::SoftMesh soft_mesh(std::move(mesh), std::move(pressure));
+  return hydroelastic::SoftGeometry(std::move(soft_mesh));
+}
+
+std::unique_ptr<VolumeMesh<double>> FilamentSoftGeometrySegment::MakeVolumeMesh(
+    const Eigen::Ref<const Vector3d>& node_0,
+    const Eigen::Ref<const Vector3d>& node_1,
+    const Eigen::Ref<const Vector3d>& t_0,
+    const Eigen::Ref<const Vector3d>& t_1,
+    const Eigen::Ref<const Vector3d>& m1_0,
+    const Eigen::Ref<const Vector3d>& m1_1) const {
+  std::vector<Vector3d> vertices;
+  for (int i = 0; i < num_cross_sections_; ++i) {
+    const double alpha = static_cast<double>(i) / (num_cross_sections_ - 1);
+    Vector3d pos = LinearInterpolate(node_0, node_1, alpha);
+    Vector3d t = SphericalInterpolate(t_0, t_1, alpha);
+    Vector3d m1 = SphericalInterpolate(m1_0, m1_1, alpha);
+    m1 = (m1 - m1.dot(t) * t).normalized();
+    /* Pose of cross-section frame in world frame. */
+    math::RigidTransformd X_WC(
+        math::RotationMatrixd::MakeFromOrthonormalColumns(m1, t.cross(m1), t),
+        pos);
+    Append(X_WC * p_CVs_, &vertices);
+  }
+  std::vector<VolumeElement> elements = elements_;
+  return std::make_unique<VolumeMesh<double>>(std::move(elements),
+                                              std::move(vertices));
+}
+
+FilamentSoftGeometry::FilamentSoftGeometry(const Filament& filament,
+                                           double hydroelastic_pressure,
+                                           double resolution_hint,
+                                           double hydroelastic_margin)
+    : closed_(filament.closed()),
+      num_nodes_(filament.node_pos().cols()),
+      num_edges_(filament.edge_m1().cols()),
+      node_pos_(filament.node_pos()),
+      edge_m1_(filament.edge_m1()) {
+  double length = 0;
+  for (int i = 0; i < num_edges_; ++i) {
+    const int ip1 = (i + 1) % num_nodes_;
+    length +=
+        (filament.node_pos().col(ip1) - filament.node_pos().col(i)).norm();
+  }
+  segment_ = FilamentSoftGeometrySegment(
+      filament.cross_section(), length / num_edges_, hydroelastic_margin,
+      resolution_hint, hydroelastic_pressure);
+}
+
+void FilamentSoftGeometry::UpdateConfigurationVector(
+    const Eigen::Ref<const Eigen::VectorXd>& q_WG) {
+  DRAKE_THROW_UNLESS(q_WG.size() == 3 * num_nodes_ + 3 * num_edges_);
+  node_pos_ = Eigen::Map<const Eigen::Matrix3Xd>(q_WG.data(), 3, num_nodes_);
+  const int offset = 3 * num_nodes_;
+  edge_m1_ =
+      Eigen::Map<const Eigen::Matrix3Xd>(q_WG.data() + offset, 3, num_edges_);
+}
+
+hydroelastic::SoftGeometry FilamentSoftGeometry::MakeSoftGeometryForEdge(
+    int edge_index) const {
+  DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < num_edges_);
+  const int node0_index = edge_index;
+  const int node1_index = (edge_index + 1) % num_nodes_;
+  const auto [node_0, t_0, m1_0] = find_node_pos_t_m1(node0_index);
+  const auto [node_1, t_1, m1_1] = find_node_pos_t_m1(node1_index);
+  return segment_.MakeSoftGeometry(node_0, node_1, t_0, t_1, m1_0, m1_1);
+}
+
+std::tuple<Eigen::Vector3d, Eigen::Vector3d, Eigen::Vector3d>
+FilamentSoftGeometry::find_node_pos_t_m1(int node_index) const {
+  DRAKE_THROW_UNLESS(0 <= node_index && node_index < num_nodes_);
+  const Vector3d pos = node_pos_.col(node_index);
+  Vector3d t;
+  Vector3d m1;
+  if (!closed_ && (node_index == 0 || node_index == num_nodes_ - 1)) {
+    if (node_index == 0) {
+      const int edge_index = node_index;
+      std::tie(t, m1) = find_edge_t_m1(edge_index);
+    } else {
+      const int edge_index = node_index - 1;
+      std::tie(t, m1) = find_edge_t_m1(edge_index);
+    }
+  } else {
+    const int edge0_index = (node_index - 1 + num_edges_) % num_edges_;
+    const int edge1_index = node_index;
+    const auto [t_0, m1_0] = find_edge_t_m1(edge0_index);
+    const auto [t_1, m1_1] = find_edge_t_m1(edge1_index);
+    t = ((t_0 + t_1) / 2).normalized();
+    Vector3d m1_c0, m1_c1;
+    math::FrameTransport<double>(t_0, m1_0, t, m1_c0);
+    math::FrameTransport<double>(t_1, m1_1, t, m1_c1);
+    m1 = (m1_c0 + m1_c1) / 2;
+    m1 = (m1 - m1.dot(t) * t).normalized();
+  }
+  return {pos, t, m1};
+}
+
+std::tuple<Eigen::Vector3d, Eigen::Vector3d>
+FilamentSoftGeometry::find_edge_t_m1(int edge_index) const {
+  DRAKE_THROW_UNLESS(0 <= edge_index && edge_index < num_edges_);
+  const Vector3d m1 = edge_m1_.col(edge_index);
+
+  const int node0_index = edge_index;
+  const int node1_index = (edge_index + 1) % num_nodes_;
+  const Vector3d t =
+      (node_pos_.col(node1_index) - node_pos_.col(node0_index)).normalized();
+  return {t, m1};
+}
+
+}  // namespace filament
+}  // namespace internal
+}  // namespace geometry
+}  // namespace drake

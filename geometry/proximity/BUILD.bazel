@@ -31,6 +31,7 @@ drake_cc_package_library(
         ":field_intersection",
         ":filament_contact_internal",
         ":filament_self_contact_filter",
+        ":filament_soft_geometry",
         ":hydroelastic_internal",
         ":inflate_mesh",
         ":make_box_field",
@@ -393,6 +394,23 @@ drake_cc_library(
         "//geometry:shape_specification",
         "//solvers:mathematical_program",
         "//solvers:solve",
+    ],
+)
+
+drake_cc_library(
+    name = "filament_soft_geometry",
+    srcs = ["filament_soft_geometry.cc"],
+    hdrs = ["filament_soft_geometry.h"],
+    deps = [
+        ":hydroelastic_internal",
+        ":meshing_utilities",
+        ":volume_mesh",
+        "//common:overloaded",
+        "//geometry:shape_specification",
+        "//math:axis_angle",
+        "//math:frame_transport",
+        "//math:geometric_transform",
+        "//math:vector3_util",
     ],
 )
 
@@ -1363,6 +1381,13 @@ drake_cc_googletest(
     name = "filament_self_contact_filter_test",
     deps = [
         ":filament_self_contact_filter",
+    ],
+)
+
+drake_cc_googletest(
+    name = "filament_soft_geometry_test",
+    deps = [
+        ":filament_soft_geometry",
     ],
 )
 
