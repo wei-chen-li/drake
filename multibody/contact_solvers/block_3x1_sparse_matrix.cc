@@ -236,6 +236,88 @@ void Block3x1SparseMatrix<T>::MultiplyWithScaledTransposeAndAddTo(
 }
 
 template <class T>
+Block3x1SparseMatrix<T> Block3x1SparseMatrix<T>::LeftMultiplyByBlockDiagonal(
+    const std::vector<MatrixX<T>>& Gs, int start, int end) const {
+  DRAKE_THROW_UNLESS(0 <= start);
+  DRAKE_THROW_UNLESS(start <= end);
+  DRAKE_THROW_UNLESS(end < ssize(Gs));
+  /* Verify that the sizes of G and M is compatible. */
+  std::vector<int>
+      row_starts;  // starting row index for each diagonal block in G
+  row_starts.reserve(end - start + 1);
+  int row = 0;
+  for (int i = start; i <= end; ++i) {
+    DRAKE_THROW_UNLESS(Gs[i].rows() == Gs[i].cols());
+    DRAKE_THROW_UNLESS(Gs[i].rows() % 3 == 0);
+    row_starts.emplace_back(row);
+    row += Gs[i].rows();
+  }
+  DRAKE_THROW_UNLESS(row == rows());
+
+  /* At this point, we know that G is block diagonal, with block h being
+   3nₕ x 3nₕ for positive integers nₕ. Therefore, all quantities in the
+   computation of A = G * M can be represented as 3x3 blocks. We loop over all
+   3x3 non-zero blocks of M, and for each Mₖⱼ (the k,j-th 3x3 block of M), we
+   find all non-zero 3x3 blocks Gᵢₖ that multiplies with Mₖⱼ, and add their
+   product to the resulting 3x3 block, Aᵢⱼ.
+
+   Because G is block diagonal, to achieve the above, we only need:
+   (1) The index h into `Gs` to obtain the correct diagonal block of G that
+       multiplies with Mₖⱼ.
+   (2) The block row indices (i.e. the i's) of these non-zero 3x3 G subblocks.
+
+   Note that, for (2), the block row indices are contiguous, so we only need the
+   starting block row index and the size of that G block to determine all the
+   block row indices. */
+  std::vector<int> G_indices(
+      block_rows());  // `G_indices[k]` gives the relevant index h into `Gs` for
+                      // block column k.
+  std::vector<int> i_start(block_rows());  // `i_start[k]` gives the starting
+                                           // block row index from (2) above.
+  {
+    int i = 0;
+    int h = start;
+    for (int k = 0; k < block_rows(); ++k) {
+      if (3 * k >= row_starts[h - start] + Gs[h].rows()) {
+        i += Gs[h].cols() / 3;
+        ++h;
+      }
+      i_start[k] = i;
+      G_indices[k] = h;
+    }
+  }
+  /* We also record, for each k, the local block column index, l, such that the
+   `Gs[G_indices[k]].col(l)` gives the (non-zero entries of) k-th column of G.
+   */
+  std::vector<int> local_block_cols(block_rows());
+  for (int k = 0; k < block_rows(); ++k) {
+    local_block_cols[k] = k - i_start[k];
+  }
+
+  Block3x1SparseMatrix<T> A(block_rows(), block_cols());
+  std::vector<Triplet> A_triplets;
+  A_triplets.reserve(num_blocks());
+  for (const auto& row_data : row_data_) {
+    for (const Triplet& t : row_data) {
+      const int k = std::get<0>(t);
+      const int j = std::get<1>(t);
+      const Vector3<T>& M_block = std::get<2>(t);
+      const int h = G_indices[k];
+      /* Given k and j, perform Aᵢⱼ+= Gᵢₖ * Mₖⱼ for all relevant i's. */
+      for (int l = 0; 3 * l < Gs[h].cols(); ++l) {
+        const int i = i_start[k] + l;
+        A_triplets.emplace_back(
+            i, j,
+            Gs[h].template block<3, 3>(3 * l, 3 * local_block_cols[k]) *
+                M_block);
+      }
+    }
+  }
+  A.SetFromTriplets(A_triplets);
+  return A;
+}
+
+template <class T>
 MatrixX<T> Block3x1SparseMatrix<T>::MakeDenseMatrix() const {
   MatrixX<T> result = MatrixX<T>::Zero(rows(), cols());
   for (const std::vector<Triplet>& row : row_data_) {
