@@ -114,8 +114,8 @@ int do_main() {
 
   auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
-  RegisterFilament(&deformable_model, Vector3d(0, -0.5, 0), Vector3d(0, 0.5, 0),
-                   true);
+  DeformableBodyId id = RegisterFilament(
+      &deformable_model, Vector3d(0, -0.5, 0), Vector3d(0, 0.5, 0), true);
   const double z = (FLAGS_diameter / 2) + FLAGS_cylinder_diameter;
   RegisterFilament(&deformable_model, Vector3d(-0.5, 0, z),
                    Vector3d(0.5, 0, z));
@@ -128,9 +128,15 @@ int do_main() {
   auto diagram = builder.Build();
 
   Simulator<double> simulator(*diagram);
+  Context<double>& context = simulator.get_mutable_context();
+  Context<double>& plant_context =
+      diagram->GetMutableSubsystemContext(plant, &context);
+
   simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
+  simulator.AdvanceTo(FLAGS_simulation_time * 0.5);
+  deformable_model.Disable(id, &plant_context);
   simulator.AdvanceTo(FLAGS_simulation_time);
 
   return 0;

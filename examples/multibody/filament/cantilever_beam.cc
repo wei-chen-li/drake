@@ -21,7 +21,7 @@ DEFINE_double(width, 0.05, "Width of the cantilever beam [m].");
 DEFINE_double(height, 0.015, "Width of the cantilever beam [m].");
 DEFINE_int32(num_edges, 100,
              "Number of edges the cantilever beam is spatially discretized.");
-DEFINE_double(ball_mass, 1e-3, "Mass of the ball [kg].");
+DEFINE_double(ball_mass, 0.1, "Mass of the ball [kg].");
 DEFINE_double(ball_radius, 0.03, "Radius of the ball [m].");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "

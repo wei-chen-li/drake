@@ -9,7 +9,7 @@
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 3.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-3,
               "Discrete time step for the system [s]. Must be positive.");
@@ -18,7 +18,7 @@ DEFINE_double(G, 2e4, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 0.6, "Length of the rope [m].");
 DEFINE_double(diameter, 0.015, "Diameter of the rope [m].");
-DEFINE_int32(num_edges, 100,
+DEFINE_int32(num_edges, 50,
              "Number of edges the rope is spatially discretized.");
 DEFINE_double(ball_mass, 1e-3, "Mass of the ball [kg].");
 DEFINE_double(ball_radius, 0.03, "Radius of the ball [m].");

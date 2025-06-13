@@ -13,8 +13,8 @@ DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-3,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 4e7, "Young's modulus of the deformable bodies [Pa].");
-DEFINE_double(G, 2e7, "Shear modulus of the deformable bodies [Pa].");
+DEFINE_double(E, 4e6, "Young's modulus of the deformable bodies [Pa].");
+DEFINE_double(G, 2e6, "Shear modulus of the deformable bodies [Pa].");
 DEFINE_double(rho, 10, "Mass density of the deformable bodies [kg/m³].");
 DEFINE_double(length, 1.0, "Length of the beam [m].");
 DEFINE_double(width, 0.05, "Width of the beam [m].");
@@ -90,7 +90,6 @@ DeformableBodyId RegisterCantileverBeam(
   config.set_youngs_modulus(FLAGS_E);
   config.set_poissons_ratio(0.5 * FLAGS_E / FLAGS_G - 1);
   config.set_mass_density(FLAGS_rho);
-  config.set_mass_damping_coefficient(1.0);
 
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
