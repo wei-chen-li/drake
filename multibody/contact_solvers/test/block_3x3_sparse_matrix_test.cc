@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
+#include "drake/multibody/contact_solvers/block_3x1_sparse_matrix.h"
 
 namespace drake {
 namespace multibody {
@@ -12,6 +13,7 @@ namespace {
 
 using Eigen::Matrix3d;
 using Eigen::MatrixXd;
+using Eigen::Vector3d;
 using Eigen::VectorXd;
 
 /* Returns an arbitrary non-zero matrix of size m-by-n.*/
@@ -107,9 +109,8 @@ GTEST_TEST(Block3x3SparseMatrixTest, TransposeAndMultiplyAndAddTo) {
   const Block3x3SparseMatrix<double> sparse_matrix = MakeBlockSparseMatrix();
   const MatrixXd dense_matrix = sparse_matrix.MakeDenseMatrix();
 
+  /* Test multiplication with dense. */
   const MatrixXd A = MakeArbitraryMatrix(12, 6);
-
-  /* Test the sparse-dense multiplication. */
   /* Set the destinations to compatible-sized non-zero matrices. */
   MatrixXd y1 = MakeArbitraryMatrix(9, 6);
   MatrixXd y2 = y1;
@@ -118,15 +119,28 @@ GTEST_TEST(Block3x3SparseMatrixTest, TransposeAndMultiplyAndAddTo) {
   y2 += dense_matrix.transpose() * A;
   EXPECT_TRUE(CompareMatrices(y1, y2));
 
-  /* Test the sparse-sparse multiplication. */
-  Block3x3SparseMatrix<double> A_sparse(4, 2);
-  std::vector<Block3x3SparseMatrix<double>::Triplet> triplets;
-  triplets.emplace_back(0, 1, MakeMatrix(4.0));
-  triplets.emplace_back(2, 1, MakeMatrix(5.0));
-  A_sparse.SetFromTriplets(triplets);
+  /* Test multiplication with 3x3 sparse . */
+  Block3x3SparseMatrix<double> A_3x3sparse(4, 2);
+  {
+    std::vector<Block3x3SparseMatrix<double>::Triplet> triplets;
+    triplets.emplace_back(0, 1, MakeMatrix(4.0));
+    triplets.emplace_back(2, 1, MakeMatrix(5.0));
+    A_3x3sparse.SetFromTriplets(triplets);
+  }
+  sparse_matrix.TransposeAndMultiplyAndAddTo(A_3x3sparse, &y1);
+  y2 += dense_matrix.transpose() * A_3x3sparse.MakeDenseMatrix();
+  EXPECT_TRUE(CompareMatrices(y1, y2));
 
-  sparse_matrix.TransposeAndMultiplyAndAddTo(A_sparse, &y1);
-  y2 += dense_matrix.transpose() * A_sparse.MakeDenseMatrix();
+  /* Test multiplication with 3x1 sparse . */
+  Block3x1SparseMatrix<double> A_3x1sparse(4, 6);
+  {
+    std::vector<Block3x1SparseMatrix<double>::Triplet> triplets;
+    triplets.emplace_back(0, 1, Vector3d::Constant(4.0));
+    triplets.emplace_back(2, 1, Vector3d::Constant(5.0));
+    A_3x1sparse.SetFromTriplets(triplets);
+  }
+  sparse_matrix.TransposeAndMultiplyAndAddTo(A_3x1sparse, &y1);
+  y2 += dense_matrix.transpose() * A_3x1sparse.MakeDenseMatrix();
   EXPECT_TRUE(CompareMatrices(y1, y2));
 }
 

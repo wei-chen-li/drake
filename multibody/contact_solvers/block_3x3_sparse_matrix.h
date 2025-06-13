@@ -11,6 +11,10 @@ namespace multibody {
 namespace contact_solvers {
 namespace internal {
 
+/* Forward declaration. */
+template <typename T>
+class Block3x1SparseMatrix;
+
 /* A sparse matrix data structure composed of m-by-n block submatrices, where
  each submatrix is of size 3-by-3. Only the non-zero submatrices are stored for
  efficiency. We use `M` to denote `this` Block3x3SparseMatrix throughout this
@@ -75,6 +79,12 @@ class Block3x3SparseMatrix {
    @pre y != nullptr and the sizes of A and y are compatible with this matrix.
   */
   void TransposeAndMultiplyAndAddTo(const Block3x3SparseMatrix<T>& A,
+                                    EigenPtr<MatrixX<T>> y) const;
+
+  /* Performs y += Mᵀ * A, where A is 3x1 block sparse.
+   @pre y != nullptr and the sizes of A and y are compatible with this matrix.
+  */
+  void TransposeAndMultiplyAndAddTo(const Block3x1SparseMatrix<T>& A,
                                     EigenPtr<MatrixX<T>> y) const;
 
   /* Performs y += M * scale.asDiagonal() * M.transpose().
