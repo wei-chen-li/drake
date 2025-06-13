@@ -939,10 +939,9 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
       if (jacobian_blocks.size() == 2 &&
           jacobian_blocks[0].tree == jacobian_blocks[1].tree) {
         TreeIndex tree = jacobian_blocks[0].tree;
-        const MatrixX<T> jacobian = jacobian_blocks[0].J.MakeDenseMatrix() +
-                                    jacobian_blocks[1].J.MakeDenseMatrix();
+        const MatrixBlock<T> J = jacobian_blocks[0].J + jacobian_blocks[1].J;
         jacobian_blocks.clear();
-        jacobian_blocks.emplace_back(tree, MatrixBlock<T>(std::move(jacobian)));
+        jacobian_blocks.emplace_back(tree, std::move(J));
       }
 
       const math::RotationMatrix<T>& R_WC = geometry_pair.R_WCs()[i];
