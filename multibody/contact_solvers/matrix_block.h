@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "drake/common/eigen_types.h"
+#include "drake/multibody/contact_solvers/block_3x1_sparse_matrix.h"
 #include "drake/multibody/contact_solvers/block_3x3_sparse_matrix.h"
 
 namespace drake {
@@ -53,6 +54,9 @@ class MatrixBlock {
 
   /* Constructs a MatrixBlock with the given Block3x3SparseMatrix. */
   explicit MatrixBlock(Block3x3SparseMatrix<T> data);
+
+  /* Constructs a MatrixBlock with the given Block3x1SparseMatrix. */
+  explicit MatrixBlock(Block3x1SparseMatrix<T> data);
 
   /* Constructs a MatrixBlock with the given Eigen dense matrix. */
   explicit MatrixBlock(MatrixX<T> data);
@@ -107,7 +111,8 @@ class MatrixBlock {
   friend MatrixBlock<T> StackMatrixBlocks<T>(
       const std::vector<MatrixBlock<T>>& blocks);
 
-  std::variant<MatrixX<T>, Block3x3SparseMatrix<T>> data_;
+  std::variant<MatrixX<T>, Block3x3SparseMatrix<T>, Block3x1SparseMatrix<T>>
+      data_;
   bool is_dense_{};
 };
 

@@ -164,9 +164,11 @@ drake_cc_library(
     srcs = ["matrix_block.cc"],
     hdrs = ["matrix_block.h"],
     deps = [
+        ":block_3x1_sparse_matrix",
         ":block_3x3_sparse_matrix",
         "//common:default_scalars",
         "//common:essential",
+        "//common:overloaded",
     ],
 )
 

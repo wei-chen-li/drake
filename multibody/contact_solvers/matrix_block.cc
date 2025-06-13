@@ -1,5 +1,7 @@
 #include "drake/multibody/contact_solvers/matrix_block.h"
 
+#include "drake/common/overloaded.h"
+
 namespace drake {
 namespace multibody {
 namespace contact_solvers {
@@ -7,6 +9,10 @@ namespace internal {
 
 template <class T>
 MatrixBlock<T>::MatrixBlock(Block3x3SparseMatrix<T> data)
+    : data_(std::move(data)), is_dense_(false) {}
+
+template <class T>
+MatrixBlock<T>::MatrixBlock(Block3x1SparseMatrix<T> data)
     : data_(std::move(data)), is_dense_(false) {}
 
 template <class T>
@@ -40,15 +46,13 @@ void MatrixBlock<T>::MultiplyAndAddTo(const Eigen::Ref<const MatrixX<T>>& A,
   DRAKE_DEMAND(cols() == A.rows());
   DRAKE_DEMAND(rows() == y->rows());
   DRAKE_DEMAND(A.cols() == y->cols());
-
-  if (is_dense_) {
-    const MatrixX<T>& M_dense = std::get<MatrixX<T>>(data_);
-    *y += M_dense * A;
-    return;
-  }
-  const Block3x3SparseMatrix<T>& M_sparse =
-      std::get<Block3x3SparseMatrix<T>>(data_);
-  M_sparse.MultiplyAndAddTo(A, y);
+  std::visit(overloaded{[&](const MatrixX<T>& M) {
+                          *y += M * A;
+                        },
+                        [&](const auto& M) {
+                          M.MultiplyAndAddTo(A, y);
+                        }},
+             data_);
 }
 
 template <class T>
@@ -58,15 +62,13 @@ void MatrixBlock<T>::TransposeAndMultiplyAndAddTo(
   DRAKE_DEMAND(cols() == y->rows());
   DRAKE_DEMAND(rows() == A.rows());
   DRAKE_DEMAND(A.cols() == y->cols());
-
-  if (is_dense_) {
-    const MatrixX<T>& M_dense = std::get<MatrixX<T>>(data_);
-    *y += M_dense.transpose() * A;
-    return;
-  }
-  const Block3x3SparseMatrix<T>& M_sparse =
-      std::get<Block3x3SparseMatrix<T>>(data_);
-  M_sparse.TransposeAndMultiplyAndAddTo(A, y);
+  std::visit(overloaded{[&](const MatrixX<T>& M) {
+                          *y += M.transpose() * A;
+                        },
+                        [&](const auto& M) {
+                          M.TransposeAndMultiplyAndAddTo(A, y);
+                        }},
+             data_);
 }
 
 // TODO(xuchenhan-tri): consider a double dispatch strategy where each block
@@ -78,25 +80,24 @@ void MatrixBlock<T>::TransposeAndMultiplyAndAddTo(
   DRAKE_DEMAND(cols() == y->rows());
   DRAKE_DEMAND(rows() == A.rows());
   DRAKE_DEMAND(A.cols() == y->cols());
-  if (A.is_dense_) {
-    const MatrixX<T>& A_dense = std::get<MatrixX<T>>(A.data_);
-    this->TransposeAndMultiplyAndAddTo(A_dense, y);
-    return;
-  }
-
-  /* A is sparse. */
-  const Block3x3SparseMatrix<T>& A_sparse =
-      std::get<Block3x3SparseMatrix<T>>(A.data_);
-  if (this->is_dense_) {
-    const MatrixX<T>& M_dense = std::get<MatrixX<T>>(this->data_);
-    A_sparse.LeftMultiplyAndAddTo(M_dense.transpose(), y);
-    return;
-  }
-
-  /* A and M are both sparse. */
-  const Block3x3SparseMatrix<T>& M_sparse =
-      std::get<Block3x3SparseMatrix<T>>(this->data_);
-  M_sparse.TransposeAndMultiplyAndAddTo(A_sparse, y);
+  std::visit(overloaded{[&](const MatrixX<T>& M) {
+                          std::visit(overloaded{[&](const MatrixX<T>& A_mat) {
+                                                  *y += M.transpose() * A_mat;
+                                                },
+                                                [&](const auto& A_mat) {
+                                                  A_mat.LeftMultiplyAndAddTo(
+                                                      M.transpose(), y);
+                                                }},
+                                     A.data_);
+                        },
+                        [&](const auto& M) {
+                          std::visit(
+                              [&](const auto& A_mat) {
+                                M.TransposeAndMultiplyAndAddTo(A_mat, y);
+                              },
+                              A.data_);
+                        }},
+             data_);
 }
 
 // TODO(xuchenhan-tri): consider a double dispatch strategy where each block
@@ -209,23 +210,24 @@ void MatrixBlock<T>::MultiplyWithScaledTransposeAndAddTo(
   DRAKE_DEMAND(cols() == scale.size());
   DRAKE_DEMAND(rows() == y->rows());
   DRAKE_DEMAND(rows() == y->cols());
-
-  if (is_dense_) {
-    const MatrixX<T>& M_dense = std::get<MatrixX<T>>(data_);
-    *y += M_dense * scale.asDiagonal() * M_dense.transpose();
-    return;
-  }
-  const Block3x3SparseMatrix<T>& M_sparse =
-      std::get<Block3x3SparseMatrix<T>>(data_);
-  M_sparse.MultiplyWithScaledTransposeAndAddTo(scale, y);
+  std::visit(overloaded{[&](const MatrixX<T>& M) {
+                          *y += M * scale.asDiagonal() * M.transpose();
+                        },
+                        [&](const auto& M) {
+                          M.MultiplyWithScaledTransposeAndAddTo(scale, y);
+                        }},
+             data_);
 }
 
 template <class T>
 MatrixX<T> MatrixBlock<T>::MakeDenseMatrix() const {
-  if (is_dense_) {
-    return std::get<MatrixX<T>>(data_);
-  }
-  return std::get<Block3x3SparseMatrix<T>>(data_).MakeDenseMatrix();
+  return std::visit(overloaded{[&](const MatrixX<T>& M) {
+                                 return M;
+                               },
+                               [&](const auto& M) {
+                                 return M.MakeDenseMatrix();
+                               }},
+                    data_);
 }
 
 template <typename T>
