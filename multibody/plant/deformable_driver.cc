@@ -28,6 +28,7 @@ using drake::geometry::internal::DeformableContact;
 using drake::geometry::internal::DeformableContactSurface;
 using drake::geometry::internal::FilamentContact;
 using drake::geometry::internal::FilamentContactGeometryPair;
+using drake::multibody::contact_solvers::internal::Block3x1SparseMatrix;
 using drake::multibody::contact_solvers::internal::Block3x3SparseMatrix;
 using drake::multibody::contact_solvers::internal::ContactConfiguration;
 using drake::multibody::contact_solvers::internal::ContactSolverResults;
@@ -524,15 +525,20 @@ DeformableDriver<T>::ComputeContactDataForFilament(
   result.v_WGc.reserve(geometry_pair.num_contacts());
   result.jacobian.reserve(geometry_pair.num_contacts());
 
+  /* The Jacobian block triplets to be filled in. There are at most 7 nonzero
+   blocks. */
+  std::vector<typename Block3x1SparseMatrix<T>::Triplet> triplets;
+  triplets.reserve(7);
   for (int k = 0; k < geometry_pair.num_contacts(); ++k) {
     /* The contact Jacobian (w.r.t. v) of the velocity of the point affixed to
      the geometry that coincides with the contact point C in the world frame,
      expressed in the contact frame C. We scale it by -1 if the body corresponds
      to body A in contact to get the correct sign. */
     const double scale = is_A ? -1.0 : 1.0;
-    // TODO(wei-chen): Consider using sparse matrix for this Jacobian.
-    Matrix3X<T> scaled_Jv_v_WGc_C =
-        Matrix3X<T>::Zero(3, dof_permutation.permuted_domain_size());
+    Block3x1SparseMatrix<T> scaled_Jv_v_WGc_C(
+        /* block rows */ 1,
+        /* block columns */ dof_permutation.permuted_domain_size());
+    triplets.clear();
     Vector3<T> v_WGc = Vector3<T>::Zero();
 
     const int index = is_A ? geometry_pair.contact_edge_indexes_A()[k]
@@ -560,19 +566,23 @@ DeformableDriver<T>::ComputeContactDataForFilament(
      zero because the vertex doesn't contribute to the contact velocity. */
     if (!der_model.IsPositionFixed(index0)) {
       v_WGc += w0 * body_participating_v0.template segment<3>(permuted_dof0);
-      scaled_Jv_v_WGc_C.template middleCols<3>(permuted_dof0) =
-          scale * w0 * R_CW.matrix();
+      const Matrix3<T> block = scale * w0 * R_CW.matrix();
+      triplets.emplace_back(0, permuted_dof0 + 0, block.col(0));
+      triplets.emplace_back(0, permuted_dof0 + 1, block.col(1));
+      triplets.emplace_back(0, permuted_dof0 + 2, block.col(2));
     }
     if (!der_model.IsPositionFixed(index1)) {
       v_WGc += w1 * body_participating_v0[permuted_dof1];
-      scaled_Jv_v_WGc_C.template middleCols<1>(permuted_dof1) =
-          scale * (R_CW * w1);
+      triplets.emplace_back(0, permuted_dof1, scale * (R_CW * w1));
     }
     if (!der_model.IsPositionFixed(index2)) {
       v_WGc += w2 * body_participating_v0.template segment<3>(permuted_dof2);
-      scaled_Jv_v_WGc_C.template middleCols<3>(permuted_dof2) =
-          scale * w2 * R_CW.matrix();
+      const Matrix3<T> block = scale * w2 * R_CW.matrix();
+      triplets.emplace_back(0, permuted_dof2 + 0, block.col(0));
+      triplets.emplace_back(0, permuted_dof2 + 1, block.col(1));
+      triplets.emplace_back(0, permuted_dof2 + 2, block.col(2));
     }
+    scaled_Jv_v_WGc_C.SetFromTriplets(std::move(triplets));
 
     result.v_WGc.emplace_back(v_WGc);
     const TreeIndex tree_index(
