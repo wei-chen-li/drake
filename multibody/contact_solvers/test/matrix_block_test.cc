@@ -12,6 +12,7 @@ namespace {
 
 using Eigen::Matrix3d;
 using Eigen::MatrixXd;
+using Eigen::Vector3d;
 using Eigen::VectorXd;
 
 /* Returns an arbitrary non-zero matrix of size m-by-n.*/
@@ -197,27 +198,57 @@ GTEST_TEST(MatrixBlockTest, StackMatrixBlock) {
 
   /* Make a second MatrixBlock that's different from the existing one. */
   Block3x3SparseMatrix<double> sparse_matrix2(2, 3);
-  std::vector<Block3x3SparseMatrix<double>::Triplet> triplets;
-  triplets.emplace_back(0, 0, Matrix3d::Constant(4.0));
-  triplets.emplace_back(1, 1, Matrix3d::Constant(5.0));
-  sparse_matrix2.SetFromTriplets(triplets);
+  {
+    std::vector<Block3x3SparseMatrix<double>::Triplet> triplets;
+    triplets.emplace_back(0, 0, Matrix3d::Constant(4.0));
+    triplets.emplace_back(1, 1, Matrix3d::Constant(5.0));
+    sparse_matrix2.SetFromTriplets(triplets);
+  }
   const MatrixXd dense_matrix2 = sparse_matrix2.MakeDenseMatrix();
   const MatrixBlock<double> sparse_block2(std::move(sparse_matrix2));
   const MatrixBlock<double> dense_block2(dense_matrix2);
+  {
+    std::vector<MatrixBlock<double>> dense_blocks = {dense_block1,
+                                                     dense_block2};
+    std::vector<MatrixBlock<double>> sparse_blocks = {sparse_block1,
+                                                      sparse_block2};
 
-  std::vector<MatrixBlock<double>> dense_blocks = {dense_block1, dense_block2};
-  std::vector<MatrixBlock<double>> sparse_blocks = {sparse_block1,
-                                                    sparse_block2};
+    MatrixXd expected(dense_matrix1.rows() + dense_matrix2.rows(),
+                      dense_matrix1.cols());
+    expected.topRows(dense_matrix1.rows()) = dense_matrix1;
+    expected.bottomRows(dense_matrix2.rows()) = dense_matrix2;
 
-  MatrixXd expected(dense_matrix1.rows() + dense_matrix2.rows(),
-                    dense_matrix1.cols());
-  expected.topRows(dense_matrix1.rows()) = dense_matrix1;
-  expected.bottomRows(dense_matrix2.rows()) = dense_matrix2;
+    const MatrixBlock<double> dense_stack = StackMatrixBlocks(dense_blocks);
+    const MatrixBlock<double> sparse_stack = StackMatrixBlocks(sparse_blocks);
+    EXPECT_TRUE(CompareMatrices(dense_stack.MakeDenseMatrix(), expected));
+    EXPECT_TRUE(CompareMatrices(sparse_stack.MakeDenseMatrix(), expected));
+  }
 
-  const MatrixBlock<double> dense_stack = StackMatrixBlocks(dense_blocks);
-  const MatrixBlock<double> sparse_stack = StackMatrixBlocks(sparse_blocks);
-  EXPECT_TRUE(CompareMatrices(dense_stack.MakeDenseMatrix(), expected));
-  EXPECT_TRUE(CompareMatrices(sparse_stack.MakeDenseMatrix(), expected));
+  /* Make a third MatrixBlock that's different from the existing ones. */
+  Block3x1SparseMatrix<double> sparse_matrix3(2, 9);
+  {
+    std::vector<Block3x1SparseMatrix<double>::Triplet> triplets;
+    triplets.emplace_back(0, 7, Vector3d::Constant(6.0));
+    triplets.emplace_back(1, 8, Vector3d::Constant(7.0));
+    sparse_matrix3.SetFromTriplets(triplets);
+  }
+  const MatrixXd dense_matrix3 = sparse_matrix3.MakeDenseMatrix();
+  const MatrixBlock<double> sparse_block3(std::move(sparse_matrix3));
+  {
+    std::vector<MatrixBlock<double>> sparse_blocks = {
+        sparse_block1, sparse_block2, sparse_block3};
+
+    MatrixXd expected(
+        sparse_block1.rows() + sparse_block2.rows() + sparse_block3.rows(),
+        sparse_block1.cols());
+    expected.topRows(sparse_block1.rows()) = sparse_block1.MakeDenseMatrix();
+    expected.middleRows(sparse_block1.rows(), sparse_block2.rows()) =
+        sparse_block2.MakeDenseMatrix();
+    expected.bottomRows(sparse_block3.rows()) = sparse_block3.MakeDenseMatrix();
+
+    const MatrixBlock<double> sparse_stack = StackMatrixBlocks(sparse_blocks);
+    EXPECT_TRUE(CompareMatrices(sparse_stack.MakeDenseMatrix(), expected));
+  }
 }
 
 }  // namespace

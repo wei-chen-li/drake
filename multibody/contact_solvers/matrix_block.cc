@@ -174,11 +174,14 @@ MatrixBlock<T> StackMatrixBlocks(const std::vector<MatrixBlock<T>>& blocks) {
     return {};
   }
 
-  const bool is_dense = blocks[0].is_dense_;
+  const bool is_dense = std::holds_alternative<MatrixX<T>>(blocks[0].data_);
+  bool is_3x3sparse = true;
   const int cols = blocks[0].cols();
   int rows = 0;
   for (const auto& b : blocks) {
-    DRAKE_DEMAND(is_dense == b.is_dense_);
+    DRAKE_DEMAND(is_dense == std::holds_alternative<MatrixX<T>>(b.data_));
+    if (!std::holds_alternative<Block3x3SparseMatrix<T>>(b.data_))
+      is_3x3sparse = false;
     DRAKE_DEMAND(cols == b.cols());
     rows += b.rows();
   }
@@ -193,36 +196,97 @@ MatrixBlock<T> StackMatrixBlocks(const std::vector<MatrixBlock<T>>& blocks) {
     return MatrixBlock<T>(std::move(result));
   }
 
-  /* Each entry in `blocks` is Block3x3SparseMatrix. */
+  if (is_3x3sparse) {
+    DRAKE_DEMAND(rows % 3 == 0);
+    DRAKE_DEMAND(cols % 3 == 0);
+    const int block_rows = rows / 3;
+    const int block_cols = cols / 3;
+    int block_row_offset = 0;
+    Block3x3SparseMatrix<T> result(block_rows, block_cols);
+    using Triplet = typename Block3x3SparseMatrix<T>::Triplet;
+    std::vector<Triplet> result_triplets;
+    int nonzero_blocks = 0;
+    for (const auto& b : blocks) {
+      const Block3x3SparseMatrix<T>& entry =
+          std::get<Block3x3SparseMatrix<T>>(b.data_);
+      nonzero_blocks += entry.num_blocks();
+    }
+    result_triplets.reserve(nonzero_blocks);
+
+    for (const auto& b : blocks) {
+      const Block3x3SparseMatrix<T>& entry =
+          std::get<Block3x3SparseMatrix<T>>(b.data_);
+      const std::vector<std::vector<Triplet>>& b_triplets =
+          entry.get_triplets();
+      for (const auto& row_data : b_triplets) {
+        for (const Triplet& t : row_data) {
+          const int block_row = std::get<0>(t) + block_row_offset;
+          const int block_col = std::get<1>(t);
+          const Matrix3<T>& m = std::get<2>(t);
+          result_triplets.emplace_back(block_row, block_col, m);
+        }
+      }
+      block_row_offset += entry.block_rows();
+    }
+    result.SetFromTriplets(result_triplets);
+    return MatrixBlock<T>(std::move(result));
+  }
+
   DRAKE_DEMAND(rows % 3 == 0);
-  DRAKE_DEMAND(cols % 3 == 0);
   const int block_rows = rows / 3;
-  const int block_cols = cols / 3;
   int block_row_offset = 0;
-  Block3x3SparseMatrix<T> result(block_rows, block_cols);
-  using Triplet = typename Block3x3SparseMatrix<T>::Triplet;
-  std::vector<Triplet> result_triplets;
+  Block3x1SparseMatrix<T> result(block_rows, cols);
+  std::vector<typename Block3x1SparseMatrix<T>::Triplet> result_triplets;
   int nonzero_blocks = 0;
   for (const auto& b : blocks) {
-    const Block3x3SparseMatrix<T>& entry =
-        std::get<Block3x3SparseMatrix<T>>(b.data_);
-    nonzero_blocks += entry.num_blocks();
+    std::visit(overloaded{[&](const Block3x1SparseMatrix<T>& entry) {
+                            nonzero_blocks += entry.num_blocks();
+                          },
+                          [&](const Block3x3SparseMatrix<T>& entry) {
+                            nonzero_blocks += entry.num_blocks() * 3;
+                          },
+                          [&](const auto&) {
+                            DRAKE_UNREACHABLE();
+                          }},
+               b.data_);
   }
   result_triplets.reserve(nonzero_blocks);
 
   for (const auto& b : blocks) {
-    const Block3x3SparseMatrix<T>& entry =
-        std::get<Block3x3SparseMatrix<T>>(b.data_);
-    const std::vector<std::vector<Triplet>>& b_triplets = entry.get_triplets();
-    for (const auto& row_data : b_triplets) {
-      for (const Triplet& t : row_data) {
-        const int block_row = std::get<0>(t) + block_row_offset;
-        const int block_col = std::get<1>(t);
-        const Matrix3<T>& m = std::get<2>(t);
-        result_triplets.emplace_back(block_row, block_col, m);
-      }
-    }
-    block_row_offset += entry.block_rows();
+    std::visit(
+        overloaded{
+            [&](const Block3x1SparseMatrix<T>& entry) {
+              for (const auto& row_data : entry.get_triplets()) {
+                for (const typename Block3x1SparseMatrix<T>::Triplet& t :
+                     row_data) {
+                  const int block_row = std::get<0>(t) + block_row_offset;
+                  const int block_col = std::get<1>(t);
+                  const Vector3<T>& m = std::get<2>(t);
+                  result_triplets.emplace_back(block_row, block_col, m);
+                }
+              }
+              block_row_offset += entry.block_rows();
+            },
+            [&](const Block3x3SparseMatrix<T>& entry) {
+              for (const auto& row_data : entry.get_triplets()) {
+                for (const typename Block3x3SparseMatrix<T>::Triplet& t :
+                     row_data) {
+                  const int block_row = std::get<0>(t) + block_row_offset;
+                  const int block_col = std::get<1>(t) * 3;
+                  const Matrix3<T>& m = std::get<2>(t);
+                  result_triplets.emplace_back(block_row, block_col, m.col(0));
+                  result_triplets.emplace_back(block_row, block_col + 1,
+                                               m.col(1));
+                  result_triplets.emplace_back(block_row, block_col + 2,
+                                               m.col(2));
+                }
+              }
+              block_row_offset += entry.block_rows();
+            },
+            [&](const auto&) {
+              DRAKE_UNREACHABLE();
+            }},
+        b.data_);
   }
   result.SetFromTriplets(result_triplets);
   return MatrixBlock<T>(std::move(result));
