@@ -158,6 +158,67 @@ GTEST_TEST(Block3x3SparseMatrixTest, MultiplyWithScaledTransposeAndAddTo) {
   EXPECT_TRUE(CompareMatrices(y1, y2));
 }
 
+GTEST_TEST(MatrixBlockTest, LeftMultiplyByBlockDiagonal) {
+  Block3x3SparseMatrix<double> sparse_matrix = MakeBlockSparseMatrix();
+  const MatrixXd dense_matrix = sparse_matrix.MakeDenseMatrix();
+
+  const int num_Gs = 7;
+  std::vector<MatrixXd> Gs;
+  for (int i = 0; i < num_Gs; ++i) {
+    Gs.emplace_back(Matrix3d::Constant(3.14 * i));
+  }
+  const int start = 2;
+  const int end = 5;
+  const Block3x3SparseMatrix<double> result =
+      sparse_matrix.LeftMultiplyByBlockDiagonal(Gs, start, end);
+
+  /* Compute the expected results using dense matrices. */
+  MatrixXd dense_G = MatrixXd::Zero(12, 12);
+  for (int i = 0; i < 4; ++i) {
+    dense_G.block<3, 3>(3 * i, 3 * i) = Gs[start + i];
+  }
+  MatrixXd expected = dense_G * dense_matrix;
+
+  EXPECT_TRUE(CompareMatrices(result.MakeDenseMatrix(), expected));
+}
+
+GTEST_TEST(MatrixBlockTest, LeftMultiplyByBlockDiagonalWithNon3x3GBlocks) {
+  Block3x3SparseMatrix<double> sparse_matrix = MakeBlockSparseMatrix();
+
+  /* Here we construct a block diagonal G with 7 square blocks of sizes
+   3 3 3 [3 6 3] 3. We'll use only the three blocks marked with brackets to
+   multiply with the sparse matrix which has 12 rows. */
+  MatrixXd matrix6(6, 6);
+  for (int i = 0; i < 6; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      matrix6(i, j) = 0.123 * i + 0.456 * j;
+    }
+  }
+  const int num_Gs = 7;
+  std::vector<MatrixXd> Gs;
+  for (int i = 0; i < num_Gs; ++i) {
+    if (i != 4) {
+      Gs.emplace_back(Matrix3d::Constant(3.14 * i));
+    } else {
+      Gs.emplace_back(matrix6);
+    }
+  }
+  const int start = 3;
+  const int end = 5;
+  const Block3x3SparseMatrix<double> result =
+      sparse_matrix.LeftMultiplyByBlockDiagonal(Gs, start, end);
+
+  /* Compute the expected results using dense matrices. */
+  MatrixXd dense_G = MatrixXd::Zero(12, 12);
+  dense_G.topLeftCorner(3, 3) = Gs[3];
+  dense_G.block<6, 6>(3, 3) = Gs[4];
+  dense_G.bottomRightCorner(3, 3) = Gs[5];
+
+  MatrixXd expected = dense_G * sparse_matrix.MakeDenseMatrix();
+  EXPECT_TRUE(CompareMatrices(result.MakeDenseMatrix(), expected,
+                              16 * std::numeric_limits<double>::epsilon()));
+}
+
 }  // namespace
 }  // namespace internal
 }  // namespace contact_solvers

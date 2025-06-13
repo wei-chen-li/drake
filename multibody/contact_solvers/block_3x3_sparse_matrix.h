@@ -93,6 +93,16 @@ class Block3x3SparseMatrix {
   void MultiplyWithScaledTransposeAndAddTo(const VectorX<T>& scale,
                                            EigenPtr<MatrixX<T>> y) const;
 
+  /* Computes G * M where G is a block diagonal matrix with the diagonal blocks
+   specified as a vector of dense matrices. In particular, the diagonal blocks
+   are [Gs[start], ..., Gs[end]].
+   @pre 0 <= start <= end < Gs.size().
+   @pre All matrices in Gs are square.
+   @pre Gs[start].rows() + ... + Gs[end].rows() == M.rows().
+   @pre All matrices in Gs are 3n-by-3n for some positive integer n. */
+  Block3x3SparseMatrix<T> LeftMultiplyByBlockDiagonal(
+      const std::vector<MatrixX<T>>& Gs, int start, int end) const;
+
   /* Returns the non-zero blocks in the matrix in a row-major fashion. Within
    each block row (result[row]), the blocks are sorted in increasing column
    indices. The returned std::vector always has size `block_rows()`. If
