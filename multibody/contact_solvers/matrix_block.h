@@ -65,7 +65,7 @@ class MatrixBlock {
   int cols() const;
   int size() const { return rows() * cols(); }
 
-  bool is_dense() const { return is_dense_; }
+  bool is_dense() const { return std::holds_alternative<MatrixX<T>>(data_); }
 
   /* Performs *y += M * A.
    @pre y != nullptr and the sizes of A and y are compatible with M. */
@@ -101,6 +101,8 @@ class MatrixBlock {
   void MultiplyWithScaledTransposeAndAddTo(const VectorX<T>& scale,
                                            EigenPtr<MatrixX<T>> y) const;
 
+  MatrixBlock<T> operator+(const MatrixBlock<T>& other) const;
+
   /* Returns the MatrixBlock as an Eigen dense matrix. Useful for debugging and
    testing. */
   MatrixX<T> MakeDenseMatrix() const;
@@ -113,7 +115,6 @@ class MatrixBlock {
 
   std::variant<MatrixX<T>, Block3x3SparseMatrix<T>, Block3x1SparseMatrix<T>>
       data_;
-  bool is_dense_{};
 };
 
 }  // namespace internal

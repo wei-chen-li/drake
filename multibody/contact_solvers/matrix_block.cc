@@ -9,15 +9,14 @@ namespace internal {
 
 template <class T>
 MatrixBlock<T>::MatrixBlock(Block3x3SparseMatrix<T> data)
-    : data_(std::move(data)), is_dense_(false) {}
+    : data_(std::move(data)) {}
 
 template <class T>
 MatrixBlock<T>::MatrixBlock(Block3x1SparseMatrix<T> data)
-    : data_(std::move(data)), is_dense_(false) {}
+    : data_(std::move(data)) {}
 
 template <class T>
-MatrixBlock<T>::MatrixBlock(MatrixX<T> data)
-    : data_(std::move(data)), is_dense_(true) {}
+MatrixBlock<T>::MatrixBlock(MatrixX<T> data) : data_(std::move(data)) {}
 
 template <class T>
 int MatrixBlock<T>::rows() const {
@@ -117,7 +116,7 @@ MatrixBlock<T> MatrixBlock<T>::LeftMultiplyByBlockDiagonal(
     DRAKE_DEMAND(Gs[i].rows() == Gs[i].cols());
     row_starts.emplace_back(row);
     row += Gs[i].rows();
-    if (!std::holds_alternative<MatrixX<T>>(data_)) {
+    if (is_dense()) {
       DRAKE_DEMAND(Gs[i].rows() % 3 == 0);
     }
   }
@@ -158,6 +157,47 @@ void MatrixBlock<T>::MultiplyWithScaledTransposeAndAddTo(
 }
 
 template <class T>
+MatrixBlock<T> MatrixBlock<T>::operator+(const MatrixBlock<T>& other) const {
+  DRAKE_THROW_UNLESS(this->rows() == other.rows());
+  DRAKE_THROW_UNLESS(this->cols() == other.cols());
+  if (this->is_dense() || other.is_dense()) {
+    return MatrixBlock<T>(this->MakeDenseMatrix() + other.MakeDenseMatrix());
+  }
+
+  std::vector<typename Block3x1SparseMatrix<T>::Triplet> triplets;
+  auto extract_triplets = overloaded{
+      [&](const Block3x1SparseMatrix<T>& entry) {
+        for (const auto& row_data : entry.get_triplets()) {
+          for (const auto& t : row_data) {
+            triplets.push_back(t);
+          }
+        }
+      },
+      [&](const Block3x3SparseMatrix<T>& entry) {
+        for (const auto& row_data : entry.get_triplets()) {
+          for (const auto& t : row_data) {
+            const int block_row = std::get<0>(t);
+            const int block_col = std::get<1>(t) * 3;
+            const Matrix3<T>& m = std::get<2>(t);
+            triplets.emplace_back(block_row, block_col + 0, m.col(0));
+            triplets.emplace_back(block_row, block_col + 1, m.col(1));
+            triplets.emplace_back(block_row, block_col + 2, m.col(2));
+          }
+        }
+      },
+      [&](const MatrixX<T>& entry) {
+        DRAKE_UNREACHABLE();
+      },
+  };
+  std::visit(extract_triplets, this->data_);
+  std::visit(extract_triplets, other.data_);
+  DRAKE_DEMAND(rows() % 3 == 0);
+  Block3x1SparseMatrix<T> result(rows() / 3, cols());
+  result.SetFromTriplets(std::move(triplets));
+  return MatrixBlock<T>(std::move(result));
+}
+
+template <class T>
 MatrixX<T> MatrixBlock<T>::MakeDenseMatrix() const {
   return std::visit(overloaded{[&](const MatrixX<T>& M) {
                                  return M;
@@ -174,12 +214,12 @@ MatrixBlock<T> StackMatrixBlocks(const std::vector<MatrixBlock<T>>& blocks) {
     return {};
   }
 
-  const bool is_dense = std::holds_alternative<MatrixX<T>>(blocks[0].data_);
+  const bool is_dense = blocks[0].is_dense();
   bool is_3x3sparse = true;
   const int cols = blocks[0].cols();
   int rows = 0;
   for (const auto& b : blocks) {
-    DRAKE_DEMAND(is_dense == std::holds_alternative<MatrixX<T>>(b.data_));
+    DRAKE_DEMAND(is_dense == b.is_dense());
     if (!std::holds_alternative<Block3x3SparseMatrix<T>>(b.data_))
       is_3x3sparse = false;
     DRAKE_DEMAND(cols == b.cols());
@@ -245,7 +285,7 @@ MatrixBlock<T> StackMatrixBlocks(const std::vector<MatrixBlock<T>>& blocks) {
                           [&](const Block3x3SparseMatrix<T>& entry) {
                             nonzero_blocks += entry.num_blocks() * 3;
                           },
-                          [&](const auto&) {
+                          [&](const MatrixX<T>&) {
                             DRAKE_UNREACHABLE();
                           }},
                b.data_);
@@ -283,7 +323,7 @@ MatrixBlock<T> StackMatrixBlocks(const std::vector<MatrixBlock<T>>& blocks) {
               }
               block_row_offset += entry.block_rows();
             },
-            [&](const auto&) {
+            [&](const MatrixX<T>&) {
               DRAKE_UNREACHABLE();
             }},
         b.data_);

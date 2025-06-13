@@ -190,6 +190,27 @@ GTEST_TEST(MatrixBlockTest, MultiplyWithScaledTransposeAndAddTo) {
   EXPECT_TRUE(CompareMatrices(y2, expected));
 }
 
+GTEST_TEST(MatrixBlockTest, AddMatrixBlocks) {
+  Block3x3SparseMatrix<double> sparse_matrix1 = MakeBlockSparseMatrix();
+  const MatrixBlock<double> sparse_block1(std::move(sparse_matrix1));
+
+  Block3x1SparseMatrix<double> sparse_matrix2(4, 9);
+  {
+    std::vector<Block3x1SparseMatrix<double>::Triplet> triplets;
+    triplets.emplace_back(0, 0, Vector3d::Constant(4.0));
+    triplets.emplace_back(1, 1, Vector3d::Constant(5.0));
+    triplets.emplace_back(2, 2, Vector3d::Constant(6.0));
+    triplets.emplace_back(3, 3, Vector3d::Constant(7.0));
+    sparse_matrix2.SetFromTriplets(triplets);
+  }
+  const MatrixBlock<double> sparse_block2(std::move(sparse_matrix2));
+
+  const MatrixBlock<double> sum = sparse_block1 + sparse_block2;
+  const MatrixXd expected =
+      sparse_block1.MakeDenseMatrix() + sparse_block2.MakeDenseMatrix();
+  EXPECT_TRUE(CompareMatrices(sum.MakeDenseMatrix(), expected));
+}
+
 GTEST_TEST(MatrixBlockTest, StackMatrixBlock) {
   Block3x3SparseMatrix<double> sparse_matrix1 = MakeBlockSparseMatrix();
   const MatrixXd dense_matrix1 = sparse_matrix1.MakeDenseMatrix();
