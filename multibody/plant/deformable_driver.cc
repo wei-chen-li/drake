@@ -530,7 +530,9 @@ DeformableDriver<T>::ComputeContactDataForFilament(
      expressed in the contact frame C. We scale it by -1 if the body corresponds
      to body A in contact to get the correct sign. */
     const double scale = is_A ? -1.0 : 1.0;
-    Matrix3X<T> scaled_Jv_v_WGc_C(3, dof_permutation.permuted_domain_size());
+    // TODO(wei-chen): Consider using sparse matrix for this Jacobian.
+    Matrix3X<T> scaled_Jv_v_WGc_C =
+        Matrix3X<T>::Zero(3, dof_permutation.permuted_domain_size());
     Vector3<T> v_WGc = Vector3<T>::Zero();
 
     const int index = is_A ? geometry_pair.contact_edge_indexes_A()[k]
