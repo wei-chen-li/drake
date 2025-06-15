@@ -27,8 +27,11 @@ DerSolver<T>::DerSolver(const DerModel<T>* model,
 template <typename T>
 int DerSolver<T>::AdvanceOneTimeStep(
     const DerState<T>& prev_state,
-    const ExternalForceField<T>& external_force_field) {
+    const ExternalForceField<T>& external_force_field,
+    const Eigen::Ref<const VectorX<T>>& generalized_external_force) {
   model_->ValidateDerState(prev_state);
+  if (generalized_external_force.size() != 0)
+    DRAKE_THROW_UNLESS(generalized_external_force.size() == model_->num_dofs());
 
   DerState<T>& state = *state_;
   typename DerModel<T>::Scratch* der_model_scratch =
@@ -46,6 +49,8 @@ int DerSolver<T>::AdvanceOneTimeStep(
   model_->ApplyBoundaryCondition(&state);
   b.head(num_dofs) =
       -model_->ComputeResidual(state, external_force_field, der_model_scratch);
+  if (generalized_external_force.size() != 0)
+    b.head(num_dofs) += generalized_external_force;
   T residual_norm = unit_adjusted_norm(b);
   const T initial_residual_norm = residual_norm;
   int iter = 0;
@@ -69,10 +74,12 @@ int DerSolver<T>::AdvanceOneTimeStep(
           "large timestep.");
     }
     linear_solver.SolveInPlace(&b);
-    auto dz = b.head(num_dofs);
+    const auto dz = b.head(num_dofs);
     integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
     b.head(num_dofs) = -model_->ComputeResidual(state, external_force_field,
                                                 der_model_scratch);
+    if (generalized_external_force.size() != 0)
+      b.head(num_dofs) += generalized_external_force;
     residual_norm = unit_adjusted_norm(b);
     ++iter;
   }

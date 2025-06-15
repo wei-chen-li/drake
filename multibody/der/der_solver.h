@@ -43,13 +43,18 @@ class DerSolver {
 
    @param[in] prev_state The state at the previous time step.
    @param[in] external_force_field The external force field to evaluate under.
+   @param[in] generalized_external_force Optional. A generalized external force
+                                         additional to the external force field.
    @returns the number of iterations the solver takes to converge.
 
    @pre `prev_state` is created from the model prescribed at construction.
+   @pre `generalized_external_force` has size 0 or `model->num_dofs()`.
    @throws std::expection if the solver fails to factorize the tangent matrix or
    the solver fails to converge. */
   int AdvanceOneTimeStep(const DerState<T>& prev_state,
-                         const ExternalForceField<T>& external_force_field);
+                         const ExternalForceField<T>& external_force_field,
+                         const Eigen::Ref<const VectorX<T>>&
+                             generalized_external_force = VectorX<T>());
 
   /* Sets the internally owned DerState to `state`.
    @pre `state` is created from the model prescribed at construction. */
