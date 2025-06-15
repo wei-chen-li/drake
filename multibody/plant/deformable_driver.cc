@@ -265,6 +265,14 @@ void DeformableDriver<T>::DeclareCacheEntries(
     } else {
       DRAKE_UNREACHABLE();
     }
+
+    /* Cache entry for contact forces. */
+    const auto& contact_force_cache_entry = manager->DeclareCacheEntry(
+        fmt::format("Contact force for body with index {}", i),
+        systems::ValueProducer(VectorX<T>(), &systems::ValueProducer::NoopCalc),
+        {systems::System<T>::nothing_ticket()});
+    cache_indexes_.contact_forces.emplace_back(
+        contact_force_cache_entry.cache_index());
   }
 
   const auto& participating_velocity_mux_cache_entry =
@@ -1419,7 +1427,9 @@ void DeformableDriver<T>::CalcFreeMotionDerSolver(
   }
   const der::internal::ExternalForceField<T> external_force_field{
       &context, deformable_model_->GetExternalForces(body_id)};
-  der_solver->AdvanceOneTimeStep(der_state, external_force_field);
+  const VectorX<T>& contact_force = GetMutableContactForce(context, index);
+  der_solver->AdvanceOneTimeStep(der_state, external_force_field,
+                                 contact_force);
 
   const der::internal::ConstraintParticipation& participation =
       EvalDerConstraintParticipation(context, index);
@@ -1528,6 +1538,7 @@ void DeformableDriver<T>::CalcNextDerState(const systems::Context<T>& context,
     const DerState<T>& free_motion_state =
         EvalFreeMotionDerState(context, index);
     next_der_state->CopyFrom(free_motion_state);
+    GetMutableContactForce(context, index) = VectorX<T>();
   } else {
     const ContactSolverResults<T>& results =
         manager_->EvalContactSolverResults(context);
@@ -1577,6 +1588,18 @@ void DeformableDriver<T>::CalcNextDerState(const systems::Context<T>& context,
     const DerState<T>& der_state = EvalDerState(context, index);
     deformable_model_->der_integrator().AdvanceOneTimeStep(der_state, v_next,
                                                            next_der_state);
+
+    /* Compute contact forces. */
+    const auto participating_tau_contact =
+        results.tau_contact.tail(num_all_participating_dofs);
+    const Eigen::Ref<const VectorX<T>> body_participating_tau_contact =
+        mux.Demultiplex(participating_tau_contact, index);
+    VectorX<T> permuted_tau_contact(num_dofs);
+    permuted_tau_contact << body_participating_tau_contact,
+        VectorX<T>::Zero(num_nonparticipating_dofs);
+    VectorX<T> tau_contact(num_dofs);
+    full_velocity_permutation.ApplyInverse(permuted_tau_contact, &tau_contact);
+    GetMutableContactForce(context, index) = tau_contact;
   }
 }
 
@@ -1816,6 +1839,16 @@ const VectorX<T>& DeformableDriver<T>::EvalParticipatingFreeMotionVelocities(
   return manager_->plant()
       .get_cache_entry(cache_indexes_.participating_free_motion_velocities)
       .template Eval<VectorX<T>>(context);
+}
+
+template <typename T>
+VectorX<T>& DeformableDriver<T>::GetMutableContactForce(
+    const systems::Context<T>& context, DeformableBodyIndex index) const {
+  const auto& cache_entry = manager_->plant().get_cache_entry(
+      cache_indexes_.contact_forces.at(index));
+  auto& cache_entry_value = cache_entry.get_mutable_cache_entry_value(context);
+  cache_entry_value.mark_out_of_date();
+  return cache_entry_value.template GetMutableValueOrThrow<VectorX<T>>();
 }
 
 template class DeformableDriver<double>;
