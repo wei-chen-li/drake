@@ -212,7 +212,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
     std::vector<systems::CacheIndex> next_states;
     std::vector<systems::CacheIndex> constraint_participations;
     std::vector<systems::CacheIndex> permutations;
-    std::vector<systems::CacheIndex> contact_forces;
     systems::CacheIndex participating_velocity_mux;
     systems::CacheIndex participating_velocities;
     systems::CacheIndex participating_free_motion_velocities;
@@ -464,9 +463,6 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
    @pre result != nullptr. */
   void CalcParticipatingFreeMotionVelocities(const systems::Context<T>& context,
                                              VectorX<T>* result) const;
-
-  VectorX<T>& GetMutableContactForce(const systems::Context<T>& context,
-                                     DeformableBodyIndex index) const;
 
   CacheIndexes cache_indexes_;
   /* Modeling information about all deformable bodies. */
