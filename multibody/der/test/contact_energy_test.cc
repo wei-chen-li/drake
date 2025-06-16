@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
+#include "drake/common/text_logging.h"
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
 
@@ -30,8 +31,8 @@ class LineSegmentsDistanceTest : public ::testing::TestWithParam<int> {
         {{Vector3d(-0.5, 0, 0), Vector3d(0.5, 0, 0), Vector3d(0, -0.5, 0.8),
           Vector3d(0, 0.5, 0.8)},
          0.8},
-        {{Vector3d(1, 0, 0), Vector3d(2, 0, 0), Vector3d(0, 0.8, 0),
-          Vector3d(3, 0.8, 0)},
+        {{Vector3d(0, 0, 0), Vector3d(3, 0, 0), Vector3d(1, 0.8, 0),
+          Vector3d(2, 0.8, 0)},
          0.8},
     };
 
@@ -79,6 +80,49 @@ TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceJacobian) {
   Eigen::Vector<double, 12> expected_jacobian = distance_ad.derivatives();
 
   EXPECT_TRUE(CompareMatrices(jacobian, expected_jacobian));
+}
+
+static std::array<Vector3<AutoDiffXAutoDiffXd>, 4>
+InitializeAutoDiffAutoDiffTuple(const Vector3d& x1, const Vector3d& x2,
+                                const Vector3d& x3, const Vector3d& x4) {
+  constexpr int kNumVars = 12;
+  Eigen::Vector<double, 12> values;
+  values << x1, x2, x3, x4;
+
+  std::vector<AutoDiffXAutoDiffXd> vars(kNumVars);
+  for (int i = 0; i < kNumVars; ++i) {
+    vars[i].value().value() = values[i];
+    vars[i].value().derivatives() = Eigen::VectorXd::Zero(kNumVars);
+    vars[i].value().derivatives()[i] = 1.0;
+    vars[i].derivatives() = Eigen::VectorX<AutoDiffXd>(kNumVars);
+    for (int j = 0; j < kNumVars; ++j)
+      vars[i].derivatives()[j].value() = (i == j) ? 1.0 : 0.0;
+  }
+
+  Vector3<AutoDiffXAutoDiffXd>  //
+      x1_ad(vars[0], vars[1], vars[2]), x2_ad(vars[3], vars[4], vars[5]),
+      x3_ad(vars[6], vars[7], vars[8]), x4_ad(vars[9], vars[10], vars[11]);
+  return {std::move(x1_ad), std::move(x2_ad), std::move(x3_ad),
+          std::move(x4_ad)};
+}
+
+TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceHessian) {
+  if (GetParam() >= 28) return;
+  const auto& [xs, _] = test_cases_.at(GetParam());
+  const auto& [x1, x2, x3, x4] = xs;
+  Eigen::Matrix<double, 12, 12> hessian =
+      ComputeLineSegmentsDistanceHessian<double>(x1, x2, x3, x4);
+
+  const auto [x1_ad, x2_ad, x3_ad, x4_ad] =
+      InitializeAutoDiffAutoDiffTuple(x1, x2, x3, x4);
+  const AutoDiffXAutoDiffXd distance_ad =
+      ComputeDistanceBetweenLineSegments<AutoDiffXAutoDiffXd>(x1_ad, x2_ad,
+                                                              x3_ad, x4_ad);
+  Eigen::Matrix<double, 12, 12> expected_hessian;
+  for (int i = 0; i < 12; ++i)
+    expected_hessian.col(i) = distance_ad.derivatives()[i].derivatives();
+
+  EXPECT_TRUE(CompareMatrices(hessian, expected_hessian, 1e-15));
 }
 
 }  // namespace

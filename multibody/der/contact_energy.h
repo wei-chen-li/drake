@@ -23,7 +23,17 @@ T ComputeDistanceBetweenLineSegments(const Eigen::Ref<const Vector3<T>>& x1,
  positions x₁, x₂, x₃, and x₄.
  @tparam_double_only */
 template <typename T>
-Vector<T, 12> ComputeLineSegmentsDistanceJacobian(
+Eigen::Vector<T, 12> ComputeLineSegmentsDistanceJacobian(
+    const Eigen::Ref<const Vector3<T>>& x1,
+    const Eigen::Ref<const Vector3<T>>& x2,
+    const Eigen::Ref<const Vector3<T>>& x3,
+    const Eigen::Ref<const Vector3<T>>& x4);
+
+/* Computes the hessian of the distance value with respect to the node
+ positions x₁, x₂, x₃, and x₄.
+ @tparam_double_only */
+template <typename T>
+Eigen::Matrix<T, 12, 12> ComputeLineSegmentsDistanceHessian(
     const Eigen::Ref<const Vector3<T>>& x1,
     const Eigen::Ref<const Vector3<T>>& x2,
     const Eigen::Ref<const Vector3<T>>& x3,
