@@ -16,6 +16,7 @@ drake_cc_package_library(
     deps = [
         ":acceleration_newmark_scheme",
         ":constraint_participation",
+        ":contact_energy",
         ":damping_model",
         ":der_indexes",
         ":der_model",
@@ -48,6 +49,15 @@ drake_cc_library(
     hdrs = ["constraint_participation.h"],
     deps = [
         "//multibody/contact_solvers/sap:partial_permutation",
+    ],
+)
+
+drake_cc_library(
+    name = "contact_energy",
+    srcs = ["contact_energy.cc"],
+    hdrs = ["contact_energy.h"],
+    deps = [
+        ":energy_hessian_matrix_utility",
     ],
 )
 
@@ -221,6 +231,15 @@ drake_cc_googletest(
     name = "constraint_participation_test",
     deps = [
         ":constraint_participation",
+    ],
+)
+
+drake_cc_googletest(
+    name = "contact_energy_test",
+    deps = [
+        ":contact_energy",
+        "//common/test_utilities:eigen_matrix_compare",
+        "//math:gradient",
     ],
 )
 
