@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "drake/common/drake_copyable.h"
-#include "drake/geometry/shape_specification.h"
+#include "drake/common/eigen_types.h"
 
 namespace drake {
 namespace geometry {
@@ -16,17 +16,23 @@ namespace filament {
  Given a reference filament with reference edge lengths. Edge i and edge j
  (assuming i ≤ j) should be checked for collision if and only if
 
-    ∑ₖ₌ᵢ₊₁ʲ⁻¹ edge_lengths[k] > d,
+    ∑ₖ₌ᵢ₊₁ʲ⁻¹ reference_edge_lengths[k] > C,
 
- where d is a characteristic diameter of the filament. From this definition, it
+ where C is a characteristic diameter of the filament. From this definition, it
  is obvious that adjacent edges are never checked for collision; their
  interactions are instead governed by internal elastic forces due to bending. */
 class FilamentSelfContactFilter {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(FilamentSelfContactFilter)
 
-  /* Constructs a self-contact filter from the reference `filament`. */
-  explicit FilamentSelfContactFilter(const Filament& filament);
+  /* Constructs a self-contact filter.
+   @param closed                 Flag indicating if the filament is closed.
+   @param reference_edge_lengths The reference edge lengths of the filament.
+   @param C                      A characteristic diameter of the filament. */
+  FilamentSelfContactFilter(
+      bool closed,
+      const Eigen::Ref<const Eigen::RowVectorXd>& reference_edge_lengths,
+      double C);
 
   /* Returns true if edge i and edge j is a candidate pair to be checked for
    collision. */

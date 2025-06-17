@@ -390,10 +390,7 @@ drake_cc_library(
     srcs = ["filament_self_contact_filter.cc"],
     hdrs = ["filament_self_contact_filter.h"],
     deps = [
-        "//common:overloaded",
-        "//geometry:shape_specification",
-        "//solvers:mathematical_program",
-        "//solvers:solve",
+        "//common:essential",
     ],
 )
 

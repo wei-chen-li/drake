@@ -391,17 +391,18 @@ class Geometries::Impl {
             .first->second;
 
     filament_data.node_positions = node_pos;
-    filament_data.self_contact_filter = FilamentSelfContactFilter(filament);
     filament_data.objects.resize(num_edges);
 
     filament_index_to_id_.push_back(id);
     FilamentIndex filament_index(ssize(filament_index_to_id_) - 1);
 
+    Eigen::RowVectorXd edge_lengths(num_edges);
     for (int i = 0; i < num_edges; ++i) {
       const int ip1 = (i + 1) % num_nodes;
       const Vector3d node_i = node_pos.col(i);
       const Vector3d node_ip1 = node_pos.col(ip1);
       const double l = (node_ip1 - node_i).norm();
+      edge_lengths[i] = l;
       const Vector3d t = (node_ip1 - node_i) / l;
       const Vector3d& m1 = edge_m1.col(i);
       math::internal::ThrowIfNotOrthonormal(t, m1, __func__);
@@ -430,6 +431,16 @@ class Geometries::Impl {
       filament_data.tree.registerObject(filament_data.objects[i].get());
     }
     filament_data.tree.setup();
+
+    filament_data.self_contact_filter = FilamentSelfContactFilter(
+        filament.closed(), edge_lengths,
+        std::visit(overloaded{[](const Filament::CircularCrossSection& cs) {
+                                return cs.diameter;
+                              },
+                              [](const Filament::RectangularCrossSection& cs) {
+                                return std::hypot(cs.width, cs.height);
+                              }},
+                   filament.cross_section()));
   }
 
   void RemoveGeometry(GeometryId id) { id_to_filament_data_.erase(id); }
