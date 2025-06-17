@@ -42,7 +42,7 @@ class DirichletBoundaryConditionTest : public ::testing::Test {
     bc_.AddBoundaryCondition(DerEdgeIndex(1), edge_state_);
   }
 
-  Eigen::SparseMatrix<double> MakeTangentMatrix() const {
+  Block4x4SparseSymmetricMatrix<double> MakeTangentMatrix() const {
     Block4x4SparseSymmetricMatrix<double> tangent_matrix =
         MakeEnergyHessianMatrix<double>(state_->has_closed_ends(),
                                         state_->num_nodes(),
@@ -54,9 +54,7 @@ class DirichletBoundaryConditionTest : public ::testing::Test {
     tangent_matrix.SetBlock(1, 1, Matrix4d::Constant(6));
     tangent_matrix.SetBlock(2, 1, Matrix4d::Constant(2));
     tangent_matrix.SetBlock(2, 2, Matrix4d::Constant(7));
-    Eigen::SparseMatrix<double> result(kDofs, kDofs);
-    Convert(tangent_matrix, &result);
-    return result;
+    return tangent_matrix;
   }
 
   static constexpr int kDofs = 12;
@@ -121,7 +119,7 @@ TEST_F(DirichletBoundaryConditionTest, ApplyHomogeneousBoundaryCondition) {
 /* Tests that the DirichletBoundaryCondition under test successfully modifies a
  given tangent matrix. */
 TEST_F(DirichletBoundaryConditionTest, ApplyBoundaryConditionToTangentMatrix) {
-  Eigen::SparseMatrix<double> tangent_matrix = MakeTangentMatrix();
+  Block4x4SparseSymmetricMatrix<double> tangent_matrix = MakeTangentMatrix();
   {
     LimitMalloc guard;
     bc_.ApplyBoundaryConditionToTangentMatrix(&tangent_matrix);
@@ -145,8 +143,8 @@ TEST_F(DirichletBoundaryConditionTest, ApplyBoundaryConditionToTangentMatrix) {
                              0, 0, 0, 3,   2, 2, 2, 0,   7, 7, 7, 7;
   // clang-format on
 
-  EXPECT_TRUE(
-      CompareMatrices(MatrixXd(tangent_matrix), expected_tangent_matrix));
+  EXPECT_TRUE(CompareMatrices(tangent_matrix.MakeDenseMatrix(),
+                              expected_tangent_matrix));
 }
 
 /* Tests out-of-bound node boundary condition throw an exception. */
@@ -161,7 +159,7 @@ TEST_F(DirichletBoundaryConditionTest, NodeOutOfBound) {
   DRAKE_EXPECT_THROWS_MESSAGE(
       bc_.ApplyHomogeneousBoundaryCondition(&residual),
       "A node index of the Dirichlet boundary condition is out of range.");
-  Eigen::SparseMatrix<double> tangent_matrix = MakeTangentMatrix();
+  Block4x4SparseSymmetricMatrix<double> tangent_matrix = MakeTangentMatrix();
   DRAKE_EXPECT_THROWS_MESSAGE(
       bc_.ApplyBoundaryConditionToTangentMatrix(&tangent_matrix),
       "A node index of the Dirichlet boundary condition is out of range.");
@@ -177,7 +175,7 @@ TEST_F(DirichletBoundaryConditionTest, EdgeOutOfBound) {
   DRAKE_EXPECT_THROWS_MESSAGE(
       bc_.ApplyHomogeneousBoundaryCondition(&residual),
       "An edge index of the Dirichlet boundary condition is out of range.");
-  Eigen::SparseMatrix<double> tangent_matrix = MakeTangentMatrix();
+  Block4x4SparseSymmetricMatrix<double> tangent_matrix = MakeTangentMatrix();
   DRAKE_EXPECT_THROWS_MESSAGE(
       bc_.ApplyBoundaryConditionToTangentMatrix(&tangent_matrix),
       "An edge index of the Dirichlet boundary condition is out of range.");

@@ -90,6 +90,7 @@ drake_cc_library(
         ":der_undeformed_state",
         ":dirichlet_boundary_condition",
         ":elastic_energy",
+        ":energy_hessian_matrix_utility",
         ":external_force_field",
         "//common:pointer_cast",
         "//math:vector3_util",

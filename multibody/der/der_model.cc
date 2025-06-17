@@ -6,10 +6,15 @@
 #include "drake/common/pointer_cast.h"
 #include "drake/math/unit_vector.h"
 #include "drake/multibody/der/elastic_energy.h"
+#include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
 namespace drake {
 namespace multibody {
 namespace der {
+
+// Import from "energy_hessian_matrix_utility.h".
+using internal::operator*;
+using internal::AddScaledMatrix;
 
 template <typename T>
 std::tuple<DerNodeIndex, DerEdgeIndex, DerNodeIndex>
@@ -259,24 +264,24 @@ struct DerModel<T>::Scratch {
   const DerModel<T>* der_model;
   const Eigen::DiagonalMatrix<T, Eigen::Dynamic> M;
   Eigen::VectorX<T> residual;
-  Eigen::VectorX<T> dEint_dq;
-  internal::Block4x4SparseSymmetricMatrix<T> d2Eint_dq2;
-  Eigen::SparseMatrix<T> tangent_matrix;
-  std::tuple<const void*, int64_t, Eigen::SparseMatrix<T>> state_to_K;
+  Eigen::VectorX<T> dEdq;
+  internal::Block4x4SparseSymmetricMatrix<T> tangent_matrix;
+  std::tuple<const void*, int64_t, internal::Block4x4SparseSymmetricMatrix<T>>
+      state_to_d2Edq2;
 
   Scratch(const DerModel<T>& model)
       : der_model(&model),
         M(internal::ComputeMassMatrix(model.der_structural_property_,
                                       model.der_undeformed_state_)),
         residual(model.num_dofs()),
-        dEint_dq(model.num_dofs()),
-        d2Eint_dq2(internal::MakeEnergyHessianMatrix<T>(
-            model.has_closed_ends(), model.num_nodes(), model.num_edges())),
-        tangent_matrix(
-            Eigen::SparseMatrix<T>(model.num_dofs(), model.num_dofs())),
-        state_to_K(
-            {0, 0,
-             Eigen::SparseMatrix<T>(model.num_dofs(), model.num_dofs())}) {}
+        dEdq(model.num_dofs()),
+        tangent_matrix(  //
+            internal::MakeEnergyHessianMatrix<T>(
+                model.has_closed_ends(), model.num_nodes(), model.num_edges())),
+        state_to_d2Edq2({0, 0,
+                         internal::MakeEnergyHessianMatrix<T>(
+                             model.has_closed_ends(), model.num_nodes(),
+                             model.num_edges())}) {}
 };
 
 template <typename T>
@@ -316,31 +321,27 @@ const Eigen::VectorX<T>& DerModel<T>::ComputeResidual(
   const T& alpha = damping_model_.mass_coeff_alpha();
   const T& beta = damping_model_.stiffness_coeff_beta();
 
-  /* Jacobian of internal elastic energy: ∂Eᵢₙₜ(q)/∂q */
-  Eigen::VectorX<T>& dEint_dq = scratch->dEint_dq;
+  Eigen::VectorX<T>& dEdq = scratch->dEdq;
   internal::ComputeElasticEnergyJacobian<T>(
-      der_structural_property_, der_undeformed_state_, state, &dEint_dq);
+      der_structural_property_, der_undeformed_state_, state, &dEdq);
 
   /* R(q, q̇, q̈) = M q̈ - Fᵢₙₜ(q, q̇) - Fₑₓₜ
-                = M q̈ + ∂Eᵢₙₜ(q)/∂q + (αM + βK) q̇ - Fₑₓₜ,
-   where K = ∂²Eᵢₙₜ(q)/∂q². */
+                = M q̈ + ∂E(q)/∂q + (αM + βK) q̇ - Fₑₓₜ,
+   where K = ∂²E(q)/∂q². */
   Eigen::VectorX<T>& residual = scratch->residual;
   residual.setZero();
   residual += M * qddot;
-  residual += dEint_dq;
+  residual += dEdq;
   if (alpha != 0) residual += alpha * (M * qdot);
   if (beta != 0) {
-    internal::Block4x4SparseSymmetricMatrix<T>& d2Eint_dq2 =
-        scratch->d2Eint_dq2;
-    internal::ComputeElasticEnergyHessian<T>(
-        der_structural_property_, der_undeformed_state_, state, &d2Eint_dq2);
-
-    auto& cache = scratch->state_to_K;
+    auto& cache = scratch->state_to_d2Edq2;
     std::get<0>(cache) = static_cast<const void*>(&state);
     std::get<1>(cache) = state.serial_number();
-    Eigen::SparseMatrix<T>& K = std::get<2>(cache);
-    internal::Convert(d2Eint_dq2, &K);
+    internal::Block4x4SparseSymmetricMatrix<T>& d2Edq2 = std::get<2>(cache);
+    internal::ComputeElasticEnergyHessian<T>(
+        der_structural_property_, der_undeformed_state_, state, &d2Edq2);
 
+    const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Edq2;
     residual += beta * (K * qdot);
   }
   residual -= external_force_field(der_structural_property_,
@@ -353,39 +354,52 @@ const Eigen::VectorX<T>& DerModel<T>::ComputeResidual(
 }
 
 template <typename T>
-const Eigen::SparseMatrix<T>& DerModel<T>::ComputeTangentMatrix(
-    const internal::DerState<T>& state, const std::array<T, 3>& weights,
-    Scratch* scratch) const {
+const internal::Block4x4SparseSymmetricMatrix<T>&
+DerModel<T>::ComputeTangentMatrix(const internal::DerState<T>& state,
+                                  const std::array<T, 3>& weights,
+                                  Scratch* scratch) const {
   this->ValidateDerState(state);
   this->ValidateScratch(scratch);
 
   /* If the state is the same one passed to ComputeResidual(), no need to
-   recalculate `K` = ∂²Eᵢₙₜ(q)/∂q². */
-  auto& cache = scratch->state_to_K;
-  Eigen::SparseMatrix<T>& K = std::get<2>(cache);
+   recalculate `d2Edq2`. */
+  auto& cache = scratch->state_to_d2Edq2;
+  internal::Block4x4SparseSymmetricMatrix<T>& d2Edq2 = std::get<2>(cache);
   if (!(&state == std::get<0>(cache) &&
         state.serial_number() == std::get<1>(cache))) {
-    internal::Block4x4SparseSymmetricMatrix<T>& d2Eint_dq2 =
-        scratch->d2Eint_dq2;
     internal::ComputeElasticEnergyHessian<T>(
-        der_structural_property_, der_undeformed_state_, state, &d2Eint_dq2);
-    internal::Convert(d2Eint_dq2, &K);
+        der_structural_property_, der_undeformed_state_, state, &d2Edq2);
   }
 
+  const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Edq2;
   const Eigen::DiagonalMatrix<T, Eigen::Dynamic>& M = scratch->M;
   const T& alpha = damping_model_.mass_coeff_alpha();
   const T& beta = damping_model_.stiffness_coeff_beta();
 
-  /* R(q, q̇, q̈) = M q̈ + ∂Eᵢₙₜ(q)/∂q + (αM + βK) q̇ - Fₑₓₜ.
-   ∂R/∂q = ∂²Eᵢₙₜ(q)/∂q² = K, ∂R/∂q̇ = αM + βK, ∂R/∂q̈ = M. */
-  Eigen::SparseMatrix<T>& tangent_matrix = scratch->tangent_matrix;
-  tangent_matrix.setZero();
-  tangent_matrix += (weights[0] + beta * weights[1]) * K;
-  tangent_matrix += (alpha * weights[1] + weights[2]) * M;
+  /* R(q, q̇, q̈) = M q̈ + ∂E(q)/∂q + (αM + βK) q̇ - Fₑₓₜ.
+   ∂R/∂q = ∂²E(q)/∂q² = K, ∂R/∂q̇ = αM + βK, ∂R/∂q̈ = M. */
+  internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix =
+      scratch->tangent_matrix;
+  tangent_matrix.SetZero();
+  AddScaledMatrix(&tangent_matrix, K, weights[0] + beta * weights[1]);
+  AddScaledMatrix(&tangent_matrix, M, alpha * weights[1] + weights[2]);
 
   /* Set boundary condition DoFs corresponding tangent matrix rows and columns
    to zero, and corresponding diagonal entries to one. */
   boundary_condition_.ApplyBoundaryConditionToTangentMatrix(&tangent_matrix);
+
+  /* If tangent_matrix is larger than num_dofs() by one, set the last diagonal
+   entry to one. */
+  DRAKE_DEMAND(tangent_matrix.rows() ==
+               (has_closed_ends() ? num_dofs() : num_dofs() + 1));
+  if (tangent_matrix.rows() == num_dofs() + 1) {
+    const int i = tangent_matrix.block_rows() - 1;
+    Eigen::Matrix4<T> block = tangent_matrix.block(i, i);
+    DRAKE_ASSERT(ExtractDoubleOrThrow(block).template rightCols<1>().isZero());
+    DRAKE_ASSERT(ExtractDoubleOrThrow(block).template bottomRows<1>().isZero());
+    block(3, 3) = 1.0;
+    tangent_matrix.SetBlock(i, i, block);
+  }
 
   return tangent_matrix;
 }

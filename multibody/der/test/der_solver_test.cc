@@ -233,7 +233,7 @@ void DerSolverCantileverBeamTest::TestStaticBending() {
   std::unique_ptr<DerModel<double>> model = CreateBeam();
 
   /* Set the integrator to use midpoint rule q = q₀ + δt/2 * (v₀ + v). */
-  const double dt = 0.005;
+  const double dt = 0.01;
   VelocityNewmarkScheme<double> integrator(dt, 1.0, 0.5);
 
   /* Under gravatational force. */
@@ -334,7 +334,7 @@ TEST_P(DerSolverCantileverBeamTest, Bending) {
   VectorXd sim_shape(kNumNodes);
   for (int i = 0; i < kNumNodes; ++i)
     sim_shape[i] = state->get_position()[4 * i + 2];
-  const double kTolerance[3] = {2e-3, 8e-3, 9e-3};  // At most 0.9% difference.
+  const double kTolerance[3] = {2e-3, 4e-3, 9e-3};  // At most 0.9% difference.
   EXPECT_TRUE(CompareMatrices(sim_shape / sim_shape[kNumNodes - 1], mode_shape,
                               kTolerance[mode_number - 1]));
 }

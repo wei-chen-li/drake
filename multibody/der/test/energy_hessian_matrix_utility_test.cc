@@ -20,7 +20,8 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
  protected:
   void SetUp() override { srand(0); }
 
-  Block4x4SparseSymmetricMatrix<double> MakeSPDBlockSparseMatrix() {
+  Block4x4SparseSymmetricMatrix<double> MakeRandomMatrix(
+      bool pad_empty_diagonal_with_one = false) {
     Block4x4SparseSymmetricMatrix<double> mat = MakeEnergyHessianMatrix<double>(
         has_closed_ends_, num_nodes_, num_edges_);
     EXPECT_EQ(mat.rows(), has_closed_ends_ ? num_dofs_ : num_dofs_ + 1);
@@ -40,15 +41,13 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
         mat.SetBlock(i, j, block);
       }
     }
+    if (!has_closed_ends_ && pad_empty_diagonal_with_one) {
+      const int i = mat.block_rows() - 1;
+      Eigen::Matrix4d block = mat.block(i, i);
+      block(3, 3) = 1.0;
+      mat.SetBlock(i, i, block);
+    }
     return mat;
-  }
-
-  Eigen::SparseMatrix<double> MakeSPDSparseMatrix() {
-    const Block4x4SparseSymmetricMatrix<double> mat =
-        MakeSPDBlockSparseMatrix();
-    Eigen::SparseMatrix<double> result(num_dofs_, num_dofs_);
-    Convert(mat, &result);
-    return result;
   }
 
   const bool has_closed_ends_ = GetParam();
@@ -60,19 +59,71 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
 INSTANTIATE_TEST_SUITE_P(HasClosedEnds, EnergyHessianMatrixUtilTest,
                          ::testing::Values(false, true));
 
-TEST_P(EnergyHessianMatrixUtilTest, Convert) {
-  const Block4x4SparseSymmetricMatrix<double> source =
-      MakeSPDBlockSparseMatrix();
-  Eigen::SparseMatrix<double> dest(num_dofs_, num_dofs_);
-  Convert<double>(source, &dest);
-  EXPECT_TRUE(CompareMatrices(
-      MatrixXd(dest),
-      source.MakeDenseMatrix().topLeftCorner(num_dofs_, num_dofs_)));
+TEST_P(EnergyHessianMatrixUtilTest, MatrixVectorProduct) {
+  const Block4x4SparseSymmetricMatrix<double> mat = MakeRandomMatrix();
+  const VectorXd vec = VectorXd::LinSpaced(num_dofs_, 0.0, 1.0);
+
+  VectorXd result = VectorXd::Ones(num_dofs_);
+  {
+    LimitMalloc guard;
+    result += mat * vec * 1.2;
+  }
+
+  const VectorXd expected =
+      VectorXd::Ones(num_dofs_) +
+      mat.MakeDenseMatrix().topLeftCorner(num_dofs_, num_dofs_) * vec * 1.2;
+  EXPECT_TRUE(CompareMatrices(result, expected, 1e-12));
+}
+
+TEST_P(EnergyHessianMatrixUtilTest, AddDiagonalMatrix) {
+  Block4x4SparseSymmetricMatrix<double> lhs = MakeRandomMatrix();
+  const Eigen::DiagonalMatrix<double, Eigen::Dynamic> rhs(
+      VectorXd::LinSpaced(num_dofs_, 0.0, 1.0));
+  const double scale = 1.23;
+
+  const MatrixXd expected =
+      lhs.MakeDenseMatrix().topLeftCorner(num_dofs_, num_dofs_) +
+      (rhs * scale).toDenseMatrix();
+
+  {
+    LimitMalloc guard;
+    AddScaledMatrix(&lhs, rhs, scale);
+  }
+  EXPECT_TRUE(
+      CompareMatrices(lhs.MakeDenseMatrix().topLeftCorner(num_dofs_, num_dofs_),
+                      expected, 1e-12));
+  if (lhs.rows() == num_dofs_ + 1) {
+    EXPECT_TRUE(lhs.MakeDenseMatrix().rightCols<1>().isZero());
+    EXPECT_TRUE(lhs.MakeDenseMatrix().bottomRows<1>().isZero());
+  }
+}
+
+TEST_P(EnergyHessianMatrixUtilTest, AddBlock4x4SparseSymmetricMatrix) {
+  Block4x4SparseSymmetricMatrix<double> lhs = MakeRandomMatrix();
+  const Block4x4SparseSymmetricMatrix<double> rhs = MakeRandomMatrix();
+  const double scale = 1.23;
+
+  const MatrixXd expected =
+      (lhs.MakeDenseMatrix() + rhs.MakeDenseMatrix() * scale)
+          .topLeftCorner(num_dofs_, num_dofs_);
+
+  {
+    LimitMalloc guard;
+    AddScaledMatrix(&lhs, rhs, scale);
+  }
+  EXPECT_TRUE(
+      CompareMatrices(lhs.MakeDenseMatrix().topLeftCorner(num_dofs_, num_dofs_),
+                      expected, 1e-12));
+  if (lhs.rows() == num_dofs_ + 1) {
+    EXPECT_TRUE(lhs.MakeDenseMatrix().rightCols<1>().isZero());
+    EXPECT_TRUE(lhs.MakeDenseMatrix().bottomRows<1>().isZero());
+  }
 }
 
 TEST_P(EnergyHessianMatrixUtilTest, ComputeSchurComplement) {
   const std::unordered_set<int> participating_dofs = {2, 3, 5, 7, 11, 13, 17};
-  const Eigen::SparseMatrix<double> mat = MakeSPDSparseMatrix();
+  const Block4x4SparseSymmetricMatrix<double> mat =
+      MakeRandomMatrix(/* pad_empty_diagonal_with_one = */ true);
   const SchurComplement<double> schur_complement =
       ComputeSchurComplement(mat, participating_dofs);
 
@@ -85,7 +136,7 @@ TEST_P(EnergyHessianMatrixUtilTest, ComputeSchurComplement) {
   for (int i = 0; i < num_rows; ++i) {
     if (!participating_dofs.contains(i)) P.indices()[i] = permuted_index++;
   }
-  const MatrixXd permuted_mat = P * MatrixXd(mat) * P.transpose();
+  const MatrixXd permuted_mat = P * mat.MakeDenseMatrix() * P.transpose();
 
   const int num_participating_dofs = participating_dofs.size();
   const MatrixXd A = permuted_mat.topLeftCorner(num_participating_dofs,

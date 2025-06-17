@@ -1,7 +1,6 @@
 #pragma once
 
 #include <map>
-#include <unordered_set>
 
 #include "drake/multibody/der/der_indexes.h"
 #include "drake/multibody/der/der_state.h"
@@ -78,7 +77,7 @@ class DirichletBoundaryCondition {
   const EdgeState<T>* GetBoundaryCondition(DerEdgeIndex index) const;
 
   /* Modifies the given `der_state` to comply with this boundary condition.
-   @pre `der_state != nullptr`.
+   @pre der_state != nullptr.
    @throw std::exception if the index of any DoF subject to `this` BC is greater
           than or equal to `der_state->num_dofs()`. */
   void ApplyBoundaryConditionToState(DerState<T>* der_state) const;
@@ -87,7 +86,7 @@ class DirichletBoundaryCondition {
    velocities/positions) that arises from an DER model without BC into the a
    vector for the same model subject to `this` BC. More specifically, the
    entries corresponding to nodes under the BC will be zeroed out.
-   @pre `v != nullptr`.
+   @pre v != nullptr.
    @throw std::exception if the index of any DoF subject to `this` BC is greater
           than or equal to `v->size()`. */
   void ApplyHomogeneousBoundaryCondition(EigenPtr<VectorX<T>> v) const;
@@ -97,12 +96,11 @@ class DirichletBoundaryCondition {
    the rows and columns corresponding to DoFs under this BC will be zeroed out
    with the exception of the diagonal entries for those DoFs which will be set
    to one.
-   @pre `tangent_matrix != nullptr`.
-   @pre `tangent_matrix->rows() == tangent_matrix->cols()`.
+   @pre tangent_matrix != nullptr.
    @throw std::exception if the index of any DoF subject to `this` BC is greater
           than or equal to `tangent_matrix->rows()`. */
   void ApplyBoundaryConditionToTangentMatrix(
-      Eigen::SparseMatrix<T>* tangent_matrix) const;
+      Block4x4SparseSymmetricMatrix<T>* tangent_matrix) const;
 
   template <typename U>
   DirichletBoundaryCondition<U> ToScalarType() const;
@@ -114,7 +112,6 @@ class DirichletBoundaryCondition {
 
   std::map<DerNodeIndex, NodeState<T>> node_to_boundary_state_{};
   std::map<DerEdgeIndex, EdgeState<T>> edge_to_boundary_state_{};
-  std::unordered_set<int> dofs_;
 };
 
 }  // namespace internal

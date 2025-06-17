@@ -104,10 +104,6 @@ class DerSolver {
   bool solver_converged(const T& residual_norm,
                         const T& initial_residual_norm) const;
 
-  double ComputeLinearSolverTolerance(double current_residual,
-                                      double previous_residual,
-                                      double previous_tolerance) const;
-
   /* Pointer to DerModel and DiscreteTimeIntegrator set at construction. */
   const DerModel<T>* const model_{};
   const DiscreteTimeIntegrator<T>* const integrator_{};
@@ -118,11 +114,6 @@ class DerSolver {
   /* Tolerance for convergence. */
   double relative_tolerance_{1e-4};  // unitless.
   double absolute_tolerance_{1e-6};  // unit N.
-  /* Maximum allowed solver tolerance for iterative linear solver, used on the
-   first Newton iteration and as a safe-guard to prevent the tolerance from
-   being too large (>1). Unitless and default to a loose value to avoid solving
-   linear systems to unnecessary accuracy in early stages of Newton solve. */
-  double max_linear_solver_tolerance_{0.1};
   /* Max number of Newton-Raphson iterations before giving up. */
   int max_iterations_{100};
   /* Instance of struct holding preallocated memory. */
@@ -130,11 +121,9 @@ class DerSolver {
     std::unique_ptr<typename DerModel<T>::Scratch,
                     typename DerModel<T>::ScratchDeleter>
         der_model_scratch;
-    Eigen::ConjugateGradient<Eigen::SparseMatrix<T>,
-                             Eigen::Lower | Eigen::Upper>
-        cg;
+    contact_solvers::internal::BlockSparseCholeskySolver<Matrix4<T>>
+        linear_solver;
     Eigen::VectorX<T> b;
-    Eigen::VectorX<T> dz;
   } scratch_;
 };
 
