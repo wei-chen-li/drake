@@ -16,12 +16,9 @@ DerSolver<T>::DerSolver(const DerModel<T>* model,
   state_ = model_->CreateDerState();
   /* Allocate the scratch for the DerModel. */
   scratch_.der_model_scratch = model_->MakeScratch();
-  /* Tell BlockSparseCholeskySolver the block sparsity pattern. */
-  const Block4x4SparseSymmetricMatrix<T>& A = model_->ComputeTangentMatrix(
-      *state_, integrator_->GetWeights(), scratch_.der_model_scratch.get());
-  scratch_.linear_solver.SetMatrix(A);
-  /* Set b to size that matches the tangent matrix. */
-  scratch_.b = Eigen::VectorX<T>::Zero(A.rows());
+  /* Set b and dz to size num_dofs(). */
+  scratch_.b = Eigen::VectorX<T>::Zero(model->num_dofs());
+  scratch_.dz = Eigen::VectorX<T>::Zero(model->num_dofs());
 }
 
 template <typename T>
@@ -33,21 +30,19 @@ int DerSolver<T>::AdvanceOneTimeStep(
   DerState<T>& state = *state_;
   typename DerModel<T>::Scratch* der_model_scratch =
       scratch_.der_model_scratch.get();
-  contact_solvers::internal::BlockSparseCholeskySolver<Matrix4<T>>&
-      linear_solver = scratch_.linear_solver;
+  auto& cg = scratch_.cg;
   Eigen::VectorX<T>& b = scratch_.b;
-  const int num_dofs = model_->num_dofs();
+  Eigen::VectorX<T>& dz = scratch_.dz;
   DRAKE_DEMAND(der_model_scratch != nullptr);
-  DRAKE_DEMAND(b.size() ==
-               (model_->has_closed_ends() ? num_dofs : num_dofs + 1));
 
   const Eigen::VectorX<T>& z = integrator_->GetUnknowns(prev_state);
   integrator_->AdvanceOneTimeStep(prev_state, z, &state);
   model_->ApplyBoundaryCondition(&state);
-  b.head(num_dofs) =
-      -model_->ComputeResidual(state, external_force_field, der_model_scratch);
+  b = model_->ComputeResidual(state, external_force_field, der_model_scratch);
   T residual_norm = unit_adjusted_norm(b);
   const T initial_residual_norm = residual_norm;
+  T prev_residual_norm = residual_norm;
+  double prev_cg_tolerance = 0;
   int iter = 0;
   /* For Newton-Raphson solver, we iterate until any of the following is true:
    1. The max number of allowed iterations is reached;
@@ -56,23 +51,24 @@ int DerSolver<T>::AdvanceOneTimeStep(
       initial residual) is smaller than the dimensionless relative tolerance. */
   while (iter < max_iterations_ &&
          !solver_converged(residual_norm, initial_residual_norm)) {
-    const internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix =
-        model_->ComputeTangentMatrix(state, integrator_->GetWeights(),
-                                     der_model_scratch);
-    linear_solver.UpdateMatrix(tangent_matrix);
-    const bool factored = linear_solver.Factor();
-    if (!factored) {
+    const Eigen::SparseMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
+        state, integrator_->GetWeights(), der_model_scratch);
+    const double cg_tolerance = ComputeLinearSolverTolerance(
+        residual_norm, prev_residual_norm, prev_cg_tolerance);
+    cg.setTolerance(cg_tolerance);
+    cg.compute(tangent_matrix);
+    if (cg.info() != Eigen::Success) {
       throw std::runtime_error(
           "Tangent matrix factorization failed in DerSolver because the DER "
           "tangent matrix is not symmetric positive definite. This may be "
           "triggered by a combination of a stiff constitutive model and a "
           "large timestep.");
     }
-    linear_solver.SolveInPlace(&b);
-    auto dz = b.head(num_dofs);
+    dz = cg.solve(-b);
     integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
-    b.head(num_dofs) = -model_->ComputeResidual(state, external_force_field,
-                                                der_model_scratch);
+    prev_residual_norm = residual_norm;
+    prev_cg_tolerance = cg_tolerance;
+    b = model_->ComputeResidual(state, external_force_field, der_model_scratch);
     residual_norm = unit_adjusted_norm(b);
     ++iter;
   }
@@ -96,9 +92,9 @@ void DerSolver<T>::ComputeTangentMatrixSchurComplement(
       scratch_.der_model_scratch.get();
   DRAKE_DEMAND(der_model_scratch != nullptr);
 
-  const internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix =
-      model_->ComputeTangentMatrix(state, integrator_->GetWeights(),
-                                   der_model_scratch);
+  const Eigen::SparseMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
+      state, integrator_->GetWeights(), der_model_scratch);
+
   tangent_matrix_schur_complement_ =
       ComputeSchurComplement(tangent_matrix, participating_dofs);
 }
@@ -130,6 +126,25 @@ bool DerSolver<T>::solver_converged(const T& residual_norm,
 }
 
 template <typename T>
+double DerSolver<T>::ComputeLinearSolverTolerance(
+    const double current_residual, const double previous_residual,
+    const double previous_tolerance) const {
+  /* first iteration */
+  if (previous_tolerance <= 0.0) {
+    return max_linear_solver_tolerance_;
+  }
+  /* ratio = ‖Fₖ‖/‖Fₖ₋₁‖  */
+  const double ratio = current_residual / previous_residual;
+  /* candidate = γ * ratio^α  with γ=1, α=2.
+   Eq.(2.6) [Eisenstat and Walker, 1996]*/
+  const double candidate = ratio * ratio;
+  /* Safe-guard to prevent the tolerance from being too small.
+   (Choice 2 safeguard in section 2.1 [Eisenstat and Walker, 1996]) */
+  const double safe_guard = previous_tolerance * previous_tolerance;
+  return std::clamp(candidate, safe_guard, max_linear_solver_tolerance_);
+}
+
+template <typename T>
 std::unique_ptr<DerSolver<T>> DerSolver<T>::Clone() const {
   auto clone = std::make_unique<DerSolver<T>>(this->model_, this->integrator_);
   /* Copy the owned DerState. */
@@ -140,6 +155,7 @@ std::unique_ptr<DerSolver<T>> DerSolver<T>::Clone() const {
   /* Copy the solver parameters. */
   clone->relative_tolerance_ = this->relative_tolerance_;
   clone->absolute_tolerance_ = this->absolute_tolerance_;
+  clone->max_linear_solver_tolerance_ = this->max_linear_solver_tolerance_;
   clone->max_iterations_ = this->max_iterations_;
   /* Scratch variables do not need to be copied. */
   return clone;

@@ -264,7 +264,7 @@ class DerModel {
    @pre `state` is allocated using CreateDerState() of the same DerModel.
    @pre `scratch != nullptr`.
    @pre `scratch` is allocated using MakeScratch() of the same DerModel. */
-  const internal::Block4x4SparseSymmetricMatrix<T>& ComputeTangentMatrix(
+  const Eigen::SparseMatrix<T>& ComputeTangentMatrix(
       const internal::DerState<T>& state, const std::array<T, 3>& weights,
       Scratch* scratch) const;
 

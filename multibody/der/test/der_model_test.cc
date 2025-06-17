@@ -336,12 +336,8 @@ TEST_P(DerModelTest, ComputeResidual) {
       dummy_context.get(), {force_density_field_.get()});
 
   auto scratch = der_model_->MakeScratch();
-  const VectorXd* residual;
-  {
-    LimitMalloc guard;
-    residual = &der_model_->ComputeResidual(*state, external_force_field,
-                                            scratch.get());
-  }
+  const VectorXd& residual =
+      der_model_->ComputeResidual(*state, external_force_field, scratch.get());
 
   // Compute and expected residual and compare to `residual`.
   const auto& prop = DerModelTester::get_der_structural_property(*der_model_);
@@ -373,7 +369,7 @@ TEST_P(DerModelTest, ComputeResidual) {
     expected(4 * index + 3) = 0.0;
   }
 
-  EXPECT_TRUE(CompareMatrices(*residual, expected, 1e-9));
+  EXPECT_TRUE(CompareMatrices(residual, expected, 1e-9));
 }
 
 TEST_P(DerModelTest, ComputeTangentMatrix) {
@@ -381,12 +377,8 @@ TEST_P(DerModelTest, ComputeTangentMatrix) {
   std::array<double, 3> weights = {1.2, 3.4, 5.6};
 
   auto scratch = der_model_->MakeScratch();
-  const internal::Block4x4SparseSymmetricMatrix<double>* tangent_matrix;
-  {
-    LimitMalloc guard;
-    tangent_matrix =
-        &der_model_->ComputeTangentMatrix(*state, weights, scratch.get());
-  }
+  const Eigen::SparseMatrix<double>& tangent_matrix =
+      der_model_->ComputeTangentMatrix(*state, weights, scratch.get());
 
   // Compute the expected tangent matrix and compare to `tangent_matrix`.
   const auto& prop = DerModelTester::get_der_structural_property(*der_model_);
@@ -418,18 +410,7 @@ TEST_P(DerModelTest, ComputeTangentMatrix) {
   }
 
   const double kTol = 1e-9;
-  if (der_model_->has_closed_ends()) {
-    EXPECT_TRUE(
-        CompareMatrices(tangent_matrix->MakeDenseMatrix(), expected, kTol));
-    return;
-  }
-  const MatrixXd result = tangent_matrix->MakeDenseMatrix();
-  EXPECT_TRUE(CompareMatrices(result.topLeftCorner(num_dofs, num_dofs),
-                              expected, kTol));
-  /* Last diagonal entry must be 1 per ComputeTangentMatrix() documentation. */
-  EXPECT_EQ(result(num_dofs, num_dofs), 1.0);
-  EXPECT_TRUE(result.topRightCorner(num_dofs, 1).isZero());
-  EXPECT_TRUE(result.bottomLeftCorner(1, num_dofs).isZero());
+  EXPECT_TRUE(CompareMatrices(MatrixXd(tangent_matrix), expected, kTol));
 }
 
 TEST_P(DerModelTest, ApplyBoundaryCondition) {
