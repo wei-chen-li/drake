@@ -8,13 +8,17 @@ namespace internal {
 namespace {
 
 template <typename T>
-double ExtractDoubleOrThrow(const T& in) {
+decltype(auto) ExtractDoubleOrThrow(const T& in) {
   return drake::ExtractDoubleOrThrow(in);
 }
 template <>
-double ExtractDoubleOrThrow<AutoDiffXAutoDiffXd>(
+decltype(auto) ExtractDoubleOrThrow<AutoDiffXAutoDiffXd>(
     const AutoDiffXAutoDiffXd& in) {
   return in.value().value();
+}
+
+double sigmoid(double x) {
+  return 1 / (1 + exp(-x));
 }
 
 /* jacobian: (i0[12])->(o0[12]) */
@@ -24,6 +28,116 @@ void casadi_f0(const double** arg, double** res);
 void casadi_f1(const double** arg, double** res);
 
 }  // namespace
+
+template <typename T>
+ContactEnergy<T>::ContactEnergy(double C,
+                                const DerUndeformedState<T>& undeformed)
+    : C_(C),
+      delta_(0.01 * C),
+      K_(15 / delta_),
+      has_closed_ends_(undeformed.has_closed_ends()),
+      num_nodes_(undeformed.num_nodes()),
+      filter_(has_closed_ends_,
+              ExtractDoubleOrThrow(undeformed.get_edge_length()), C) {}
+
+template <typename T>
+const T& ContactEnergy<T>::ComputeEnergy(const DerState<T>& state) {
+  Cache& cache = EvalCache(state);
+  if (cache.energy) {
+    return *cache.energy;
+  }
+
+  T energy(0.0);
+  for (const auto& [i, j, D] : cache.contacts) {
+    T val;
+    if (ExtractDoubleOrThrow(D) <= C_ - delta_) {
+      val = C_ - D;
+    } else {
+      val = 1 / K_ * log(1 + exp(K_ * (C_ - D)));
+    }
+    energy += val * val;
+  }
+  cache.energy = std::move(energy);
+  return *cache.energy;
+}
+
+template <typename T>
+const Eigen::VectorX<T>& ContactEnergy<T>::ComputeEnergyJacobian(
+    const DerState<T>& state) {
+  Cache& cache = EvalCache(state);
+  if (cache.jacobian) {
+    DRAKE_DEMAND(cache.jacobian->size() == state.num_dofs());
+    return *cache.jacobian;
+  }
+
+  const int num_nodes = state.num_dofs();
+  Eigen::VectorX<T> jacobian = Eigen::VectorX<T>::Zero(state.num_dofs());
+  for (const auto& [i, j, D] : cache.contacts) {
+    const int ip1 = (i + 1) % num_nodes;
+    const int jp1 = (j + 1) % num_nodes;
+
+    Eigen::Vector<T, 12> J = ComputeLineSegmentsDistanceJacobian<T>(
+        cache.node_positions.col(i), cache.node_positions.col(ip1),
+        cache.node_positions.col(j), cache.node_positions.col(jp1));
+    if (ExtractDoubleOrThrow(D) <= C_ - delta_) {
+      J *= -2 * (C_ - D);
+    } else {
+      J *= -2 / K_ * log(1 + exp(K_ * (C_ - D))) * sigmoid(K_ * (C_ - D));
+    }
+
+    jacobian.template segment<3>(4 * i) += J.template segment<3>(0);
+    jacobian.template segment<3>(4 * ip1) += J.template segment<3>(3);
+    jacobian.template segment<3>(4 * j) += J.template segment<3>(6);
+    jacobian.template segment<3>(4 * jp1) += J.template segment<3>(9);
+  }
+  cache.jacobian = std::move(jacobian);
+  return *cache.jacobian;
+}
+
+template <typename T>
+typename ContactEnergy<T>::Cache& ContactEnergy<T>::EvalCache(
+    const DerState<T>& state) {
+  DRAKE_THROW_UNLESS(state.has_closed_ends() == has_closed_ends_);
+  DRAKE_THROW_UNLESS(state.num_nodes() == num_nodes_);
+  if (&state == std::get<0>(state_to_cache_) &&
+      state.serial_number() == std::get<1>(state_to_cache_)) {
+    Cache& cache = std::get<2>(state_to_cache_);
+    DRAKE_DEMAND(cache.node_positions.cols() == state.num_nodes());
+    return cache;
+  }
+
+  std::get<0>(state_to_cache_) = &state;
+  std::get<1>(state_to_cache_) = state.serial_number();
+  Cache& cache = std::get<2>(state_to_cache_);
+
+  const int num_edges = state.num_edges();
+  const int num_nodes = state.num_nodes();
+  const VectorX<T>& q = state.get_position();
+  cache.node_positions.resize(3, num_nodes);
+  for (int i = 0; i < num_nodes; ++i) {
+    cache.node_positions.col(i) = q.template segment<3>(4 * i);
+  }
+
+  cache.contacts.clear();
+  // TODO(wei-chen): Use broad-phase search instead of brute force all pairs.
+  for (int i = 0; i < num_edges; ++i) {
+    for (int j = i + 1; j < num_edges; ++j) {
+      if (!filter_.ShouldCollide(i, j)) continue;
+      const int ip1 = (i + 1) % num_nodes;
+      const int jp1 = (j + 1) % num_nodes;
+      T D = ComputeDistanceBetweenLineSegments<T>(
+          cache.node_positions.col(i), cache.node_positions.col(ip1),
+          cache.node_positions.col(j), cache.node_positions.col(jp1));
+      if (ExtractDoubleOrThrow(D) < C_ + delta_)
+        cache.contacts.emplace_back(i, j, std::move(D));
+    }
+  }
+
+  cache.energy = std::nullopt;
+  cache.jacobian = std::nullopt;
+  cache.hessian = std::nullopt;
+  return cache;
+}
 
 /* This is the Lumelsky's algorithm.
  Lumelsky, V. J., 1985, “On Fast Computation of Distance Between Line
@@ -94,6 +208,8 @@ Eigen::Matrix<T, 12, 12> ComputeLineSegmentsDistanceHessian(
   casadi_f1(arg, res);
   return hessian;
 }
+
+template class ContactEnergy<double>;
 
 DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (&ComputeDistanceBetweenLineSegments<T>));

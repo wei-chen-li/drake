@@ -57,7 +57,11 @@ drake_cc_library(
     srcs = ["contact_energy.cc"],
     hdrs = ["contact_energy.h"],
     deps = [
+        ":der_indexes",
+        ":der_state",
+        ":der_undeformed_state",
         ":energy_hessian_matrix_utility",
+        "//geometry/proximity:filament_self_contact_filter",
     ],
 )
 

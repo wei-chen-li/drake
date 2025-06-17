@@ -6,7 +6,6 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
-#include "drake/common/text_logging.h"
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
 
@@ -17,6 +16,7 @@ namespace internal {
 namespace {
 
 using Eigen::Vector3d;
+using Eigen::VectorXd;
 
 class LineSegmentsDistanceTest : public ::testing::TestWithParam<int> {
  private:
@@ -123,6 +123,100 @@ TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceHessian) {
     expected_hessian.col(i) = distance_ad.derivatives()[i].derivatives();
 
   EXPECT_TRUE(CompareMatrices(hessian, expected_hessian, 1e-15));
+}
+
+class ContactEnergyTest
+    : public ::testing::TestWithParam<std::tuple<bool, double>> {
+ private:
+  void SetUp() override {
+    const bool has_closed_ends = std::get<0>(GetParam());
+    std::vector<Vector3d> node_positions;
+    std::vector<double> edge_angles;
+    if (!has_closed_ends) {
+      node_positions = {Vector3d(-1, 0, 0), Vector3d(1, 0, 0),
+                        Vector3d(1, 1, 0.15), Vector3d(0, 1, 0.3),
+                        Vector3d(0, -1, 0.3)};
+      edge_angles = {0, 0, 0, 0};
+    } else {
+      node_positions = {Vector3d(-1, 0, 0),   Vector3d(1, 0, 0),
+                        Vector3d(1, 1, 0.15), Vector3d(0, 1, 0.3),
+                        Vector3d(0, -1, 0.3), Vector3d(-1, -1, 0.15)};
+      edge_angles = {0, 0, 0, 0, 0, 0};
+    }
+    der_state_system_ = std::make_unique<DerStateSystem<double>>(
+        has_closed_ends, node_positions, edge_angles, std::nullopt);
+
+    der_state_ = std::make_unique<DerState<double>>(der_state_system_.get());
+
+    undeformed_ = DerUndeformedState<double>::FromCurrentDerState(*der_state_);
+
+    const double C = std::get<1>(GetParam());
+    contact_energy_ = ContactEnergy<double>(C, *undeformed_);
+  }
+
+ protected:
+  template <typename T>
+  T ComputeContactEnergy(const VectorX<T>& q) {
+    const double C = std::get<1>(GetParam());
+    const double delta = 0.01 * C;
+    const double K = 15 / delta;
+
+    geometry::internal::filament::FilamentSelfContactFilter filter(
+        undeformed_->has_closed_ends(), undeformed_->get_edge_length(), C);
+    const int num_nodes = undeformed_->num_nodes();
+    const int num_edges = undeformed_->num_edges();
+
+    T energy = 0.0 * q[0];
+    for (int i = 0; i < num_edges; ++i) {
+      for (int j = i; j < num_edges; ++j) {
+        if (!filter.ShouldCollide(i, j)) continue;
+        const int ip1 = (i + 1) % num_nodes;
+        const int jp1 = (j + 1) % num_nodes;
+        const T D = ComputeDistanceBetweenLineSegments<T>(
+            q.template segment<3>(4 * i), q.template segment<3>(4 * ip1),
+            q.template segment<3>(4 * j), q.template segment<3>(4 * jp1));
+        if (ExtractDoubleOrThrow(D) <= C - delta) {
+          const T val = C - D;
+          energy += val * val;
+        } else if (ExtractDoubleOrThrow(D) < C + delta) {
+          const T val = 1 / K * log(1 + exp(K * (C - D)));
+          energy += val * val;
+        }
+      }
+    }
+    return energy;
+  }
+
+  std::unique_ptr<DerStateSystem<double>> der_state_system_;
+  std::unique_ptr<DerState<double>> der_state_;
+  std::optional<DerUndeformedState<double>> undeformed_;
+  std::optional<ContactEnergy<double>> contact_energy_;
+};
+
+INSTANTIATE_TEST_SUITE_P(HasClosedEnds_ContactDistances, ContactEnergyTest,
+                         ::testing::Combine(::testing::Values(false, true),
+                                            ::testing::Values(0.29, 0.3,
+                                                              0.31)));
+
+TEST_P(ContactEnergyTest, ComputeEnergy) {
+  const double energy = contact_energy_->ComputeEnergy(*der_state_);
+
+  const VectorX<double> q = der_state_->get_position();
+  const double expected_energy = ComputeContactEnergy(q);
+
+  EXPECT_EQ(energy, expected_energy);
+}
+
+TEST_P(ContactEnergyTest, ComputeEnergyJacobian) {
+  const VectorXd& jacobian =
+      contact_energy_->ComputeEnergyJacobian(*der_state_);
+
+  const VectorX<double> q = der_state_->get_position();
+  const auto [q_ad] = math::InitializeAutoDiffTuple(q);
+  const AutoDiffXd energy_ad = ComputeContactEnergy(q_ad);
+  const VectorXd expected_jacobian = energy_ad.derivatives();
+
+  EXPECT_TRUE(CompareMatrices(jacobian, expected_jacobian));
 }
 
 }  // namespace
