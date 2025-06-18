@@ -62,6 +62,7 @@ drake_cc_library(
         ":der_undeformed_state",
         ":energy_hessian_matrix_utility",
         "//geometry/proximity:filament_self_contact_filter",
+        "//math:matrix_util",
     ],
 )
 

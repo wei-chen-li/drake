@@ -16,6 +16,7 @@ namespace der {
 namespace internal {
 namespace {
 
+using Eigen::MatrixXd;
 using Eigen::Vector3d;
 using Eigen::VectorXd;
 
@@ -61,8 +62,11 @@ INSTANTIATE_TEST_SUITE_P(TestCases, LineSegmentsDistanceTest,
 TEST_P(LineSegmentsDistanceTest, ComputeDistanceBetweenLineSegments) {
   const auto& [xs, expected_distance] = test_cases_.at(GetParam());
   const auto& [x1, x2, x3, x4] = xs;
-  EXPECT_EQ(ComputeDistanceBetweenLineSegments<double>(x1, x2, x3, x4),
-            expected_distance);
+
+  const double distance =
+      ComputeDistanceBetweenLineSegments<double>(x1, x2, x3, x4);
+
+  EXPECT_EQ(distance, expected_distance);
 }
 
 TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceJacobian) {
@@ -127,6 +131,13 @@ class ContactEnergyTest
     contact_energy_ = ContactEnergy<double>(C, *undeformed_);
   }
 
+  static double ExtractDoubleOrThrow(const AutoDiffXd& in) {
+    return in.value();
+  }
+  static double ExtractDoubleOrThrow(const AutoDiffXAutoDiffXd& in) {
+    return in.value().value();
+  }
+
  protected:
   template <typename T>
   T ComputeContactEnergy(const VectorX<T>& q) {
@@ -174,7 +185,7 @@ INSTANTIATE_TEST_SUITE_P(HasClosedEnds_ContactDistances, ContactEnergyTest,
 TEST_P(ContactEnergyTest, ComputeEnergy) {
   const double energy = contact_energy_->ComputeEnergy(*der_state_);
 
-  const VectorX<double> q = der_state_->get_position();
+  const VectorXd q = der_state_->get_position();
   const double expected_energy = ComputeContactEnergy(q);
 
   EXPECT_EQ(energy, expected_energy);
@@ -184,12 +195,27 @@ TEST_P(ContactEnergyTest, ComputeEnergyJacobian) {
   const VectorXd& jacobian =
       contact_energy_->ComputeEnergyJacobian(*der_state_);
 
-  const VectorX<double> q = der_state_->get_position();
+  const VectorXd q = der_state_->get_position();
   const auto q_ad = math::InitializeAutoDiff(q);
   const AutoDiffXd energy_ad = ComputeContactEnergy(q_ad);
   const VectorXd expected_jacobian = energy_ad.derivatives();
 
   EXPECT_TRUE(CompareMatrices(jacobian, expected_jacobian));
+}
+
+TEST_P(ContactEnergyTest, ComputeEnergyHessian) {
+  const Block4x4SparseSymmetricMatrix<double>& hessian =
+      contact_energy_->ComputeEnergyHessian(*der_state_);
+
+  const VectorXd q = der_state_->get_position();
+  const auto q_adad = math::InitializeAutoDiffAutoDiff(q);
+  const AutoDiffXAutoDiffXd energy_adad = ComputeContactEnergy(q_adad);
+  const MatrixXd expected_hessian = math::ExtractHessian(energy_adad);
+
+  const int num_dofs = der_state_->num_dofs();
+  EXPECT_TRUE(CompareMatrices(
+      hessian.MakeDenseMatrix().topLeftCorner(num_dofs, num_dofs),
+      expected_hessian, 1e-15));
 }
 
 }  // namespace

@@ -32,8 +32,9 @@ static void CheckConstraintParticipatingDofs(
   int permuted_index = 0;
   for (int i = 0; i < num_dofs; ++i) {
     EXPECT_EQ(dof_permutation.participates(i), participating_dofs.contains(i));
-    if (dof_permutation.participates(i))
+    if (dof_permutation.participates(i)) {
       EXPECT_EQ(dof_permutation.permuted_index(i), permuted_index++);
+    }
   }
 }
 

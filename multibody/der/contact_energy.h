@@ -25,14 +25,16 @@ using AutoDiffXAutoDiffXd = Eigen::AutoDiffScalar<VectorX<AutoDiffXd>>;
  where C is the contact distance at which contact would occur, δ is the contact
  distance tolerance and is set to 0.01C, K is the stiffness parameter and is set
  to 15/δ.
- @tparam_double_only */
+ @tparam_default_scalar */
 template <typename T>
 class ContactEnergy {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ContactEnergy);
 
   /* Creates a ContactEnergy class from the contact distance `C` and the
-   undeformed state `undeformed`. */
+   undeformed state `undeformed`. The parameter `scale` controls the scaling of
+   the contact energy.
+   @pre `C > 0`. */
   ContactEnergy(double C, const DerUndeformedState<T>& undeformed);
 
   /* Computes Ec given the `state`.
@@ -41,7 +43,16 @@ class ContactEnergy {
 
   /* Computes ∂Ec/∂q given the `state`.
    @pre `state` is compatible with `undeformed` supplied at construction. */
-  const Eigen::VectorX<T>& ComputeEnergyJacobian(const DerState<T>& state);
+  template <typename T1 = T>
+  std::enable_if_t<std::is_same_v<T1, double>, const Eigen::VectorX<T>&>
+  ComputeEnergyJacobian(const DerState<T>& state);
+
+  /* Computes ∂²Ec/∂q² given the `state`.
+   @pre `state` is compatible with `undeformed` supplied at construction. */
+  template <typename T1 = T>
+  std::enable_if_t<std::is_same_v<T1, double>,
+                   const Block4x4SparseSymmetricMatrix<T>&>
+  ComputeEnergyHessian(const DerState<T>& state);
 
  private:
   struct Cache {
@@ -54,9 +65,18 @@ class ContactEnergy {
 
   Cache& EvalCache(const DerState<T>& state);
 
-  double C_;
-  double delta_;
-  double K_;
+  struct EnergyModel {
+    explicit EnergyModel(double C);
+    T Ec(const T& D) const;
+    T dEc_dD(const T& D) const;
+    T d2Ec_dD2(const T& D) const;
+
+    double C;
+    double delta;
+    double K;
+  };
+
+  EnergyModel energy_model_;
   bool has_closed_ends_;
   int num_nodes_;
   geometry::internal::filament::FilamentSelfContactFilter filter_;

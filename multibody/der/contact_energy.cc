@@ -1,5 +1,10 @@
 #include "drake/multibody/der/contact_energy.h"
 
+#include <array>
+#include <set>
+
+#include "drake/math/matrix_util.h"
+
 namespace drake {
 namespace multibody {
 namespace der {
@@ -17,8 +22,25 @@ decltype(auto) ExtractDoubleOrThrow<AutoDiffXAutoDiffXd>(
   return in.value().value();
 }
 
-double sigmoid(double x) {
-  return 1 / (1 + exp(-x));
+template <typename T>
+void AddTo(Block4x4SparseSymmetricMatrix<T>* hessian,
+           std::array<int, 4> node_indexes,
+           const Eigen::Ref<const Eigen::Matrix<T, 12, 12>>& mat) {
+  DRAKE_THROW_UNLESS(hessian != nullptr);
+  DRAKE_ASSERT(math::IsSymmetric(mat, 1e-8));
+  Eigen::Matrix4<T> block = Eigen::Matrix4<T>::Zero();
+  for (int i = 0; i < 4; ++i) {
+    for (int j = i; j < 4; ++j) {
+      block.template topLeftCorner<3, 3>() =
+          mat.template block<3, 3>(3 * i, 3 * j);
+      const int block_i = node_indexes[i];
+      const int block_j = node_indexes[j];
+      if (block_i >= block_j)
+        hessian->AddToBlock(block_i, block_j, block);
+      else
+        hessian->AddToBlock(block_j, block_i, block.transpose());
+    }
+  }
 }
 
 /* jacobian: (i0[12])->(o0[12]) */
@@ -32,13 +54,61 @@ void casadi_f1(const double** arg, double** res);
 template <typename T>
 ContactEnergy<T>::ContactEnergy(double C,
                                 const DerUndeformedState<T>& undeformed)
-    : C_(C),
-      delta_(0.01 * C),
-      K_(15 / delta_),
+    : energy_model_(C),
       has_closed_ends_(undeformed.has_closed_ends()),
       num_nodes_(undeformed.num_nodes()),
       filter_(has_closed_ends_,
-              ExtractDoubleOrThrow(undeformed.get_edge_length()), C) {}
+              ExtractDoubleOrThrow(undeformed.get_edge_length()), C) {
+  DRAKE_THROW_UNLESS(C > 0);
+}
+
+template <typename T>
+ContactEnergy<T>::EnergyModel::EnergyModel(double C_in)
+    : C(C_in), delta(0.01 * C), K(15 / delta) {
+  DRAKE_THROW_UNLESS(C > 0);
+  DRAKE_THROW_UNLESS(std::isfinite(C));
+}
+
+template <typename T>
+T ContactEnergy<T>::EnergyModel::Ec(const T& D) const {
+  DRAKE_ASSERT(ExtractDoubleOrThrow(D) >= 0);
+  T val_sqrt(0.0);
+  if (ExtractDoubleOrThrow(D) <= C - delta) {
+    val_sqrt = C - D;
+  } else if (ExtractDoubleOrThrow(D) < C + delta) {
+    val_sqrt = 1 / K * log(1 + exp(K * (C - D)));
+  }
+  return val_sqrt * val_sqrt;
+}
+
+template <typename T>
+T ContactEnergy<T>::EnergyModel::dEc_dD(const T& D) const {
+  DRAKE_ASSERT(ExtractDoubleOrThrow(D) >= 0);
+  T val(0.0);
+  if (ExtractDoubleOrThrow(D) <= C - delta) {
+    val = -2 * (C - D);
+  } else if (ExtractDoubleOrThrow(D) < C + delta) {
+    const T z = K * (C - D);
+    const T sigmoid_z = 1 / (1 + exp(-z));
+    val = -2 / K * log(1 + exp(z)) * sigmoid_z;
+  }
+  return val;
+}
+
+template <typename T>
+T ContactEnergy<T>::EnergyModel::d2Ec_dD2(const T& D) const {
+  DRAKE_ASSERT(ExtractDoubleOrThrow(D) >= 0);
+  T val(0.0);
+  if (ExtractDoubleOrThrow(D) <= C - delta) {
+    val = 2.0;
+  } else if (ExtractDoubleOrThrow(D) < C + delta) {
+    const T z = K * (C - D);
+    const T sigmoid_z = 1 / (1 + exp(-z));
+    val = 2 * (sigmoid_z * sigmoid_z +
+               log(1 + exp(z)) * sigmoid_z * (1 - sigmoid_z));
+  }
+  return val;
+}
 
 template <typename T>
 const T& ContactEnergy<T>::ComputeEnergy(const DerState<T>& state) {
@@ -49,21 +119,16 @@ const T& ContactEnergy<T>::ComputeEnergy(const DerState<T>& state) {
 
   T energy(0.0);
   for (const auto& [i, j, D] : cache.contacts) {
-    T val;
-    if (ExtractDoubleOrThrow(D) <= C_ - delta_) {
-      val = C_ - D;
-    } else {
-      val = 1 / K_ * log(1 + exp(K_ * (C_ - D)));
-    }
-    energy += val * val;
+    energy += energy_model_.Ec(D);
   }
   cache.energy = std::move(energy);
   return *cache.energy;
 }
 
 template <typename T>
-const Eigen::VectorX<T>& ContactEnergy<T>::ComputeEnergyJacobian(
-    const DerState<T>& state) {
+template <typename T1>
+std::enable_if_t<std::is_same_v<T1, double>, const Eigen::VectorX<T>&>
+ContactEnergy<T>::ComputeEnergyJacobian(const DerState<T>& state) {
   Cache& cache = EvalCache(state);
   if (cache.jacobian) {
     DRAKE_DEMAND(cache.jacobian->size() == state.num_dofs());
@@ -76,14 +141,11 @@ const Eigen::VectorX<T>& ContactEnergy<T>::ComputeEnergyJacobian(
     const int ip1 = (i + 1) % num_nodes;
     const int jp1 = (j + 1) % num_nodes;
 
-    Eigen::Vector<T, 12> J = ComputeLineSegmentsDistanceJacobian<T>(
-        cache.node_positions.col(i), cache.node_positions.col(ip1),
-        cache.node_positions.col(j), cache.node_positions.col(jp1));
-    if (ExtractDoubleOrThrow(D) <= C_ - delta_) {
-      J *= -2 * (C_ - D);
-    } else {
-      J *= -2 / K_ * log(1 + exp(K_ * (C_ - D))) * sigmoid(K_ * (C_ - D));
-    }
+    const Eigen::Vector<T, 12> J =
+        energy_model_.dEc_dD(D) *
+        ComputeLineSegmentsDistanceJacobian<T>(
+            cache.node_positions.col(i), cache.node_positions.col(ip1),
+            cache.node_positions.col(j), cache.node_positions.col(jp1));
 
     jacobian.template segment<3>(4 * i) += J.template segment<3>(0);
     jacobian.template segment<3>(4 * ip1) += J.template segment<3>(3);
@@ -92,6 +154,60 @@ const Eigen::VectorX<T>& ContactEnergy<T>::ComputeEnergyJacobian(
   }
   cache.jacobian = std::move(jacobian);
   return *cache.jacobian;
+}
+
+template <typename T>
+template <typename T1>
+std::enable_if_t<std::is_same_v<T1, double>,
+                 const Block4x4SparseSymmetricMatrix<T>&>
+ContactEnergy<T>::ComputeEnergyHessian(const DerState<T>& state) {
+  Cache& cache = EvalCache(state);
+  if (cache.hessian) {
+    return *cache.hessian;
+  }
+
+  const int num_nodes = state.num_nodes();
+  std::vector<int> block_sizes(num_nodes, 4);
+  std::vector<std::set<int>> pattern(num_nodes);
+  for (int i = 0; i < num_nodes; ++i) pattern[i].insert(i);
+  for (const auto& [i, j, D] : cache.contacts) {
+    std::array<int, 4> indexes = {i, (i + 1) % num_nodes,  //
+                                  j, (j + 1) % num_nodes};
+    for (int index1 : indexes) {
+      for (int index2 : indexes) {
+        pattern[index1].insert(index2);
+      }
+    }
+  }
+  std::vector<std::vector<int>> neighbors(num_nodes);
+  for (int i = 0; i < num_nodes; ++i) {
+    std::set<int>& row_pattern = pattern[i];
+    neighbors[i].insert(neighbors[i].end(), row_pattern.lower_bound(i),
+                        row_pattern.end());
+  }
+  contact_solvers::internal::BlockSparsityPattern block_sparsity_pattern(
+      std::move(block_sizes), std::move(neighbors));
+
+  Block4x4SparseSymmetricMatrix<T> hessian(std::move(block_sparsity_pattern));
+  for (const auto& [i, j, D] : cache.contacts) {
+    const int ip1 = (i + 1) % num_nodes;
+    const int jp1 = (j + 1) % num_nodes;
+
+    const auto node_i = cache.node_positions.col(i);
+    const auto node_ip1 = cache.node_positions.col(ip1);
+    const auto node_j = cache.node_positions.col(j);
+    const auto node_jp1 = cache.node_positions.col(jp1);
+
+    const Eigen::Vector<T, 12> J = ComputeLineSegmentsDistanceJacobian<T>(
+        node_i, node_ip1, node_j, node_jp1);
+    const Eigen::Matrix<T, 12, 12> H =
+        energy_model_.d2Ec_dD2(D) * (J * J.transpose()) +
+        energy_model_.dEc_dD(D) * ComputeLineSegmentsDistanceHessian<T>(
+                                      node_i, node_ip1, node_j, node_jp1);
+    AddTo<T>(&hessian, {i, ip1, j, jp1}, H);
+  }
+  cache.hessian = std::move(hessian);
+  return *cache.hessian;
 }
 
 template <typename T>
@@ -128,7 +244,7 @@ typename ContactEnergy<T>::Cache& ContactEnergy<T>::EvalCache(
       T D = ComputeDistanceBetweenLineSegments<T>(
           cache.node_positions.col(i), cache.node_positions.col(ip1),
           cache.node_positions.col(j), cache.node_positions.col(jp1));
-      if (ExtractDoubleOrThrow(D) < C_ + delta_)
+      if (ExtractDoubleOrThrow(energy_model_.Ec(D)) != 0.0)
         cache.contacts.emplace_back(i, j, std::move(D));
     }
   }
@@ -209,11 +325,15 @@ Eigen::Matrix<T, 12, 12> ComputeLineSegmentsDistanceHessian(
   return hessian;
 }
 
-template class ContactEnergy<double>;
+DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ContactEnergy);
+template const Eigen::VectorX<double>& ContactEnergy<
+    double>::ComputeEnergyJacobian<double>(const DerState<double>& state);
+template const Block4x4SparseSymmetricMatrix<double>& ContactEnergy<
+    double>::ComputeEnergyHessian<double>(const DerState<double>& state);
 
 DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (&ComputeDistanceBetweenLineSegments<T>));
-
 template AutoDiffXAutoDiffXd
 ComputeDistanceBetweenLineSegments<AutoDiffXAutoDiffXd>(
     const Eigen::Ref<const Vector3<AutoDiffXAutoDiffXd>>& x1,
@@ -542,7 +662,7 @@ void casadi_f0(const double** arg, double** res) {
   if (res[0] != 0) res[0][9] = a01;
   if (res[0] != 0) res[0][10] = a11;
   if (res[0] != 0) res[0][11] = a13;
-}
+}  // NOLINT(readability/fn_size)
 
 void casadi_f1(const double** arg, double** res) {
   double a000, a001, a002, a003, a004, a005, a006, a007, a008, a009, a010, a011;
@@ -3298,7 +3418,7 @@ void casadi_f1(const double** arg, double** res) {
   if (res[0] != 0) res[0][141] = a001;
   if (res[0] != 0) res[0][142] = a011;
   if (res[0] != 0) res[0][143] = a013;
-}
+}  // NOLINT(readability/fn_size)
 
 }  // namespace
 
