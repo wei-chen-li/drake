@@ -8,6 +8,7 @@
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
+#include "drake/multibody/der/test_utilities/autodiff_autodiff.h"
 
 namespace drake {
 namespace multibody {
@@ -67,60 +68,32 @@ TEST_P(LineSegmentsDistanceTest, ComputeDistanceBetweenLineSegments) {
 TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceJacobian) {
   const auto& [xs, _] = test_cases_.at(GetParam());
   const auto& [x1, x2, x3, x4] = xs;
-  Eigen::Vector<double, 12> jacobian =
+  const Eigen::Vector<double, 12> jacobian =
       ComputeLineSegmentsDistanceJacobian<double>(x1, x2, x3, x4);
 
-  const auto xs_ad = math::InitializeAutoDiffTuple(x1, x2, x3, x4);
-  const Vector3<AutoDiffXd> x1_ad = std::get<0>(xs_ad).cast<AutoDiffXd>();
-  const Vector3<AutoDiffXd> x2_ad = std::get<1>(xs_ad).cast<AutoDiffXd>();
-  const Vector3<AutoDiffXd> x3_ad = std::get<2>(xs_ad).cast<AutoDiffXd>();
-  const Vector3<AutoDiffXd> x4_ad = std::get<3>(xs_ad).cast<AutoDiffXd>();
+  const auto [x1_ad, x2_ad, x3_ad, x4_ad] =
+      math::InitializeAutoDiffTuple(VectorXd(x1), x2, x3, x4);
   const AutoDiffXd distance_ad = ComputeDistanceBetweenLineSegments<AutoDiffXd>(
       x1_ad, x2_ad, x3_ad, x4_ad);
-  Eigen::Vector<double, 12> expected_jacobian = distance_ad.derivatives();
+  const Eigen::Vector<double, 12> expected_jacobian = distance_ad.derivatives();
 
   EXPECT_TRUE(CompareMatrices(jacobian, expected_jacobian));
-}
-
-static std::array<Vector3<AutoDiffXAutoDiffXd>, 4>
-InitializeAutoDiffAutoDiffTuple(const Vector3d& x1, const Vector3d& x2,
-                                const Vector3d& x3, const Vector3d& x4) {
-  constexpr int kNumVars = 12;
-  Eigen::Vector<double, 12> values;
-  values << x1, x2, x3, x4;
-
-  std::vector<AutoDiffXAutoDiffXd> vars(kNumVars);
-  for (int i = 0; i < kNumVars; ++i) {
-    vars[i].value().value() = values[i];
-    vars[i].value().derivatives() = Eigen::VectorXd::Zero(kNumVars);
-    vars[i].value().derivatives()[i] = 1.0;
-    vars[i].derivatives() = Eigen::VectorX<AutoDiffXd>(kNumVars);
-    for (int j = 0; j < kNumVars; ++j)
-      vars[i].derivatives()[j].value() = (i == j) ? 1.0 : 0.0;
-  }
-
-  Vector3<AutoDiffXAutoDiffXd>  //
-      x1_ad(vars[0], vars[1], vars[2]), x2_ad(vars[3], vars[4], vars[5]),
-      x3_ad(vars[6], vars[7], vars[8]), x4_ad(vars[9], vars[10], vars[11]);
-  return {std::move(x1_ad), std::move(x2_ad), std::move(x3_ad),
-          std::move(x4_ad)};
 }
 
 TEST_P(LineSegmentsDistanceTest, ComputeLineSegmentsDistanceHessian) {
   if (GetParam() >= 28) return;
   const auto& [xs, _] = test_cases_.at(GetParam());
   const auto& [x1, x2, x3, x4] = xs;
-  Eigen::Matrix<double, 12, 12> hessian =
+  const Eigen::Matrix<double, 12, 12> hessian =
       ComputeLineSegmentsDistanceHessian<double>(x1, x2, x3, x4);
 
-  const auto [x1_ad, x2_ad, x3_ad, x4_ad] =
-      InitializeAutoDiffAutoDiffTuple(x1, x2, x3, x4);
-  const AutoDiffXAutoDiffXd distance_ad =
-      ComputeDistanceBetweenLineSegments<AutoDiffXAutoDiffXd>(x1_ad, x2_ad,
-                                                              x3_ad, x4_ad);
-  Eigen::Matrix<double, 12, 12> expected_hessian;
-  for (int i = 0; i < 12; ++i)
-    expected_hessian.col(i) = distance_ad.derivatives()[i].derivatives();
+  const auto [x1_adad, x2_adad, x3_adad, x4_adad] =
+      math::InitializeAutoDiffAutoDiffTuple(VectorXd(x1), x2, x3, x4);
+  const AutoDiffXAutoDiffXd distance_adad =
+      ComputeDistanceBetweenLineSegments<AutoDiffXAutoDiffXd>(x1_adad, x2_adad,
+                                                              x3_adad, x4_adad);
+  const Eigen::Matrix<double, 12, 12> expected_hessian =
+      math::ExtractHessian(distance_adad);
 
   EXPECT_TRUE(CompareMatrices(hessian, expected_hessian, 1e-15));
 }
@@ -161,7 +134,7 @@ class ContactEnergyTest
     const double delta = 0.01 * C;
     const double K = 15 / delta;
 
-    geometry::internal::filament::FilamentSelfContactFilter filter(
+    const geometry::internal::filament::FilamentSelfContactFilter filter(
         undeformed_->has_closed_ends(), undeformed_->get_edge_length(), C);
     const int num_nodes = undeformed_->num_nodes();
     const int num_edges = undeformed_->num_edges();
@@ -212,7 +185,7 @@ TEST_P(ContactEnergyTest, ComputeEnergyJacobian) {
       contact_energy_->ComputeEnergyJacobian(*der_state_);
 
   const VectorX<double> q = der_state_->get_position();
-  const auto [q_ad] = math::InitializeAutoDiffTuple(q);
+  const auto q_ad = math::InitializeAutoDiff(q);
   const AutoDiffXd energy_ad = ComputeContactEnergy(q_ad);
   const VectorXd expected_jacobian = energy_ad.derivatives();
 

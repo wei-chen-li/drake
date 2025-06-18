@@ -1,0 +1,29 @@
+load("//tools/lint:lint.bzl", "add_lint_tests")
+load(
+    "//tools/skylark:drake_cc.bzl",
+    "drake_cc_googletest",
+    "drake_cc_library",
+    "drake_cc_package_library",
+)
+
+package(default_visibility = ["//visibility:public"])
+
+drake_cc_package_library(
+    name = "test_utilities",
+    testonly = 1,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":autodiff_autodiff",
+    ],
+)
+
+drake_cc_library(
+    name = "autodiff_autodiff",
+    testonly = 1,
+    hdrs = ["autodiff_autodiff.h"],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+add_lint_tests(enable_clang_format_lint = True)

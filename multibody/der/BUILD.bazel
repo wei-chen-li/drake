@@ -244,6 +244,7 @@ drake_cc_googletest(
         ":contact_energy",
         "//common/test_utilities:eigen_matrix_compare",
         "//math:gradient",
+        "//multibody/der/test_utilities:autodiff_autodiff",
     ],
 )
 
