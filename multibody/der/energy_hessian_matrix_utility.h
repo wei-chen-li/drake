@@ -113,6 +113,14 @@ void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
                      const Block4x4SparseSymmetricMatrix<T>& rhs,
                      const T& scale = 1.0);
 
+/* Returns mat1 * scalar1 + mat2 + scalar2. The two matrices can have different
+ sparsity patterns.
+ @pre `mat1.rows() == mat2.rows()`. */
+template <typename T>
+Block4x4SparseSymmetricMatrix<T> SumMatrices(
+    const Block4x4SparseSymmetricMatrix<T>& mat1, const T& scalar1,
+    const Block4x4SparseSymmetricMatrix<T>& mat2, const T& scalar2);
+
 /* Given a system of linear equations that can be written in block form as:
      Ax + By  =  a     (1)
      Bᵀx + Dy =  0     (2)

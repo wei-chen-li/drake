@@ -14,33 +14,36 @@ namespace {
 
 using multibody::contact_solvers::internal::PartialPermutation;
 
-/* Return true only if the number of rows of `mat` is equal to `num_dofs` or
- `num_dofs + 1`. For number of rows equal `num_dofs + 1`, return true only
- if the last row and last column of `mat` are all zero.  */
+/* Reports if the last row and last column of `mat` are all zero. */
 template <typename T>
-[[nodiscard]] bool IsMatrixSizeOk(const Block4x4SparseSymmetricMatrix<T>& mat,
-                                  int num_dofs) {
-  DRAKE_DEMAND(num_dofs > 0);
-  DRAKE_DEMAND(mat.rows() == mat.cols());
-  if (mat.rows() == num_dofs) {
-    return true;
-  } else if (mat.rows() == num_dofs + 1) {
-    for (int j = 0; j < mat.block_cols(); ++j) {
-      for (int i : mat.sparsity_pattern().neighbors()[j]) {  // i ≥ j
-        if (i < mat.block_rows() - 1) continue;
-        const Eigen::Matrix4d block = ExtractDoubleOrThrow(mat.block(i, j));
-        if (i == j) {
-          if (!block.template rightCols<1>().isZero() ||
-              !block.template bottomRows<1>().isZero())
-            return false;
-        } else {
-          if (!block.template bottomRows<1>().isZero()) return false;
-        }
+[[nodiscard]] bool IsLastRowAndColZero(
+    const Block4x4SparseSymmetricMatrix<T>& mat) {
+  for (int j = 0; j < mat.block_cols(); ++j) {
+    for (int i : mat.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+      if (i < mat.block_rows() - 1) continue;
+      const Eigen::Matrix4d block = ExtractDoubleOrThrow(mat.block(i, j));
+      if (i == j) {
+        if (!block.template rightCols<1>().isZero() ||
+            !block.template bottomRows<1>().isZero())
+          return false;
+      } else {
+        if (!block.template bottomRows<1>().isZero()) return false;
       }
     }
-    return true;
   }
-  return false;
+  return true;
+}
+
+/* Validates if the number of rows of `mat` is equal to `num_dofs` or
+ `num_dofs + 1`. If number of rows equal `num_dofs + 1`, assert that the last
+ row and last column of `mat` are all zero. */
+template <typename T>
+void ValidateMatrixSize(const Block4x4SparseSymmetricMatrix<T>& mat,
+                        int num_dofs) {
+  DRAKE_THROW_UNLESS(num_dofs > 0);
+  DRAKE_THROW_UNLESS(mat.rows() == mat.cols());
+  DRAKE_THROW_UNLESS(mat.rows() == num_dofs || mat.rows() == num_dofs + 1);
+  if (mat.rows() == num_dofs + 1) DRAKE_ASSERT(IsLastRowAndColZero(mat));
 }
 
 }  // namespace
@@ -51,7 +54,9 @@ Block4x4SparseSymmetricMatrixVectorProduct<T>::
         const Block4x4SparseSymmetricMatrix<T>* mat,
         const Eigen::VectorX<T>* vec, const T& scale)
     : mat_(mat), vec_(vec), scale_(scale) {
-  DRAKE_ASSERT(IsMatrixSizeOk(*mat, vec->size()));
+  DRAKE_THROW_UNLESS(mat != nullptr);
+  DRAKE_THROW_UNLESS(vec != nullptr);
+  ValidateMatrixSize(*mat, vec->size());
 }
 
 template <typename T>
@@ -98,7 +103,7 @@ void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
                      const Eigen::DiagonalMatrix<T, Eigen::Dynamic>& rhs,
                      const T& scale) {
   DRAKE_THROW_UNLESS(lhs != nullptr);
-  DRAKE_ASSERT(IsMatrixSizeOk(*lhs, rhs.rows()));
+  ValidateMatrixSize(*lhs, rhs.rows());
   const bool size_off_by_1 = lhs->rows() != rhs.rows();
   if (scale == 0.0) return;
 
@@ -127,6 +132,43 @@ void AddScaledMatrix(Block4x4SparseSymmetricMatrix<T>* lhs,
       lhs->AddToBlock(i, j, rhs.block(i, j) * scale);
     }
   }
+}
+
+template <typename T>
+Block4x4SparseSymmetricMatrix<T> SumMatrices(
+    const Block4x4SparseSymmetricMatrix<T>& mat1, const T& scalar1,
+    const Block4x4SparseSymmetricMatrix<T>& mat2, const T& scalar2) {
+  DRAKE_THROW_UNLESS(mat1.rows() == mat2.rows());
+  const int block_rows = mat1.block_rows();
+
+  std::vector<std::set<int>> pattern(block_rows);
+  for (int i = 0; i < block_rows; ++i) {
+    pattern[i].insert(mat1.sparsity_pattern().neighbors()[i].begin(),
+                      mat1.sparsity_pattern().neighbors()[i].end());
+    pattern[i].insert(mat2.sparsity_pattern().neighbors()[i].begin(),
+                      mat2.sparsity_pattern().neighbors()[i].end());
+  }
+  std::vector<std::vector<int>> neighbors(block_rows);
+  for (int i = 0; i < block_rows; ++i) {
+    neighbors[i].insert(neighbors[i].end(), pattern[i].begin(),
+                        pattern[i].end());
+  }
+  std::vector<int> block_sizes(block_rows, 4);
+  contact_solvers::internal::BlockSparsityPattern block_sparsity_pattern(
+      std::move(block_sizes), std::move(neighbors));
+  Block4x4SparseSymmetricMatrix<T> result(std::move(block_sparsity_pattern));
+
+  for (int j = 0; j < mat1.block_cols(); ++j) {
+    for (int i : mat1.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+      result.AddToBlock(i, j, mat1.block(i, j) * scalar1);
+    }
+  }
+  for (int j = 0; j < mat2.block_cols(); ++j) {
+    for (int i : mat2.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+      result.AddToBlock(i, j, mat2.block(i, j) * scalar2);
+    }
+  }
+  return result;
 }
 
 template <typename T>
@@ -211,7 +253,8 @@ DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
                           const T&)>(&AddScaledMatrix<T>),
      static_cast<void (*)(Block4x4SparseSymmetricMatrix<T>*,
                           const Block4x4SparseSymmetricMatrix<T>&,  //
-                          const T&)>(&AddScaledMatrix<T>)));
+                          const T&)>(&AddScaledMatrix<T>),
+     &SumMatrices<T>));
 
 DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_NONSYMBOLIC_SCALARS(
     (&ComputeSchurComplement<T>));

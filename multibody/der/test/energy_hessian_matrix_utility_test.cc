@@ -21,7 +21,7 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
   void SetUp() override { srand(0); }
 
   Block4x4SparseSymmetricMatrix<double> MakeRandomMatrix(
-      bool pad_empty_diagonal_with_one = false) {
+      bool fill_empty_diagonal_with_one = false) {
     Block4x4SparseSymmetricMatrix<double> mat = MakeEnergyHessianMatrix<double>(
         has_closed_ends_, num_nodes_, num_edges_);
     EXPECT_EQ(mat.rows(), has_closed_ends_ ? num_dofs_ : num_dofs_ + 1);
@@ -41,7 +41,7 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
         mat.SetBlock(i, j, block);
       }
     }
-    if (!has_closed_ends_ && pad_empty_diagonal_with_one) {
+    if (!has_closed_ends_ && fill_empty_diagonal_with_one) {
       const int i = mat.block_rows() - 1;
       Eigen::Matrix4d block = mat.block(i, i);
       block(3, 3) = 1.0;
@@ -120,10 +120,20 @@ TEST_P(EnergyHessianMatrixUtilTest, AddBlock4x4SparseSymmetricMatrix) {
   }
 }
 
+TEST_P(EnergyHessianMatrixUtilTest, SumMatrices) {
+  const Block4x4SparseSymmetricMatrix<double> mat1 = MakeRandomMatrix();
+  const Block4x4SparseSymmetricMatrix<double> mat2 = MakeRandomMatrix();
+  const Block4x4SparseSymmetricMatrix<double> sum =
+      SumMatrices(mat1, 1.2, mat2, 3.4);
+  EXPECT_TRUE(CompareMatrices(
+      sum.MakeDenseMatrix(),
+      mat1.MakeDenseMatrix() * 1.2 + mat2.MakeDenseMatrix() * 3.4));
+}
+
 TEST_P(EnergyHessianMatrixUtilTest, ComputeSchurComplement) {
   const std::unordered_set<int> participating_dofs = {2, 3, 5, 7, 11, 13, 17};
   const Block4x4SparseSymmetricMatrix<double> mat =
-      MakeRandomMatrix(/* pad_empty_diagonal_with_one = */ true);
+      MakeRandomMatrix(/* fill_empty_diagonal_with_one = */ true);
   const SchurComplement<double> schur_complement =
       ComputeSchurComplement(mat, participating_dofs);
 
