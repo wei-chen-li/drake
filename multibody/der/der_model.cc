@@ -5,6 +5,7 @@
 
 #include "drake/common/pointer_cast.h"
 #include "drake/math/unit_vector.h"
+#include "drake/multibody/der/contact_energy.h"
 #include "drake/multibody/der/elastic_energy.h"
 #include "drake/multibody/der/energy_hessian_matrix_utility.h"
 
@@ -260,28 +261,41 @@ std::unique_ptr<internal::DerState<T>> DerModel<T>::CreateDerState() const {
 }
 
 template <typename T>
+static internal::Block4x4SparseSymmetricMatrix<T>
+MakeElasticEnergyHessianMatrix(const DerModel<T>& model) {
+  return internal::MakeElasticEnergyHessianMatrix<T>(
+      model.has_closed_ends(), model.num_nodes(), model.num_edges());
+}
+
+template <typename T>
+static double diameter(const internal::DerStructuralProperty<T>& prop) {
+  return 2 * sqrt(ExtractDoubleOrThrow(prop.A()) / M_PI);
+}
+
+template <typename T>
 struct DerModel<T>::Scratch {
-  const DerModel<T>* der_model;
+  const DerModel<T>* const der_model;
   const Eigen::DiagonalMatrix<T, Eigen::Dynamic> M;
+  internal::ContactEnergy<T> contact_energy;
   Eigen::VectorX<T> residual;
-  Eigen::VectorX<T> dEdq;
-  internal::Block4x4SparseSymmetricMatrix<T> tangent_matrix;
+  Eigen::VectorX<T> dEidq;
   std::tuple<const void*, int64_t, internal::Block4x4SparseSymmetricMatrix<T>>
-      state_to_d2Edq2;
+      state_to_d2Eidq2;
+  internal::Block4x4SparseSymmetricMatrix<T> tangent_matrix_without_contact;
+  std::optional<internal::Block4x4SparseSymmetricMatrix<T>>
+      tangent_matrix_with_contact;
 
   Scratch(const DerModel<T>& model)
       : der_model(&model),
         M(internal::ComputeMassMatrix(model.der_structural_property_,
                                       model.der_undeformed_state_)),
+        contact_energy(diameter(model.der_structural_property_),
+                       model.der_undeformed_state_),
         residual(model.num_dofs()),
-        dEdq(model.num_dofs()),
-        tangent_matrix(  //
-            internal::MakeElasticEnergyHessianMatrix<T>(
-                model.has_closed_ends(), model.num_nodes(), model.num_edges())),
-        state_to_d2Edq2({0, 0,
-                         internal::MakeElasticEnergyHessianMatrix<T>(
-                             model.has_closed_ends(), model.num_nodes(),
-                             model.num_edges())}) {}
+        dEidq(model.num_dofs()),
+        state_to_d2Eidq2(nullptr, 0, MakeElasticEnergyHessianMatrix(model)),
+        tangent_matrix_without_contact(MakeElasticEnergyHessianMatrix(model)),
+        tangent_matrix_with_contact(std::nullopt) {}
 };
 
 template <typename T>
@@ -321,9 +335,9 @@ const Eigen::VectorX<T>& DerModel<T>::ComputeResidual(
   const T& alpha = damping_model_.mass_coeff_alpha();
   const T& beta = damping_model_.stiffness_coeff_beta();
 
-  Eigen::VectorX<T>& dEdq = scratch->dEdq;
+  Eigen::VectorX<T>& dEidq = scratch->dEidq;
   internal::ComputeElasticEnergyJacobian<T>(
-      der_structural_property_, der_undeformed_state_, state, &dEdq);
+      der_structural_property_, der_undeformed_state_, state, &dEidq);
 
   /* R(q, q̇, q̈) = M q̈ - Fᵢₙₜ(q, q̇) - Fₑₓₜ
                 = M q̈ + ∂E(q)/∂q + (αM + βK) q̇ - Fₑₓₜ,
@@ -331,21 +345,27 @@ const Eigen::VectorX<T>& DerModel<T>::ComputeResidual(
   Eigen::VectorX<T>& residual = scratch->residual;
   residual.setZero();
   residual += M * qddot;
-  residual += dEdq;
+  residual += dEidq;
   if (alpha != 0) residual += alpha * (M * qdot);
   if (beta != 0) {
-    auto& cache = scratch->state_to_d2Edq2;
+    auto& cache = scratch->state_to_d2Eidq2;
     std::get<0>(cache) = static_cast<const void*>(&state);
     std::get<1>(cache) = state.serial_number();
-    internal::Block4x4SparseSymmetricMatrix<T>& d2Edq2 = std::get<2>(cache);
+    internal::Block4x4SparseSymmetricMatrix<T>& d2Eidq2 = std::get<2>(cache);
     internal::ComputeElasticEnergyHessian<T>(
-        der_structural_property_, der_undeformed_state_, state, &d2Edq2);
+        der_structural_property_, der_undeformed_state_, state, &d2Eidq2);
 
-    const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Edq2;
+    const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Eidq2;
     residual += beta * (K * qdot);
   }
   residual -= external_force_field(der_structural_property_,
                                    der_undeformed_state_, state);
+  if constexpr (std::is_same_v<T, double>) {
+    if (IsContactEnergyEnabled()) {
+      residual += contact_energy_scaling_ *
+                  scratch->contact_energy.ComputeEnergyJacobian(state);
+    }
+  }
 
   /* Set boundary condition DoFs corresponding residual entries to zero. */
   boundary_condition_.ApplyHomogeneousBoundaryCondition(&residual);
@@ -362,46 +382,60 @@ DerModel<T>::ComputeTangentMatrix(const internal::DerState<T>& state,
   this->ValidateScratch(scratch);
 
   /* If the state is the same one passed to ComputeResidual(), no need to
-   recalculate `d2Edq2`. */
-  auto& cache = scratch->state_to_d2Edq2;
-  internal::Block4x4SparseSymmetricMatrix<T>& d2Edq2 = std::get<2>(cache);
+   recalculate `d2Eidq2`. */
+  auto& cache = scratch->state_to_d2Eidq2;
+  internal::Block4x4SparseSymmetricMatrix<T>& d2Eidq2 = std::get<2>(cache);
   if (!(&state == std::get<0>(cache) &&
         state.serial_number() == std::get<1>(cache))) {
     internal::ComputeElasticEnergyHessian<T>(
-        der_structural_property_, der_undeformed_state_, state, &d2Edq2);
+        der_structural_property_, der_undeformed_state_, state, &d2Eidq2);
   }
 
-  const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Edq2;
+  const internal::Block4x4SparseSymmetricMatrix<T>& K = d2Eidq2;
   const Eigen::DiagonalMatrix<T, Eigen::Dynamic>& M = scratch->M;
   const T& alpha = damping_model_.mass_coeff_alpha();
   const T& beta = damping_model_.stiffness_coeff_beta();
 
   /* R(q, q̇, q̈) = M q̈ + ∂E(q)/∂q + (αM + βK) q̇ - Fₑₓₜ.
-   ∂R/∂q = ∂²E(q)/∂q² = K, ∂R/∂q̇ = αM + βK, ∂R/∂q̈ = M. */
-  internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix =
-      scratch->tangent_matrix;
-  tangent_matrix.SetZero();
-  AddScaledMatrix(&tangent_matrix, K, weights[0] + beta * weights[1]);
-  AddScaledMatrix(&tangent_matrix, M, alpha * weights[1] + weights[2]);
+   ∂R/∂q = ∂²E(q)/∂q², ∂R/∂q̇ = αM + βK, ∂R/∂q̈ = M. */
+  internal::Block4x4SparseSymmetricMatrix<T>& tangent_matrix_without_contact =
+      scratch->tangent_matrix_without_contact;
+  tangent_matrix_without_contact.SetZero();
+  AddScaledMatrix(&tangent_matrix_without_contact, K,
+                  weights[0] + beta * weights[1]);
+  AddScaledMatrix(&tangent_matrix_without_contact, M,
+                  alpha * weights[1] + weights[2]);
 
-  /* Set boundary condition DoFs corresponding tangent matrix rows and columns
-   to zero, and corresponding diagonal entries to one. */
-  boundary_condition_.ApplyBoundaryConditionToTangentMatrix(&tangent_matrix);
+  internal::Block4x4SparseSymmetricMatrix<T>* tangent_matrix =
+      &tangent_matrix_without_contact;
+  if constexpr (std::is_same_v<T, double>) {
+    if (IsContactEnergyEnabled()) {
+      scratch->tangent_matrix_with_contact = internal::SumMatrices(
+          tangent_matrix_without_contact, 1.0,
+          scratch->contact_energy.ComputeEnergyHessian(state),
+          contact_energy_scaling_ * weights[0]);
+      tangent_matrix = &scratch->tangent_matrix_with_contact.value();
+    }
+  }
+
+  /* Set boundary condition DoFs corresponding tangent matrix rows and
+   columns to zero, and corresponding diagonal entries to one. */
+  boundary_condition_.ApplyBoundaryConditionToTangentMatrix(tangent_matrix);
 
   /* If tangent_matrix is larger than num_dofs() by one, set the last diagonal
    entry to one. */
-  DRAKE_DEMAND(tangent_matrix.rows() ==
+  DRAKE_DEMAND(tangent_matrix->rows() ==
                (has_closed_ends() ? num_dofs() : num_dofs() + 1));
-  if (tangent_matrix.rows() == num_dofs() + 1) {
-    const int i = tangent_matrix.block_rows() - 1;
-    Eigen::Matrix4<T> block = tangent_matrix.block(i, i);
+  if (tangent_matrix->rows() == num_dofs() + 1) {
+    const int i = tangent_matrix->block_rows() - 1;
+    Eigen::Matrix4<T> block = tangent_matrix->block(i, i);
     DRAKE_ASSERT(ExtractDoubleOrThrow(block).template rightCols<1>().isZero());
     DRAKE_ASSERT(ExtractDoubleOrThrow(block).template bottomRows<1>().isZero());
     block(3, 3) = 1.0;
-    tangent_matrix.SetBlock(i, i, block);
+    tangent_matrix->SetBlock(i, i, block);
   }
 
-  return tangent_matrix;
+  return *tangent_matrix;
 }
 
 template <typename T>
@@ -409,6 +443,18 @@ void DerModel<T>::ApplyBoundaryCondition(internal::DerState<T>* state) const {
   DRAKE_THROW_UNLESS(state != nullptr);
   this->ValidateDerState(*state);
   boundary_condition_.ApplyBoundaryConditionToState(state);
+}
+
+template <typename T>
+template <typename T1>
+std::enable_if_t<std::is_same_v<T1, double>, void>
+DerModel<T>::EnableContactEnergy(std::optional<double> scaling) {
+  DRAKE_THROW_UNLESS(!scaling.has_value() || scaling.value() > 0);
+  if (!scaling.has_value()) {
+    scaling = der_structural_property_.EA() /
+              diameter(der_structural_property_) * 1e-3;
+  }
+  contact_energy_scaling_ = *scaling;
 }
 
 template <typename T>
@@ -433,20 +479,6 @@ std::unique_ptr<DerModel<U>> DerModel<T>::ToScalarType() const {
                       boundary_condition_.template ToScalarType<U>()));
 }
 
-using symbolic::Expression;
-template std::unique_ptr<DerModel<AutoDiffXd>>
-DerModel<double>::ToScalarType<AutoDiffXd>() const;
-template std::unique_ptr<DerModel<Expression>>
-DerModel<double>::ToScalarType<Expression>() const;
-template std::unique_ptr<DerModel<double>>
-DerModel<AutoDiffXd>::ToScalarType<double>() const;
-template std::unique_ptr<DerModel<Expression>>
-DerModel<AutoDiffXd>::ToScalarType<Expression>() const;
-template std::unique_ptr<DerModel<double>>
-DerModel<Expression>::ToScalarType<double>() const;
-template std::unique_ptr<DerModel<AutoDiffXd>>
-DerModel<Expression>::ToScalarType<AutoDiffXd>() const;
-
 template <typename T>
 void DerModel<T>::ValidateDerState(const internal::DerState<T>& state) const {
   if (!state.is_created_from_system(*der_state_system_))
@@ -462,6 +494,23 @@ void DerModel<T>::ValidateScratch(
     throw std::invalid_argument(
         "The passed DerModel::Scratch is not created from this DerModel.");
 }
+
+template void DerModel<double>::EnableContactEnergy<double>(
+    std::optional<double>);
+
+using symbolic::Expression;
+template std::unique_ptr<DerModel<AutoDiffXd>>
+DerModel<double>::ToScalarType<AutoDiffXd>() const;
+template std::unique_ptr<DerModel<Expression>>
+DerModel<double>::ToScalarType<Expression>() const;
+template std::unique_ptr<DerModel<double>>
+DerModel<AutoDiffXd>::ToScalarType<double>() const;
+template std::unique_ptr<DerModel<Expression>>
+DerModel<AutoDiffXd>::ToScalarType<Expression>() const;
+template std::unique_ptr<DerModel<double>>
+DerModel<Expression>::ToScalarType<double>() const;
+template std::unique_ptr<DerModel<AutoDiffXd>>
+DerModel<Expression>::ToScalarType<AutoDiffXd>() const;
 
 }  // namespace der
 }  // namespace multibody

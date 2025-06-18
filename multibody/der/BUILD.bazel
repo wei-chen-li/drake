@@ -88,6 +88,7 @@ drake_cc_library(
     srcs = ["der_model.cc"],
     hdrs = ["der_model.h"],
     deps = [
+        ":contact_energy",
         ":damping_model",
         ":der_indexes",
         ":der_state",

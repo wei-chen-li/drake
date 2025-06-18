@@ -273,6 +273,20 @@ class DerModel {
    @pre `state` is allocated using CreateDerState() of the same DerModel. */
   void ApplyBoundaryCondition(internal::DerState<T>* state) const;
 
+  /** Includes contact energy when computing residual and tangent matrix.
+   Defaults to not including contact energy.
+   @param scaling Optional scaling factor for the contact energy. If not
+                  specified, the value is automatically choosen. The scaling
+                  factor has unit N/m.
+   @pre `!scaling.has_value() || scaling.value() > 0`. */
+  template <typename T1 = T>
+  std::enable_if_t<std::is_same_v<T1, double>, void> EnableContactEnergy(
+      std::optional<double> scaling = std::nullopt);
+
+  /** Reports whether contact energy is included when computing residual and
+   tangent matrix. */
+  bool IsContactEnergyEnabled() const { return contact_energy_scaling_ > 0.0; }
+
   /** Creates a deep copy of this DerModel. Even though the cloned model is
    functionally identical, any DerState and Scratch created for this model are
    not compatible with the cloned model, and vice versa. */
@@ -317,6 +331,7 @@ class DerModel {
   const internal::DerUndeformedState<T> der_undeformed_state_;
   const internal::DampingModel<T> damping_model_;
   internal::DirichletBoundaryCondition<T> boundary_condition_;
+  double contact_energy_scaling_{0.0};
 };
 
 }  // namespace der

@@ -123,6 +123,7 @@ class DerSolver {
         der_model_scratch;
     contact_solvers::internal::BlockSparseCholeskySolver<Matrix4<T>>
         linear_solver;
+    bool prev_is_contact_energy_enabled;
     Eigen::VectorX<T> b;
   } scratch_;
 };
