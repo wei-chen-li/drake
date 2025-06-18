@@ -41,7 +41,7 @@ void ComputeElasticEnergyJacobian(const DerStructuralProperty<T>& prop,
 
  @pre `undeformed` and `state` are compatible.
  @pre `hessian != nullptr`.
- @pre `hessian` is created from MakeEnergyHessianMatrix().
+ @pre `hessian` is created from MakeElasticEnergyHessianMatrix().
  @tparam_default_scalar */
 template <typename T>
 void ComputeElasticEnergyHessian(const DerStructuralProperty<T>& prop,
@@ -56,9 +56,8 @@ void ComputeElasticEnergyHessian(const DerStructuralProperty<T>& prop,
  @pre `num_edges == (has_closed_ends ? num_nodes : num_nodes-1)`.
  @tparam_default_scalar */
 template <typename T>
-Block4x4SparseSymmetricMatrix<T> MakeEnergyHessianMatrix(bool has_closed_ends,
-                                                         int num_nodes,
-                                                         int num_edges);
+Block4x4SparseSymmetricMatrix<T> MakeElasticEnergyHessianMatrix(
+    bool has_closed_ends, int num_nodes, int num_edges);
 
 /* Computes Eₛ. */
 template <typename T>

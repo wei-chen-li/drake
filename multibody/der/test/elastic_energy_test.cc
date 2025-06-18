@@ -82,8 +82,10 @@ class ElasticEnergyTest : public ::testing::TestWithParam<bool> {
 
   void CheckHessian(JacobianCalcFuncType jacobian_calc_func,
                     HessianCalcFuncType hessian_calc_func) const {
-    Block4x4SparseSymmetricMatrix<T> hessian = MakeEnergyHessianMatrix<T>(
-        state_->has_closed_ends(), state_->num_nodes(), state_->num_edges());
+    Block4x4SparseSymmetricMatrix<T> hessian =
+        MakeElasticEnergyHessianMatrix<T>(state_->has_closed_ends(),
+                                          state_->num_nodes(),
+                                          state_->num_edges());
     hessian_calc_func(*prop_, *undeformed_, *state_, &hessian);
     Eigen::MatrixXd matrix = hessian.MakeDenseMatrix();
     auto d2Edq2 = matrix.topLeftCorner(state_->num_dofs(), state_->num_dofs());
@@ -140,7 +142,7 @@ TEST_P(ElasticEnergyTest, TotalElasticEnergyHessian) {
                &ComputeElasticEnergyHessian<T>);
 }
 
-TEST_P(ElasticEnergyTest, MakeEnergyHessianMatrix) {
+TEST_P(ElasticEnergyTest, MakeElasticEnergyHessianMatrix) {
   const bool has_closed_ends = state_->has_closed_ends();
   const int num_nodes = 301;
   const int num_edges = has_closed_ends ? num_nodes : num_nodes - 1;
@@ -194,7 +196,7 @@ TEST_P(ElasticEnergyTest, MakeEnergyHessianMatrix) {
   }
 
   Block4x4SparseSymmetricMatrix<T> hessian =
-      MakeEnergyHessianMatrix<T>(has_closed_ends, num_nodes, num_edges);
+      MakeElasticEnergyHessianMatrix<T>(has_closed_ends, num_nodes, num_edges);
   for (int i = 0; i < ssize(pattern); ++i) {
     std::set<int>& row_pattern = pattern[i];
 

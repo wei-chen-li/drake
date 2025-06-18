@@ -22,8 +22,9 @@ class EnergyHessianMatrixUtilTest : public ::testing::TestWithParam<bool> {
 
   Block4x4SparseSymmetricMatrix<double> MakeRandomMatrix(
       bool fill_empty_diagonal_with_one = false) {
-    Block4x4SparseSymmetricMatrix<double> mat = MakeEnergyHessianMatrix<double>(
-        has_closed_ends_, num_nodes_, num_edges_);
+    Block4x4SparseSymmetricMatrix<double> mat =
+        MakeElasticEnergyHessianMatrix<double>(has_closed_ends_, num_nodes_,
+                                               num_edges_);
     EXPECT_EQ(mat.rows(), has_closed_ends_ ? num_dofs_ : num_dofs_ + 1);
     for (int j = 0; j < mat.block_cols(); ++j) {
       for (int i : mat.sparsity_pattern().neighbors()[j]) {  // i ≥ j

@@ -141,9 +141,8 @@ void ComputeElasticEnergyHessian(const DerStructuralProperty<T>& prop,
 }
 
 template <typename T>
-Block4x4SparseSymmetricMatrix<T> MakeEnergyHessianMatrix(bool has_closed_ends,
-                                                         int num_nodes,
-                                                         int num_edges) {
+Block4x4SparseSymmetricMatrix<T> MakeElasticEnergyHessianMatrix(
+    bool has_closed_ends, int num_nodes, int num_edges) {
   DRAKE_THROW_UNLESS(num_edges ==
                      (has_closed_ends ? num_nodes : num_nodes - 1));
   std::vector<int> block_sizes(num_nodes, 4);
@@ -848,7 +847,7 @@ void AddBendingEnergyHessian(const DerStructuralProperty<T>& prop,
 
 DRAKE_DEFINE_FUNCTION_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     (&ComputeElasticEnergy<T>, &ComputeElasticEnergyJacobian<T>,
-     &ComputeElasticEnergyHessian<T>, &MakeEnergyHessianMatrix<T>));
+     &ComputeElasticEnergyHessian<T>, &MakeElasticEnergyHessianMatrix<T>));
 
 }  // namespace internal
 }  // namespace der

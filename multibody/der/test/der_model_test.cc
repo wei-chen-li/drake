@@ -353,7 +353,7 @@ TEST_P(DerModelTest, ComputeResidual) {
   VectorXd dEdq(num_dofs);
   internal::ComputeElasticEnergyJacobian<double>(prop, undeformed, *state,
                                                  &dEdq);
-  auto d2Edq2 = internal::MakeEnergyHessianMatrix<double>(
+  auto d2Edq2 = internal::MakeElasticEnergyHessianMatrix<double>(
       state->has_closed_ends(), state->num_nodes(), state->num_edges());
   internal::ComputeElasticEnergyHessian(prop, undeformed, *state, &d2Edq2);
 
@@ -395,7 +395,7 @@ TEST_P(DerModelTest, ComputeTangentMatrix) {
   const auto& damping = DerModelTester::get_damping_model(*der_model_);
   const int num_dofs = state->num_dofs();
 
-  auto d2Edq2 = internal::MakeEnergyHessianMatrix<double>(
+  auto d2Edq2 = internal::MakeElasticEnergyHessianMatrix<double>(
       state->has_closed_ends(), state->num_nodes(), state->num_edges());
   internal::ComputeElasticEnergyHessian(prop, undeformed, *state, &d2Edq2);
 
