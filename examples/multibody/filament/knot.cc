@@ -12,17 +12,16 @@
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
-DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-3,
+DEFINE_double(simulation_time, 0.02, "Desired duration of the simulation [s].");
+DEFINE_double(time_step, 1e-5,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 2e9, "Young's modulus of the filament [Pa].");
-DEFINE_double(G, 1e9, "Shear modulus of the filament [Pa].");
+DEFINE_double(E, 2e8, "Young's modulus of the filament [Pa].");
+DEFINE_double(G, 1e8, "Shear modulus of the filament [Pa].");
 DEFINE_double(rho, 1e3, "Mass density of the filament [kg/m³].");
 DEFINE_double(mu, 0.01, "Friction coefficient of the filament [unitless].");
-DEFINE_double(force, 1e7, "Pulling force on the filament [N].");
+DEFINE_double(force, 3e9, "Pulling force on the filament.");
 DEFINE_string(
-    knot_configuration, "n1",
+    knot_configuration, "n4",
     "The knot configuration. Options are: 'n1', 'n2', 'n3', and 'n4'.");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
@@ -45,6 +44,7 @@ using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
 using drake::multibody::RigidBody;
 using drake::multibody::SpatialInertia;
+using drake::multibody::der::DerModel;
 using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
 using drake::systems::Simulator;
@@ -152,6 +152,8 @@ DeformableBodyId RegisterFilament(DeformableModel<double>* deformable_model) {
   const double unused_resolution_hint = 9999;
   DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
       std::move(geometry_instance), config, unused_resolution_hint);
+  // const_cast<DerModel<double>*>(deformable_model->GetDerModel(body_id))
+  //     ->EnableContactEnergy();
   return body_id;
 }
 
@@ -173,13 +175,13 @@ int do_main() {
 
   /* Add a visualizer that emits LCM messages for visualization. */
   geometry::DrakeVisualizerParams params;
+  params.publish_period = FLAGS_time_step;
   geometry::DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph,
                                                   nullptr, params);
   auto diagram = builder.Build();
 
   Simulator<double> simulator(*diagram);
   simulator.Initialize();
-  simulator.set_target_realtime_rate(FLAGS_realtime_rate);
 
   simulator.AdvanceTo(FLAGS_simulation_time);
   return 0;
