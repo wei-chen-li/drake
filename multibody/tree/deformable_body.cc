@@ -306,6 +306,7 @@ DeformableBody<T>::DeformableBody(DeformableBodyIndex index,
       geometry_id_(geometry_id),
       filament_G_(filament_G),
       X_WG_(X_WG),
+      X_WD_(X_WG),
       config_(config) {
   if constexpr (std::is_same_v<T, double>) {
     BuildFilamentDerModel(X_WG, filament_G, config);
@@ -531,8 +532,15 @@ void DeformableBody<T>::SetDefaultState(const systems::Context<T>&,
     state->get_mutable_discrete_state(discrete_state_index_)
         .get_mutable_value()
         .head(fem_model_->num_dofs()) = CalcDefaultPositions();
+  } else if (der_model_) {
+    std::unique_ptr<der::internal::DerState<T>> der_state =
+        der_model_->CreateDerState();
+    der_state->Transform((X_WD_ * X_WG_.inverse()).cast<T>());
+    state->get_mutable_discrete_state(discrete_state_index_)
+        .get_mutable_value() = der_state->Serialize();
+  } else {
+    DRAKE_UNREACHABLE();
   }
-  // TODO(wei-chen): Implement SetDefaultState() for DER model.
 }
 
 template <typename T>
