@@ -105,7 +105,14 @@ class DeformableBody final : public MultibodyElement<T> {
 
   /** Returns the cache index for the FemState of this deformable body. */
   systems::CacheIndex fem_state_cache_index() const {
+    DRAKE_THROW_UNLESS(fem_model_ != nullptr);
     return fem_state_cache_index_;
+  }
+
+  /** Returns the cache index for the DerState of this deformable body. */
+  systems::CacheIndex der_state_cache_index() const {
+    DRAKE_THROW_UNLESS(der_model_ != nullptr);
+    return der_state_cache_index_;
   }
 
   /** (Internal use only) Configures the parallelism that `this`
@@ -413,6 +420,11 @@ class DeformableBody final : public MultibodyElement<T> {
   void CalcFemStateFromDiscreteValues(const systems::Context<T>& context,
                                       fem::FemState<T>* fem_state) const;
 
+  /* Private helper to populate DerState from discrete state values. */
+  void CalcDerStateFromDiscreteValues(
+      const systems::Context<T>& context,
+      der::internal::DerState<T>* der_state) const;
+
   /* NOTE: If a new data member is added to this list, it would need to be
    cloned accordingly in CloneToDouble(). */
   DeformableBodyId id_{};
@@ -420,7 +432,9 @@ class DeformableBody final : public MultibodyElement<T> {
   geometry::GeometryId geometry_id_{};
   /* The mesh of the deformable geometry (in its reference configuration) in
    its geometry frame. */
-  geometry::VolumeMesh<double> mesh_G_;
+  std::optional<geometry::VolumeMesh<double>> mesh_G_;
+  /* The filament (in its reference configuration) in its geometry frame. */
+  std::optional<geometry::Filament> filament_G_;
   /* The pose of the deformable geometry (in its reference configuration) at
    registration in the world frame. */
   math::RigidTransform<double> X_WG_;
@@ -435,6 +449,7 @@ class DeformableBody final : public MultibodyElement<T> {
   copyable_unique_ptr<der::DerModel<T>> der_model_;
   systems::DiscreteStateIndex discrete_state_index_{};
   systems::CacheIndex fem_state_cache_index_{};
+  systems::CacheIndex der_state_cache_index_{};
   systems::AbstractParameterIndex is_enabled_parameter_index_{};
   std::vector<internal::DeformableRigidFixedConstraintSpec>
       fixed_constraint_specs_;

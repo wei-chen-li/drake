@@ -294,27 +294,9 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
       const geometry::internal::FilamentContactGeometryPair<T>& geometry_pair)
       const;
 
-  /* Copies the state of the deformable body with `id` in the given
-   `context` to the `fem_state`.
-   @pre fem_state != nullptr and has size compatible with the state of the
-        deformable body with the given `index`.
-   @pre `index` is valid and less than the number of deformable bodies. */
-  void CalcFemState(const systems::Context<T>& context,
-                    DeformableBodyIndex index,
-                    fem::FemState<T>* fem_state) const;
-
   /* Eval version of CalcFemState(). */
   const fem::FemState<T>& EvalFemState(const systems::Context<T>& context,
                                        DeformableBodyIndex index) const;
-
-  /* Copies the state of the deformable body with `id` in the given `context`
-   to the `der_state`.
-   @pre der_state != nullptr and has size compatible with the state of the
-        deformable body with the given `index`.
-   @pre `index` is valid and less than the number of deformable bodies. */
-  void CalcDerState(const systems::Context<T>& context,
-                    DeformableBodyIndex index,
-                    der::internal::DerState<T>* der_state) const;
 
   /* Eval version of CalcDerState(). */
   const der::internal::DerState<T>& EvalDerState(
