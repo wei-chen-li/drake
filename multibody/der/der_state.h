@@ -224,6 +224,11 @@ class DerState {
     der_state_system_->Deserialize(context_.get_mutable(), serialized);
   }
 
+  /* Transforms `this` DerState by `X`. */
+  void Transform(const math::RigidTransform<T>& X) {
+    der_state_system_->Transform(context_.get_mutable(), X);
+  }
+
   /* Returns the serial number. This counts up every time a setter method is
    called or whenever mutable access is granted. */
   int64_t serial_number() const {

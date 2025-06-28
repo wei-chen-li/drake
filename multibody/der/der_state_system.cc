@@ -568,6 +568,35 @@ void DerStateSystem<T>::Deserialize(
 }
 
 template <typename T>
+void DerStateSystem<T>::Transform(systems::Context<T>* context,
+                                  const math::RigidTransform<T>& X) const {
+  this->ValidateContext(context);
+  const math::RotationMatrix<T> R = X.rotation();
+
+  Eigen::VectorBlock<VectorX<T>> q =
+      context->get_mutable_discrete_state(q_index_).get_mutable_value();
+  Eigen::VectorBlock<VectorX<T>> qdot =
+      context->get_mutable_discrete_state(qdot_index_).get_mutable_value();
+  Eigen::VectorBlock<VectorX<T>> qddot =
+      context->get_mutable_discrete_state(qddot_index_).get_mutable_value();
+  for (int i = 0; i < num_nodes(); ++i) {
+    q.template segment<3>(4 * i) = (X * q.template segment<3>(4 * i)).eval();
+    qdot.template segment<3>(4 * i) =
+        (R * qdot.template segment<3>(4 * i)).eval();
+    qddot.template segment<3>(4 * i) =
+        (R * qddot.template segment<3>(4 * i)).eval();
+  }
+
+  PrevStep<T>& prev_step =
+      context->template get_mutable_abstract_state<PrevStep<T>>(
+          prev_step_index_);
+  prev_step.tangent = (R * prev_step.tangent).eval();
+  prev_step.reference_frame_d1 = (R * prev_step.reference_frame_d1).eval();
+
+  increment_serial_number(context);
+}
+
+template <typename T>
 int64_t DerStateSystem<T>::serial_number(
     const systems::Context<T>& context) const {
   this->ValidateContext(context);

@@ -3,6 +3,7 @@
 #include <optional>
 #include <vector>
 
+#include "drake/math/rigid_transform.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/scalar_conversion_traits.h"
 
@@ -219,6 +220,11 @@ class DerStateSystem final : public systems::LeafSystem<T> {
    @pre `serialized` has the correct size. */
   void Deserialize(systems::Context<T>* context,
                    const Eigen::Ref<const Eigen::VectorX<T>>& serialized) const;
+
+  /* Transforms the states in `context` by `X`.
+   @pre `context != nullptr`. */
+  void Transform(systems::Context<T>* context,
+                 const math::RigidTransform<T>& X) const;
 
   /* Returns the serial number. The serial number is incremented every time the
    `context` is modified by DerStateStstem. */

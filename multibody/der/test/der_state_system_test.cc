@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include "drake/common/test_utilities/eigen_matrix_compare.h"
+
 namespace drake {
 namespace multibody {
 namespace der {
@@ -35,6 +37,8 @@ class DerStateSystemTester {
 
 namespace {
 
+using Eigen::Matrix3X;
+using Eigen::RowVectorX;
 using Eigen::Vector3;
 using Eigen::VectorX;
 using systems::CacheIndex;
@@ -174,6 +178,64 @@ TYPED_TEST(DerStateSystemTest, Serialize) {
             system.get_reference_twist(*context2));
 }
 
+/* Test that transforming the state is correct. */
+TYPED_TEST(DerStateSystemTest, Transform) {
+  using T = TypeParam;
+  const DerStateSystem<T>& system = *this->der_state_system_;
+  const int num_dofs = system.num_dofs();
+
+  auto context = system.CreateDefaultContext();
+  system.AdvancePositionToNextStep(context.get(),
+                                   VectorX<T>::LinSpaced(num_dofs, 0.0, 1.0));
+  system.SetVelocity(context.get(), VectorX<T>::Constant(num_dofs, 1.2));
+  system.SetAcceleration(context.get(), VectorX<T>::Constant(num_dofs, 3.4));
+
+  const math::RigidTransform<T> X(math::RotationMatrix<T>::MakeXRotation(0.1),
+                                  Vector3<T>(1, 2, 3));
+  const math::RotationMatrix<T> R = X.rotation();
+  VectorX<T> q_expected = system.get_position(*context);
+  VectorX<T> qdot_expected = system.get_velocity(*context);
+  VectorX<T> qddot_expected = system.get_acceleration(*context);
+  for (int i = 0; i < system.num_nodes(); ++i) {
+    q_expected.template segment<3>(4 * i) =
+        (X * q_expected.template segment<3>(4 * i)).eval();
+    qdot_expected.template segment<3>(4 * i) =
+        (R * qdot_expected.template segment<3>(4 * i)).eval();
+    qddot_expected.template segment<3>(4 * i) =
+        (R * qddot_expected.template segment<3>(4 * i)).eval();
+  }
+  const Matrix3X<T> t_expected = R * system.get_tangent(*context);
+  const Matrix3X<T> d1_expected = R * system.get_reference_frame_d1(*context);
+  const Matrix3X<T> m1_expected = R * system.get_material_frame_m1(*context);
+  const Matrix3X<T> curvature_expected =
+      R * system.get_discrete_integrated_curvature(*context);
+  const RowVectorX<T> kappa1_expected = system.get_curvature_kappa1(*context);
+  const RowVectorX<T> kappa2_expected = system.get_curvature_kappa2(*context);
+  const RowVectorX<T> twist_expected = system.get_twist(*context);
+
+  system.Transform(context.get(), X);
+  const double kTol = 1e-14;
+  EXPECT_TRUE(CompareMatrices(system.get_position(*context), q_expected, kTol));
+  EXPECT_TRUE(
+      CompareMatrices(system.get_velocity(*context), qdot_expected, kTol));
+  EXPECT_TRUE(
+      CompareMatrices(system.get_acceleration(*context), qddot_expected, kTol));
+  EXPECT_TRUE(CompareMatrices(system.get_tangent(*context), t_expected, kTol));
+  EXPECT_TRUE(CompareMatrices(system.get_reference_frame_d1(*context),
+                              d1_expected, kTol));
+  EXPECT_TRUE(CompareMatrices(system.get_material_frame_m1(*context),
+                              m1_expected, kTol));
+  EXPECT_TRUE(
+      CompareMatrices(system.get_discrete_integrated_curvature(*context),
+                      curvature_expected, kTol));
+  EXPECT_TRUE(CompareMatrices(system.get_curvature_kappa1(*context),
+                              kappa1_expected, kTol));
+  EXPECT_TRUE(CompareMatrices(system.get_curvature_kappa2(*context),
+                              kappa2_expected, kTol));
+  EXPECT_TRUE(
+      CompareMatrices(system.get_twist(*context), twist_expected, kTol));
+}
+
 TYPED_TEST(DerStateSystemTest, ScalarConversion) {
   using T = TypeParam;
   const DerStateSystem<T>& system = *this->der_state_system_;
@@ -208,9 +270,11 @@ TYPED_TEST(DerStateSystemTest, SerialNumber) {
   EXPECT_EQ(system.serial_number(context), 7);
   system.Deserialize(&context, system.Serialize(context));
   EXPECT_EQ(system.serial_number(context), 8);
+  system.Transform(&context, math::RigidTransform<T>());
+  EXPECT_EQ(system.serial_number(context), 9);
   if constexpr (std::is_same_v<T, AutoDiffXd>) {
     system.FixReferenceFrameDuringAutoDiff(&context);
-    EXPECT_EQ(system.serial_number(context), 9);
+    EXPECT_EQ(system.serial_number(context), 10);
   }
 
   auto context2 = system.CreateDefaultContext();

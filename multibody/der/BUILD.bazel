@@ -132,6 +132,7 @@ drake_cc_library(
     deps = [
         "//math:axis_angle",
         "//math:frame_transport",
+        "//math:geometric_transform",
         "//systems/framework:leaf_system",
     ],
 )
@@ -291,6 +292,7 @@ drake_cc_googletest(
     name = "der_state_system_test",
     deps = [
         ":der_state_system",
+        "//common/test_utilities:eigen_matrix_compare",
     ],
 )
 
