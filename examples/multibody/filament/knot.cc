@@ -122,8 +122,9 @@ DeformableBodyId RegisterFilament(DeformableModel<double>* deformable_model) {
   const double unused_resolution_hint = 9999;
   DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
       std::move(geometry_instance), config, unused_resolution_hint);
-  // const_cast<DerModel<double>*>(deformable_model->GetDerModel(body_id))
-  //     ->EnableContactEnergy();
+  deformable_model->GetMutableBody(body_id).set_default_pose(
+      math::RigidTransformd(Vector3d(0, 0, 0.15)));
+
   return body_id;
 }
 
