@@ -453,6 +453,8 @@ class DeformableBody final : public MultibodyElement<T> {
   systems::AbstractParameterIndex is_enabled_parameter_index_{};
   std::vector<internal::DeformableRigidFixedConstraintSpec>
       fixed_constraint_specs_;
+  std::vector<internal::FilamentRigidFixedConstraintSpec>
+      fixed_constraint_specs2_;
   /* External forces and constraints. */
   /* Owned gravity force. */
   copyable_unique_ptr<ForceDensityFieldBase<T>> gravity_force_;

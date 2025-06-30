@@ -108,6 +108,17 @@ struct DeformableRigidFixedConstraintSpec {
   MultibodyConstraintId id;  // Id of this constraint in the plant.
 };
 
+struct FilamentRigidFixedConstraintSpec {
+  DeformableBodyId body_A;  // Id of the deformable body A.
+  BodyIndex body_B;         // Index of the rigid body B.
+  std::vector<int> nodes;   // Indices of the nodes in filament A.
+  std::vector<Vector3<double>>
+      p_BQs;               // Positions of points Qᵢ in body frame B.
+  std::vector<int> edges;  // Indices of the edges in filament A.
+  std::vector<Vector3<double>> m1_Bs;  // m₁ directors in body frame B.
+  MultibodyConstraintId id;            // Id of this constraint in the plant.
+};
+
 // Struct to store tendon constraint parameters.
 // Tendon constraints are modeled as a unilateral constraints on an
 // abstract length of the form:

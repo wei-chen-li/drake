@@ -92,7 +92,6 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
         "with the MultibodyPlant owning the deformable model.",
         body_B.name()));
   }
-  // TODO(wei-chen): Implement DeformableBody::AddFixedConstraint for DerModel.
   /* X_WG is the pose of this body's reference mesh in the world frame. In the
    scope of this function, we call that the A frame and G is used to denote
    the rigid body's geometry, so we rename X_WG_ to X_WA here to avoid
@@ -100,9 +99,6 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
   const math::RigidTransformd& X_WA = X_WG_;
   const MultibodyConstraintId constraint_id =
       MultibodyConstraintId::get_new_id();
-  /* Create an empty spec first. We will add to it. */
-  internal::DeformableRigidFixedConstraintSpec spec{
-      id_, body_B.index(), {}, {}, constraint_id};
   geometry::SceneGraph<double> scene_graph;
   geometry::SourceId source_id = scene_graph.RegisterSource("deformable_model");
   /* Register the geometry in deformable reference geometry A frame. */
@@ -117,33 +113,79 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
   auto query =
       scene_graph.get_query_output_port().Eval<geometry::QueryObject<double>>(
           *context);
-  const VectorX<double>& p_WPi = reference_positions_;
-  for (int vertex_index = 0; vertex_index < fem_model_->num_nodes();
-       ++vertex_index) {
-    /* The vertex position in the deformable body's geometry frame. */
-    const Vector3<double>& p_APi =
-        X_WA.inverse() * p_WPi.template segment<3>(vertex_index * 3);
-    /* Note that `shape` is also registered in the A frame in the throw-away
-     scene graph. */
-    const std::vector<geometry::SignedDistanceToPoint<double>>
-        signed_distances = query.ComputeSignedDistanceToPoint(p_APi);
-    DRAKE_DEMAND(ssize(signed_distances) == 1);
-    const double signed_distance = signed_distances[0].distance;
-    if (signed_distance <= 0.0) {
-      spec.vertices.push_back(vertex_index);
-      /* Qi is conincident with Pi. */
-      spec.p_BQs.emplace_back(X_BA * p_APi);
+  if (fem_model_) {
+    /* Create an empty spec first. We will add to it. */
+    internal::DeformableRigidFixedConstraintSpec spec{
+        id_, body_B.index(), {}, {}, constraint_id};
+    const VectorX<double>& p_WPi = reference_positions_;
+    for (int vertex_index = 0; vertex_index < fem_model_->num_nodes();
+         ++vertex_index) {
+      /* The vertex position in the deformable body's geometry frame. */
+      const Vector3<double>& p_APi =
+          X_WA.inverse() * p_WPi.template segment<3>(vertex_index * 3);
+      /* Note that `shape` is also registered in the A frame in the throw-away
+       scene graph. */
+      const std::vector<geometry::SignedDistanceToPoint<double>>
+          signed_distances = query.ComputeSignedDistanceToPoint(p_APi);
+      DRAKE_DEMAND(ssize(signed_distances) == 1);
+      const double signed_distance = signed_distances[0].distance;
+      if (signed_distance <= 0.0) {
+        spec.vertices.push_back(vertex_index);
+        /* Qi is conincident with Pi. */
+        spec.p_BQs.emplace_back(X_BA * p_APi);
+      }
     }
+    // TODO(xuchenhan-tri): consider adding an option to allow empty constraint.
+    if (spec.vertices.size() == 0) {
+      throw std::runtime_error(fmt::format(
+          "AddFixedConstraint(): No constraint has been added between "
+          "deformable body with id {} and rigid body with name {}. Remove the "
+          "call to AddFixedConstraint() if this is intended.",
+          id_, body_B.name()));
+    }
+    fixed_constraint_specs_.push_back(std::move(spec));
+  } else if (der_model_) {
+    /* Create an empty spec first. We will add to it. */
+    internal::FilamentRigidFixedConstraintSpec spec{
+        id_, body_B.index(), {}, {}, {}, {}, constraint_id};
+    const int num_nodes = der_model_->num_nodes();
+    for (int i = 0; i < num_nodes; ++i) {
+      /* The node position in the filament body's geometry frame. */
+      const Vector3<double> p_APi = filament_G_->node_pos().col(i);
+      /* Note that `shape` is also registered in the A frame in the throw-away
+       scene graph. */
+      const std::vector<geometry::SignedDistanceToPoint<double>>
+          signed_distances = query.ComputeSignedDistanceToPoint(p_APi);
+      DRAKE_DEMAND(ssize(signed_distances) == 1);
+      const double signed_distance = signed_distances[0].distance;
+      if (signed_distance <= 0.0) {
+        spec.nodes.push_back(i);
+        spec.p_BQs.emplace_back(X_BA * p_APi);
+      }
+    }
+    /* If node i and node i+1 are fixed, also fix edge i. */
+    for (int k = 0; k < ssize(spec.nodes); ++k) {
+      const int i = spec.nodes[k];
+      const int ip1 =
+          der_model_->has_closed_ends() ? (i + 1) % num_nodes : (i + 1);
+      /* The m₁ director in the filament body's geometry frame. */
+      const Vector3<double> m1_Ai = filament_G_->edge_m1().col(i);
+      if (ip1 == spec.nodes[(k + 1) % ssize(spec.nodes)]) {
+        spec.edges.push_back(i);
+        spec.m1_Bs.emplace_back(X_BA * m1_Ai);
+      }
+    }
+    /* Throw if no constraints are added. */
+    if (spec.nodes.size() == 0) {
+      throw std::runtime_error(fmt::format(
+          "AddFixedConstraint(): No constraint has been added between "
+          "deformable body with id {} and rigid body with name {}. Remove the "
+          "call to AddFixedConstraint() if this is intended.",
+          id_, body_B.name()));
+    }
+  } else {
+    DRAKE_UNREACHABLE();
   }
-  // TODO(xuchenhan-tri): consider adding an option to allow empty constraint.
-  if (spec.vertices.size() == 0) {
-    throw std::runtime_error(fmt::format(
-        "AddFixedConstraint(): No constraint has been added between deformable "
-        "body with id {} and rigid body with name {}. Remove the call to "
-        "AddFixedConstraint() if this is intended.",
-        id_, body_B.name()));
-  }
-  fixed_constraint_specs_.push_back(std::move(spec));
   return constraint_id;
 }
 
