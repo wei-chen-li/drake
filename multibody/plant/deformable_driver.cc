@@ -1054,15 +1054,14 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
   for (DeformableBodyIndex index(0); index < deformable_model_->num_bodies();
        ++index) {
     const DeformableBody<T>& body = deformable_model_->GetBody(index);
-    if (!body.is_enabled(context) || !body.has_fixed_constraint()) {
+    if (!(body.fem_model() && body.is_enabled(context) &&
+          body.has_fixed_constraint())) {
       continue;
     }
 
-    const FemModel<T>* fem_model = body.fem_model();
-    if (!fem_model) return;
-    // TODO(wei-chen): Implement AppendDeformableRigidFixedCo...() for DerModel.
+    const FemModel<T>& fem_model = *body.fem_model();
     const DirichletBoundaryCondition<T>& bc =
-        fem_model->dirichlet_boundary_condition();
+        fem_model.dirichlet_boundary_condition();
 
     /* Returns true iff for the deformable body, the given vertex index is under
      boundary condition. */
@@ -1151,6 +1150,123 @@ void DeformableDriver<T>::AppendDeformableRigidFixedConstraintKinematics(
         SapConstraintJacobian<T> J(clique_index_A, std::move(jacobian_block_A));
         result->emplace_back(object_A, std::move(p_WPs), std::move(p_PQs_W),
                              std::move(J));
+      }
+    }
+  }
+}
+
+template <typename T>
+void DeformableDriver<T>::AppendFilamentRigidFixedConstraintKinematics(
+    const systems::Context<T>& context,
+    std::vector<contact_solvers::internal::FilamentConstraintKinematics<T>>*
+        result) const {
+  DRAKE_DEMAND(result != nullptr);
+  /* For a fixed constraint between a filament A and a rigid body B, we define
+   the velocity difference as
+
+     v_ApBq_W = v_WBq - v_WAp.
+
+   The relative velocity Jacobian is then:
+
+     Jv_v_W_ApBq = Jv_v_WBq - Jv_v_WAp.
+
+   We encode the jacobian as two jacobian blocks, each with its own sparsity
+   pattern, by exploiting the fact that the set of DoFs for deformable bodies
+   and rigid bodies are mutually exclusive, and Jv_v_WAp = 0 for rigid dofs
+   and Jv_v_WBq = 0 for deformable dofs. */
+  const MultibodyTreeTopology& tree_topology =
+      manager_->internal_tree().get_topology();
+  for (DeformableBodyIndex index(0); index < deformable_model_->num_bodies();
+       ++index) {
+    const DeformableBody<T>& body = deformable_model_->GetBody(index);
+    if (!(body.der_model() && body.is_enabled(context) &&
+          body.has_fixed_constraint())) {
+      continue;
+    }
+    const DerModel<T>& der_model = *body.der_model();
+
+    // Each deformable body forms its own clique and are indexed in inceasing
+    // DeformableBodyIndex order and placed after all rigid cliques.
+    const TreeIndex clique_index_A(tree_topology.num_trees() + index);
+    const PartialPermutation& dof_permutation =
+        EvalDofPermutation(context, index);
+    const DerState<T>& der_state = EvalDerState(context, index);
+
+    for (const FilamentRigidFixedConstraintSpec& spec :
+         body.fixed_constraint_specs2()) {
+      const int num_nodes_in_constraint = ssize(spec.nodes);
+      /* The Jacobian block for the deformable body A. */
+      Block3x1SparseMatrix<T> negative_Jv_v_WAp(
+          num_nodes_in_constraint, dof_permutation.permuted_domain_size());
+      std::vector<typename Block3x1SparseMatrix<T>::Triplet> jacobian_triplets;
+      jacobian_triplets.reserve(num_nodes_in_constraint * 3);
+      /* Positions of fixed dofs of the deformable body in the deformable
+       body's frame which is always assumed to be the world frame. */
+      VectorX<T> q_WPs(3 * num_nodes_in_constraint);
+      for (int i = 0; i < ssize(spec.nodes); ++i) {
+        q_WPs.template segment<3>(3 * i) =
+            der_state.get_position().template segment<3>(4 * spec.nodes[i]);
+        /* The Jacobian for the deformable body is identity for a free vertex
+         and zero otherwise. */
+        if (!der_model.IsPositionFixed(der::DerNodeIndex(spec.nodes[i]))) {
+          const int dof_index = 4 * spec.nodes[i];
+          const int permuted_dof_index =
+              dof_permutation.permuted_index(dof_index);
+          const Matrix3<T> block = -Matrix3<T>::Identity();
+          jacobian_triplets.emplace_back(i, permuted_dof_index + 0,
+                                         block.col(0));
+          jacobian_triplets.emplace_back(i, permuted_dof_index + 1,
+                                         block.col(1));
+          jacobian_triplets.emplace_back(i, permuted_dof_index + 2,
+                                         block.col(2));
+        }
+      }
+      negative_Jv_v_WAp.SetFromTriplets(jacobian_triplets);
+      MatrixBlock<T> jacobian_block_A(std::move(negative_Jv_v_WAp));
+
+      const BodyIndex index_B = spec.body_B;
+      const TreeIndex tree_index = tree_topology.body_to_tree_index(index_B);
+      const int clique_index_B = tree_index;
+      const RigidBody<T>& rigid_body = manager_->plant().get_body(index_B);
+      const math::RigidTransform<T>& X_WB =
+          manager_->plant().EvalBodyPoseInWorld(context, rigid_body);
+      /* The positions of the anchor dofs on the rigid body in world frame. */
+      VectorX<T> q_WQs(3 * num_nodes_in_constraint);
+      for (int i = 0; i < ssize(spec.nodes); ++i) {
+        q_WQs.template segment<3>(3 * i) = X_WB * spec.p_BQs[i].cast<T>();
+      }
+      // The jacobian for the rigid body.
+      MatrixBlock<T> jacobian_block_B;
+      if (tree_index.is_valid()) {
+        /* Rigid body is not welded to world. */
+        const Frame<T>& frame_W = manager_->plant().world_frame();
+        const int nv = manager_->plant().num_velocities();
+        MatrixX<T> Jv_v_WBq(3 * num_nodes_in_constraint, nv);
+        manager_->internal_tree().CalcJacobianTranslationalVelocity(
+            context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
+            Eigen::Map<const Matrix3X<T>>(q_WQs.data(), 3, ssize(spec.nodes)),
+            frame_W, frame_W, &Jv_v_WBq);
+        jacobian_block_B = MatrixBlock<T>(Jv_v_WBq.middleCols(
+            tree_topology.tree_velocities_start_in_v(tree_index),
+            tree_topology.num_tree_velocities(tree_index)));
+      }
+
+      /* By convention, deformable bodies are assigned object indexes after all
+       rigid bodies. */
+      const int object_A =
+          index + manager_->plant().num_bodies();  // Deformable body.
+      const int object_B = index_B;                // Rigid body.
+      VectorX<T> q_PQs_W = q_WQs - q_WPs;
+      if (tree_index.is_valid()) {
+        /* Rigid body is not welded to world. */
+        SapConstraintJacobian<T> J(clique_index_A, std::move(jacobian_block_A),
+                                   clique_index_B, std::move(jacobian_block_B));
+        result->emplace_back(object_A, object_B, std::move(q_PQs_W),
+                             std::move(J));
+      } else {
+        /* Rigid body is welded to world. */
+        SapConstraintJacobian<T> J(clique_index_A, std::move(jacobian_block_A));
+        result->emplace_back(object_A, std::move(q_PQs_W), std::move(J));
       }
     }
   }
@@ -1657,6 +1773,7 @@ void DeformableDriver<T>::CalcDerConstraintParticipation(
     der::internal::ConstraintParticipation* constraint_participation) const {
   DRAKE_DEMAND(constraint_participation != nullptr);
   const DeformableBodyId body_id = deformable_model_->GetBodyId(index);
+  const DeformableBody<T>& body = deformable_model_->GetBody(body_id);
   const DerModel<T>* der_model = deformable_model_->GetDerModel(body_id);
   DRAKE_DEMAND(der_model != nullptr);
   *constraint_participation = der::internal::ConstraintParticipation(
@@ -1667,7 +1784,11 @@ void DeformableDriver<T>::CalcDerConstraintParticipation(
   const FilamentContact<T>& contact_data = EvalFilamentContact(context);
   constraint_participation->ParticipateEdgesAndAdjacentNodes(
       contact_data.contact_edges(geometry_id));
-  // TODO(wei-chen): Add fixed constraints in CalcDerConstraintParticipation().
+  for (const internal::FilamentRigidFixedConstraintSpec& spec :
+       body.fixed_constraint_specs2()) {
+    constraint_participation->ParticipateNodes(spec.nodes);
+    constraint_participation->ParticipateEdges(spec.edges);
+  }
 }
 
 template <typename T>

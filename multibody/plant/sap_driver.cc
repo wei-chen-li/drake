@@ -15,6 +15,7 @@
 #include "drake/multibody/contact_solvers/sap/sap_contact_problem.h"
 #include "drake/multibody/contact_solvers/sap/sap_coupler_constraint.h"
 #include "drake/multibody/contact_solvers/sap/sap_distance_constraint.h"
+#include "drake/multibody/contact_solvers/sap/sap_filament_constraint.h"
 #include "drake/multibody/contact_solvers/sap/sap_fixed_constraint.h"
 #include "drake/multibody/contact_solvers/sap/sap_friction_cone_constraint.h"
 #include "drake/multibody/contact_solvers/sap/sap_holonomic_constraint.h"
@@ -35,6 +36,7 @@ using drake::multibody::contact_solvers::internal::ContactConfiguration;
 using drake::multibody::contact_solvers::internal::ContactSolverResults;
 using drake::multibody::contact_solvers::internal::ExtractNormal;
 using drake::multibody::contact_solvers::internal::ExtractTangent;
+using drake::multibody::contact_solvers::internal::FilamentConstraintKinematics;
 using drake::multibody::contact_solvers::internal::FixedConstraintKinematics;
 using drake::multibody::contact_solvers::internal::MakeContactConfiguration;
 using drake::multibody::contact_solvers::internal::MatrixBlock;
@@ -44,6 +46,7 @@ using drake::multibody::contact_solvers::internal::SapConstraintJacobian;
 using drake::multibody::contact_solvers::internal::SapContactProblem;
 using drake::multibody::contact_solvers::internal::SapCouplerConstraint;
 using drake::multibody::contact_solvers::internal::SapDistanceConstraint;
+using drake::multibody::contact_solvers::internal::SapFilamentConstraint;
 using drake::multibody::contact_solvers::internal::SapFixedConstraint;
 using drake::multibody::contact_solvers::internal::SapFrictionConeConstraint;
 using drake::multibody::contact_solvers::internal::SapHolonomicConstraint;
@@ -808,6 +811,15 @@ void SapDriver<T>::AddFixedConstraints(
       for (FixedConstraintKinematics<T>& k : kinematics) {
         problem->AddConstraint(
             std::make_unique<SapFixedConstraint<T>>(std::move(k)));
+      }
+      std::vector<FilamentConstraintKinematics<T>> filament_kinematics;
+      manager()
+          .deformable_driver()
+          ->AppendFilamentRigidFixedConstraintKinematics(context,
+                                                         &filament_kinematics);
+      for (FilamentConstraintKinematics<T>& k : filament_kinematics) {
+        problem->AddConstraint(
+            std::make_unique<SapFilamentConstraint<T>>(std::move(k)));
       }
     }
   } else {

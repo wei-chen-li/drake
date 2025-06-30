@@ -14,6 +14,20 @@ ConstraintParticipation::ConstraintParticipation(bool has_closed_ends,
                      (has_closed_ends ? num_nodes : num_nodes - 1));
 }
 
+void ConstraintParticipation::ParticipateNodes(const std::vector<int>& nodes) {
+  for (int i : nodes) {
+    DRAKE_THROW_UNLESS(0 <= i && i < num_nodes_);
+    participating_nodes_.insert(i);
+  }
+}
+
+void ConstraintParticipation::ParticipateEdges(const std::vector<int>& edges) {
+  for (int i : edges) {
+    DRAKE_THROW_UNLESS(0 <= i && i < num_edges_);
+    participating_edges_.insert(i);
+  }
+}
+
 void ConstraintParticipation::ParticipateEdgesAndAdjacentNodes(
     const std::unordered_set<int>& edges) {
   for (int i : edges) {

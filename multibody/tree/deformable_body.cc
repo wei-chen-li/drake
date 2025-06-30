@@ -183,6 +183,7 @@ MultibodyConstraintId DeformableBody<T>::AddFixedConstraint(
           "call to AddFixedConstraint() if this is intended.",
           id_, body_B.name()));
     }
+    fixed_constraint_specs2_.push_back(std::move(spec));
   } else {
     DRAKE_UNREACHABLE();
   }
