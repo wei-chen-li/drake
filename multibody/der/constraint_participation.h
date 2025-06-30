@@ -21,6 +21,16 @@ class ConstraintParticipation {
    @pre `num_edges == (has_closed_ends ? num_nodes : num_nodes-1)`. */
   ConstraintParticipation(bool has_closed_ends, int num_nodes, int num_edges);
 
+  /* Mark the given nodes as participating in constraint.
+   @pre Each entry in `nodes` is non-negative and less than `num_nodes` provided
+   at construction. */
+  void ParticipateNodes(const std::vector<int>& nodes);
+
+  /* Mark the given edges as participating in constraint.
+   @pre Each entry in `edges` is non-negative and less than `num_edges` provided
+   at construction. */
+  void ParticipateEdges(const std::vector<int>& edges);
+
   /* Mark the given edges and the nodes adjacent to the edges as participating
    in constraint.
    @pre Each entry in `edges` is non-negative and less than `num_edges` provided

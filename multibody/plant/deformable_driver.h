@@ -10,6 +10,7 @@
 #include "drake/common/eigen_types.h"
 #include "drake/multibody/contact_solvers/contact_solver_results.h"
 #include "drake/multibody/contact_solvers/sap/partial_permutation.h"
+#include "drake/multibody/contact_solvers/sap/sap_filament_constraint.h"
 #include "drake/multibody/contact_solvers/sap/sap_fixed_constraint.h"
 #include "drake/multibody/contact_solvers/schur_complement.h"
 #include "drake/multibody/der/constraint_participation.h"
@@ -162,6 +163,16 @@ class DeformableDriver : public ScalarConvertibleComponent<T> {
   void AppendDeformableRigidFixedConstraintKinematics(
       const systems::Context<T>& context,
       std::vector<contact_solvers::internal::FixedConstraintKinematics<T>>*
+          result) const;
+
+  /* Appends the constraint kinematics information for each filament rigid
+   fixed constraint.
+   @note If a deformable body is disabled, then it by definition does not have
+   any constraint kinematics and nothing is appended.
+   @pre result != nullptr. */
+  void AppendFilamentRigidFixedConstraintKinematics(
+      const systems::Context<T>& context,
+      std::vector<contact_solvers::internal::FilamentConstraintKinematics<T>>*
           result) const;
 
   /* Computes the contact information for all deformable bodies.

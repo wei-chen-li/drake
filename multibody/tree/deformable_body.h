@@ -170,13 +170,23 @@ class DeformableBody final : public MultibodyElement<T> {
       const geometry::Shape& shape_G, const math::RigidTransform<double>& X_BG);
 
   /** Returns true if this deformable body is under any fixed constraint. */
-  bool has_fixed_constraint() const { return !fixed_constraint_specs_.empty(); }
+  bool has_fixed_constraint() const {
+    return !fixed_constraint_specs_.empty() ||
+           !fixed_constraint_specs2_.empty();
+  }
 
   /** (Internal use only) Returns a reference to the fixed constraints
    registered with this deformable body. */
   const std::vector<internal::DeformableRigidFixedConstraintSpec>&
   fixed_constraint_specs() const {
     return fixed_constraint_specs_;
+  }
+
+  /** (Internal use only) Returns a reference to the fixed constraints
+   registered with this deformable body. */
+  const std::vector<internal::FilamentRigidFixedConstraintSpec>&
+  fixed_constraint_specs2() const {
+    return fixed_constraint_specs2_;
   }
 
   /** Sets the vertex positions of this deformable body in the provided
