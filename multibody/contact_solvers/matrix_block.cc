@@ -185,7 +185,7 @@ MatrixBlock<T> MatrixBlock<T>::operator+(const MatrixBlock<T>& other) const {
           }
         }
       },
-      [&](const MatrixX<T>& entry) {
+      [&](const MatrixX<T>&) {
         DRAKE_UNREACHABLE();
       },
   };

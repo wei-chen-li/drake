@@ -22,7 +22,7 @@ DEFINE_double(link_density, 1000,
 DEFINE_double(motor_torque, 1e-4,
               "Torque of the motor driving the input link [N⋅m].");
 DEFINE_double(shaft_diameter, 5e-3, "Diameter of the flexible shaft [m].");
-DEFINE_double(shaft_E, 1e9, "Young's modulus of the flexible shaft [Pa].");
+DEFINE_double(shaft_E, 1e8, "Young's modulus of the flexible shaft [Pa].");
 DEFINE_double(shaft_density, 1000,
               "Mass density of the flexible shaft [kg/m³].");
 DEFINE_double(shaft_N, 100,
@@ -126,7 +126,7 @@ int do_main() {
       std::move(geometry_instance), config, unused_resolution_hint);
 
   /* Attach the flexible shaft to the input link and output link. */
-  const Sphere bbox(shank * 1.1);
+  const Sphere bbox(shank * 1.0001);
   deformable_model.AddFixedConstraint(shaft_body_id, link1, X_WL1.inverse(),
                                       bbox, RigidTransformd());
   deformable_model.AddFixedConstraint(shaft_body_id, link2, X_WL2.inverse(),
