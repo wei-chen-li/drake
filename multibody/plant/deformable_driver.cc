@@ -12,6 +12,7 @@
 #include "drake/common/eigen_types.h"
 #include "drake/common/text_logging.h"
 #include "drake/geometry/geometry_ids.h"
+#include "drake/math/axis_angle.h"
 #include "drake/math/rigid_transform.h"
 #include "drake/multibody/contact_solvers/contact_configuration.h"
 #include "drake/multibody/fem/dirichlet_boundary_condition.h"
@@ -1194,34 +1195,38 @@ void DeformableDriver<T>::AppendFilamentRigidFixedConstraintKinematics(
 
     for (const FilamentRigidFixedConstraintSpec& spec :
          body.fixed_constraint_specs2()) {
-      const int num_nodes_in_constraint = ssize(spec.nodes);
+      const int num_constraints = ssize(spec.nodes) * 3 + ssize(spec.edges);
+      const int offset = ssize(spec.nodes) * 3;
       /* The Jacobian block for the deformable body A. */
-      Block3x1SparseMatrix<T> negative_Jv_v_WAp(
-          num_nodes_in_constraint, dof_permutation.permuted_domain_size());
-      std::vector<typename Block3x1SparseMatrix<T>::Triplet> jacobian_triplets;
-      jacobian_triplets.reserve(num_nodes_in_constraint * 3);
+      MatrixX<T> negative_Jv_v_WAp = MatrixX<T>::Zero(
+          num_constraints, dof_permutation.permuted_domain_size());
       /* Positions of fixed dofs of the deformable body in the deformable
        body's frame which is always assumed to be the world frame. */
-      VectorX<T> q_WPs(3 * num_nodes_in_constraint);
+      VectorX<T> q_WPs(num_constraints);
       for (int i = 0; i < ssize(spec.nodes); ++i) {
         q_WPs.template segment<3>(3 * i) =
             der_state.get_position().template segment<3>(4 * spec.nodes[i]);
-        /* The Jacobian for the deformable body is identity for a free vertex
+        /* The Jacobian for the deformable body is identity for a free node
          and zero otherwise. */
         if (!der_model.IsPositionFixed(der::DerNodeIndex(spec.nodes[i]))) {
           const int dof_index = 4 * spec.nodes[i];
           const int permuted_dof_index =
               dof_permutation.permuted_index(dof_index);
-          const Matrix3<T> block = -Matrix3<T>::Identity();
-          jacobian_triplets.emplace_back(i, permuted_dof_index + 0,
-                                         block.col(0));
-          jacobian_triplets.emplace_back(i, permuted_dof_index + 1,
-                                         block.col(1));
-          jacobian_triplets.emplace_back(i, permuted_dof_index + 2,
-                                         block.col(2));
+          negative_Jv_v_WAp.template block<3, 3>(3 * i, permuted_dof_index) =
+              -Matrix3<T>::Identity();
         }
       }
-      negative_Jv_v_WAp.SetFromTriplets(jacobian_triplets);
+      for (int i = 0; i < ssize(spec.edges); ++i) {
+        q_WPs[offset + i] = 0.0;
+        /* The Jacobian for the deformable body is identity for a free edge
+         and zero otherwise. */
+        if (!der_model.IsPositionFixed(der::DerEdgeIndex(spec.edges[i]))) {
+          const int dof_index = 4 * spec.edges[i] + 3;
+          const int permuted_dof_index =
+              dof_permutation.permuted_index(dof_index);
+          negative_Jv_v_WAp(offset + i, permuted_dof_index) = -1.0;
+        }
+      }
       MatrixBlock<T> jacobian_block_A(std::move(negative_Jv_v_WAp));
 
       const BodyIndex index_B = spec.body_B;
@@ -1231,24 +1236,54 @@ void DeformableDriver<T>::AppendFilamentRigidFixedConstraintKinematics(
       const math::RigidTransform<T>& X_WB =
           manager_->plant().EvalBodyPoseInWorld(context, rigid_body);
       /* The positions of the anchor dofs on the rigid body in world frame. */
-      VectorX<T> q_WQs(3 * num_nodes_in_constraint);
+      VectorX<T> q_WQs(num_constraints);
       for (int i = 0; i < ssize(spec.nodes); ++i) {
         q_WQs.template segment<3>(3 * i) = X_WB * spec.p_BQs[i].cast<T>();
       }
-      // The jacobian for the rigid body.
+      for (int i = 0; i < ssize(spec.edges); ++i) {
+        const Vector3<T> t_A_W = der_state.get_tangent().col(spec.edges[i]);
+        const Vector3<T> m1_A_W =
+            der_state.get_material_frame_m1().col(spec.edges[i]);
+        const Vector3<T> m1_B_B = spec.m1_Bs[i];
+        Vector3<T> m1_B_W = X_WB * m1_B_B;
+        m1_B_W = (m1_B_W - m1_B_W.dot(t_A_W) * t_A_W).normalized();
+        q_WQs[offset + i] =
+            math::SignedAngleAroundAxis<T>(m1_A_W, m1_B_W, t_A_W);
+      }
+      // The jacobian for the rigid body B.
       MatrixBlock<T> jacobian_block_B;
       if (tree_index.is_valid()) {
         /* Rigid body is not welded to world. */
         const Frame<T>& frame_W = manager_->plant().world_frame();
         const int nv = manager_->plant().num_velocities();
-        MatrixX<T> Jv_v_WBq(3 * num_nodes_in_constraint, nv);
+        MatrixX<T> Jv_v_WBq_block0(ssize(spec.nodes) * 3, nv);
         manager_->internal_tree().CalcJacobianTranslationalVelocity(
             context, JacobianWrtVariable::kV, rigid_body.body_frame(), frame_W,
             Eigen::Map<const Matrix3X<T>>(q_WQs.data(), 3, ssize(spec.nodes)),
-            frame_W, frame_W, &Jv_v_WBq);
-        jacobian_block_B = MatrixBlock<T>(Jv_v_WBq.middleCols(
+            frame_W, frame_W, &Jv_v_WBq_block0);
+
+        const int num_tree_velocities =
+            tree_topology.num_tree_velocities(tree_index);
+        MatrixX<T> Jv_v_WBq =
+            MatrixX<T>::Zero(num_constraints, num_tree_velocities);
+        Jv_v_WBq.topRows(ssize(spec.nodes) * 3) = Jv_v_WBq_block0.middleCols(
             tree_topology.tree_velocities_start_in_v(tree_index),
-            tree_topology.num_tree_velocities(tree_index)));
+            num_tree_velocities);
+
+        for (int i = 0; i < ssize(spec.edges); ++i) {
+          const Vector3<T> t_W = der_state.get_tangent().col(spec.edges[i]);
+          Matrix3X<T> Jv_v_WBq_block(3, nv);
+          manager_->internal_tree().CalcJacobianAngularVelocity(
+              context, JacobianWrtVariable::kV, rigid_body.body_frame(),
+              frame_W, frame_W, &Jv_v_WBq_block);
+          Jv_v_WBq.template middleRows<1>(offset + i) =
+              t_W.transpose() *
+              Jv_v_WBq_block.middleCols(
+                  tree_topology.tree_velocities_start_in_v(tree_index),
+                  num_tree_velocities);
+        }
+
+        jacobian_block_B = MatrixBlock<T>(Jv_v_WBq);
       }
 
       /* By convention, deformable bodies are assigned object indexes after all

@@ -112,8 +112,10 @@ class SapFilamentConstraint final : public SapHolonomicConstraint<T> {
    DoClone(). */
   SapFilamentConstraint(const SapFilamentConstraint&) = default;
 
-  void DoAccumulateGeneralizedImpulses(int, const Eigen::Ref<const VectorX<T>>&,
-                                       EigenPtr<VectorX<T>>) const final {
+  void DoAccumulateGeneralizedImpulses(
+      int i, const Eigen::Ref<const VectorX<T>>& gamma,
+      EigenPtr<VectorX<T>> tau) const final {
+    unused(i, gamma, tau);
     // TODO(wei-chen): Implement DoAccumulateGeneralizedImpulses() for
     // SapFilamentConstraint.
   }
@@ -121,6 +123,7 @@ class SapFilamentConstraint final : public SapHolonomicConstraint<T> {
   void DoAccumulateSpatialImpulses(int i,
                                    const Eigen::Ref<const VectorX<T>>& gamma,
                                    SpatialForce<T>* F) const final {
+    unused(i, gamma, F);
     // TODO(wei-chen): Implement DoAccumulateSpatialImpulses() for
     // SapFilamentConstraint.
   }
