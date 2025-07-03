@@ -9,15 +9,18 @@
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
+DEFINE_double(simulation_time, 6.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
 DEFINE_double(time_step, 1e-3,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 4e4, "Young's modulus of the deformable bodies [Pa].");
-DEFINE_double(G, 2e4, "Shear modulus of the deformable bodies [Pa].");
-DEFINE_double(rho, 50, "Mass density of the deformable bodies [kg/m³].");
-DEFINE_double(length, 0.6, "Length of the rope [m].");
-DEFINE_double(diameter, 0.015, "Diameter of the rope [m].");
+DEFINE_double(E, 4e4, "Young's modulus of the beam [Pa].");
+DEFINE_double(G, 2e4, "Shear modulus of the beam [Pa].");
+DEFINE_double(rho, 50, "Mass density of the beam [kg/m³].");
+DEFINE_double(length, 0.6, "Length of the beam [m].");
+DEFINE_double(diameter, 0.015, "Diameter of the beam [m].");
+DEFINE_string(
+    cross_section, "circle",
+    "Shape of the cross section. Options are: 'circle' and 'square'.");
 DEFINE_int32(num_edges, 50,
              "Number of edges the rope is spatially discretized.");
 DEFINE_bool(self_contact, true, "Whether self contact resolution is enabled.");
@@ -57,14 +60,28 @@ using math::RotationMatrixd;
 
 DeformableBodyId RegisterRope(DeformableModel<double>* deformable_model) {
   DRAKE_THROW_UNLESS(FLAGS_num_edges > 0);
+  const double edge_length = FLAGS_length / FLAGS_num_edges;
 
   const bool closed = false;
   Eigen::Matrix3Xd node_pos(3, 2);
   node_pos.col(0) = Vector3d(0, 0, 0);
-  node_pos.col(1) = Vector3d(0, 0, FLAGS_length);
+  node_pos.col(1) = Vector3d(1e-9, 0, FLAGS_length);
 
-  Filament filament(closed, node_pos,
-                    Filament::CircularCrossSection{.diameter = FLAGS_diameter});
+  DRAKE_THROW_UNLESS(FLAGS_cross_section == "circle" ||
+                     FLAGS_cross_section == "square");
+  Filament filament = [&]() {
+    if (FLAGS_cross_section == "circle") {
+      return Filament(
+          closed, node_pos,
+          Filament::CircularCrossSection{.diameter = FLAGS_diameter});
+    } else {
+      const double size = FLAGS_diameter * sqrt(M_PI / 2);
+      return Filament(
+          closed, node_pos,
+          Filament::RectangularCrossSection{.width = size, .height = size},
+          Vector3d(1, 0, 0));
+    }
+  }();
 
   /* Create the geometry instance from the shape shifted by z = +0.5. */
   const RigidTransformd X_WG(RotationMatrixd::Identity(),
@@ -82,9 +99,8 @@ DeformableBodyId RegisterRope(DeformableModel<double>* deformable_model) {
   const CoulombFriction<double> surface_friction(0.8, 0.8);
   AddContactMaterial({}, {}, surface_friction, &proximity_props);
   if (FLAGS_hydroelastic_modulus < 1e10) {
-    AddCompliantHydroelasticProperties(FLAGS_diameter * 0.4,
-                                       FLAGS_hydroelastic_modulus * 0.05,
-                                       &proximity_props);
+    AddCompliantHydroelasticProperties(
+        edge_length, FLAGS_hydroelastic_modulus * 0.05, &proximity_props);
   }
   proximity_props.AddProperty("collision", "self_contact", FLAGS_self_contact);
   geometry_instance->set_proximity_properties(proximity_props);
@@ -98,7 +114,6 @@ DeformableBodyId RegisterRope(DeformableModel<double>* deformable_model) {
 
   /* Add the geometry instance to the deformable model. The filament geometry is
    further discretized based on resolution_hint. */
-  const double edge_length = FLAGS_length / FLAGS_num_edges;
   DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
       std::move(geometry_instance), config,
       /* resolution_hint = */ edge_length);
