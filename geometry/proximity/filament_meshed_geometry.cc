@@ -20,19 +20,16 @@ using Eigen::Vector3d;
 
 namespace {
 
-/* Makes the cross-section vertices and the elements enough to represent the
- mesh of the filament segment.
- @returns A tuple (p_CVs, num_cross_sections, elements).
-          p_CVs               The vertices of a cross-section in the
-                              cross-section frame
-          num_cross_sections  The number of cross section that make
-                              up the mesh.
-          elements            The connectivity of the mesh. */
-std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
-MakeFilamentSegmentMesh(const Filament::CircularCrossSection& cross_section,
-                        double segment_length, double hydroelastic_margin,
-                        double resolution_hint) {
+/* Meshes the circular cross-section into vertices and triangles.
+ @returns A tuple (p_CVs, triangles).
+          p_CVs      The vertices of a cross-section in the cross-section frame.
+          triangles  The connectivity of the vertices into triangles. */
+std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
+    const Filament::CircularCrossSection& cross_section, double resolution_hint,
+    double hydroelastic_margin) {
   DRAKE_THROW_UNLESS(cross_section.diameter > 0);
+  DRAKE_THROW_UNLESS(resolution_hint > 0);
+  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
   const double d = cross_section.diameter + 2 * hydroelastic_margin;
 
   int num_thetas = M_PI * d / resolution_hint;
@@ -40,43 +37,131 @@ MakeFilamentSegmentMesh(const Filament::CircularCrossSection& cross_section,
 
   const int num_verts_per_cross_section = 1 + num_thetas;
   Eigen::Matrix3Xd p_CVs(3, num_verts_per_cross_section);
+  p_CVs.col(0).setZero();
   auto theta = Eigen::VectorXd::LinSpaced(num_thetas + 1, 0, 2 * M_PI)
                    .head(num_thetas)
                    .array();
-  p_CVs.col(0).setZero();
   p_CVs.rightCols(num_thetas).row(0) = 0.5 * d * cos(theta);
   p_CVs.rightCols(num_thetas).row(1) = 0.5 * d * sin(theta);
   p_CVs.rightCols(num_thetas).row(2).setZero();
 
+  Eigen::Matrix3Xi triangles(3, num_thetas);
+  for (int i = 0; i < num_thetas; ++i) {
+    const int ip1 = (i + 1) % num_thetas;
+    triangles.col(i) = Vector3<int>(0, 1 + i, 1 + ip1);
+  }
+
+  return {std::move(p_CVs), std::move(triangles)};
+}
+
+/* Meshes the rectangular cross-section into vertices and triangles.
+ @returns A tuple (p_CVs, triangles).
+          p_CVs      The vertices of a cross-section in the cross-section frame.
+          triangles  The connectivity of the vertices into triangles. */
+std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
+    const Filament::RectangularCrossSection& cross_section,
+    double resolution_hint, double hydroelastic_margin) {
+  DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
+  DRAKE_THROW_UNLESS(resolution_hint > 0);
+  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
+  const double w = cross_section.width + 2 * hydroelastic_margin;
+  const double h = cross_section.height + 2 * hydroelastic_margin;
+  if (w / h < 2.0 / 3.0) {
+    // A thin-tall rectangle.
+    Eigen::Matrix3Xd p_CVs(3, 8);
+    const double ma = h - w;
+    // clang-format off
+    p_CVs <<     0,    0,  w/2, w/2, w/2, -w/2, -w/2, -w/2,
+             -ma/2, ma/2, -h/2,   0, h/2,  h/2,    0, -h/2,
+                 0,    0,    0,   0,   0,    0,    0,    0;
+    // clang-format on
+    Eigen::Matrix3Xi triangles(3, 8);
+    // clang-format off
+    triangles << 0, 0, 1, 1, 1, 0, 0, 0,
+                 2, 3, 3, 4, 5, 1, 6, 7,
+                 3, 1, 4, 5, 6, 6, 7, 2;
+    // clang-format on
+    return {std::move(p_CVs), std::move(triangles)};
+  } else if (w / h <= 3.0 / 2.0) {
+    // A rectangle close to a square.
+    Eigen::Matrix3Xd p_CVs(3, 5);
+    // clang-format off
+    p_CVs << 0,  w/2, w/2, -w/2, -w/2,
+             0, -h/2, h/2,  h/2, -h/2,
+             0,    0,   0,    0,    0;
+    // clang-format on
+    Eigen::Matrix3Xi triangles(3, 4);
+    // clang-format off
+    triangles << 0, 0, 0, 0,
+                 1, 2, 3, 4,
+                 2, 3, 4, 1;
+    // clang-format on
+    return {std::move(p_CVs), std::move(triangles)};
+  } else {
+    // A fat-short rectangle.
+    Filament::RectangularCrossSection cs = cross_section;
+    std::swap(cs.width, cs.height);
+    auto [p_CVs, triangles] =
+        MakeCrossSectionMesh(cs, resolution_hint, hydroelastic_margin);
+    p_CVs.row(0).swap(p_CVs.row(1));
+    triangles.row(1).swap(triangles.row(2));
+    return {std::move(p_CVs), std::move(triangles)};
+  }
+}
+
+/* Makes the cross-section vertices and the elements representing the mesh of
+ the filament segment.
+ @returns A tuple (p_CVs, num_cross_sections, elements).
+          p_CVs               The vertices of a cross-section in the
+                              cross-section frame
+          num_cross_sections  The number of cross section that make
+                              up the mesh.
+          elements            The connectivity of the mesh. */
+std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
+MakeFilamentSegmentMesh(
+    const std::variant<Filament::CircularCrossSection,
+                       Filament::RectangularCrossSection>& cross_section,
+    double segment_length, double resolution_hint, double hydroelastic_margin) {
+  const auto [p_CVs, triangles] = std::visit(
+      [&](auto&& cs) {
+        return MakeCrossSectionMesh(cs, resolution_hint, hydroelastic_margin);
+      },
+      cross_section);
+  const int num_verts_per_cross_section = p_CVs.cols();
+
   int num_cross_sections = std::round(segment_length / resolution_hint) + 1;
-  num_cross_sections = std::min(std::max(num_cross_sections, 2), 1000);
+  num_cross_sections = std::max(num_cross_sections, 2);
 
   std::vector<VolumeElement> elements;
   for (int k = 1; k < num_cross_sections; ++k) {
     const int offset0 = num_verts_per_cross_section * (k - 1);
     const int offset1 = num_verts_per_cross_section * k;
-    for (int i = 0; i < num_thetas; ++i) {
-      const int ip1 = (i + 1) % num_thetas;
+    for (int j = 0; j < triangles.cols(); ++j) {
+      const Vector3<int> tri = triangles.col(j);
       Append(SplitTriangularPrismToTetrahedra(
-                 offset0, offset0 + 1 + i, offset0 + 1 + ip1, offset1,
-                 offset1 + 1 + i, offset1 + 1 + ip1),
+                 offset0 + tri[0], offset0 + tri[1], offset0 + tri[2],
+                 offset1 + tri[0], offset1 + tri[1], offset1 + tri[2]),
              &elements);
     }
   }
   return {std::move(p_CVs), num_cross_sections, std::move(elements)};
 }
 
-/* Makes the hydroelastic pressure for the mesh vertices. */
+/* Makes the hydroelastic pressures for the mesh vertices. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::CircularCrossSection& cross_section,
     double hydroelastic_margin, double hydroelastic_modulus,
     const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
   DRAKE_THROW_UNLESS(cross_section.diameter > 0);
+  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
+  DRAKE_THROW_UNLESS(hydroelastic_modulus > 0);
+  DRAKE_THROW_UNLESS(num_cross_sections > 0);
   std::vector<double> pressures;
   pressures.reserve(p_CVs.cols() * num_cross_sections);
   const double pressure_max = hydroelastic_modulus;
-  const double pressure_min =
-      -hydroelastic_modulus / cross_section.diameter * hydroelastic_margin;
+  const double pressure_min = -hydroelastic_modulus /
+                              (cross_section.diameter / 2) *
+                              hydroelastic_margin;
   for (int k = 0; k < num_cross_sections; ++k) {
     pressures.push_back(pressure_max);
     for (int i = 1; i < p_CVs.cols(); ++i) {
@@ -86,33 +171,31 @@ std::vector<double> MakeFilamentSegmentPressureField(
   return pressures;
 }
 
-/* Makes the cross-section vertices and the elements enough to represent the
- mesh of the filament segment. */
-std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
-MakeFilamentSegmentMesh(const Filament::RectangularCrossSection& cross_section,
-                        double segment_length, double hydroelastic_margin,
-                        double resolution_hint) {
-  DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
-  // TODO(wei-chen): Implement MakeFilamentSegmentMesh() for rectangular
-  // cross-sectioned filament.
-  unused(segment_length, hydroelastic_margin, resolution_hint);
-  throw std::logic_error(
-      "MakeFilamentSegmentMesh() not implemented for RectangularCrossSection "
-      "yet.");
-}
-
-/* Makes the hydroelastic pressure for the mesh vertices. */
+/* Makes the hydroelastic pressures for the mesh vertices. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::RectangularCrossSection& cross_section,
     double hydroelastic_margin, double hydroelastic_modulus,
     const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
   DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
-  // TODO(wei-chen): Implement MakeFilamentSegmentPressureField() for
-  // rectangular cross-sectioned filament.
-  unused(hydroelastic_margin, hydroelastic_modulus, p_CVs, num_cross_sections);
-  throw std::logic_error(
-      "MakeFilamentSegmentPressureField() not implemented for "
-      "RectangularCrossSection yet.");
+  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
+  DRAKE_THROW_UNLESS(hydroelastic_modulus > 0);
+  DRAKE_THROW_UNLESS(num_cross_sections > 0);
+  std::vector<double> pressures;
+  pressures.reserve(p_CVs.cols() * num_cross_sections);
+  const double pressure_max = hydroelastic_modulus;
+  const double pressure_min =
+      -hydroelastic_modulus /
+      (std::min(cross_section.width, cross_section.height) / 2) *
+      hydroelastic_margin;
+  for (int k = 0; k < num_cross_sections; ++k) {
+    for (int i = 0; i < p_CVs.cols(); ++i) {
+      if (i <= 1 && (p_CVs.col(i)[0] == 0 || p_CVs.col(i)[1] == 0))
+        pressures.push_back(pressure_max);
+      else
+        pressures.push_back(pressure_min);
+    }
+  }
+  return pressures;
 }
 
 Vector3d LinearInterpolate(const Eigen::Ref<const Vector3d>& vec_0,
@@ -158,11 +241,10 @@ FilamentSegmentMeshedGeometry::FilamentSegmentMeshedGeometry(
   DRAKE_THROW_UNLESS(resolution_hint > 0);
   DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
   DRAKE_THROW_UNLESS(!hydroelastic_modulus || hydroelastic_modulus > 0);
+  std::tie(p_CVs_, num_cross_sections_, elements_) = MakeFilamentSegmentMesh(
+      cross_section, segment_length, resolution_hint, hydroelastic_margin);
   std::visit(
       [&](auto&& cs) {
-        std::tie(p_CVs_, num_cross_sections_, elements_) =
-            MakeFilamentSegmentMesh(cs, segment_length, hydroelastic_margin,
-                                    resolution_hint);
         if (hydroelastic_modulus.has_value()) {
           pressures_ = MakeFilamentSegmentPressureField(
               cs, hydroelastic_margin, *hydroelastic_modulus, p_CVs_,

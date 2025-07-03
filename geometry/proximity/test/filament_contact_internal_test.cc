@@ -388,7 +388,7 @@ GTEST_TEST(FilamentContactInternalTest, FilamentRigidHydroelasticContact) {
   EXPECT_THAT(pair->contact_edge_indexes_A(), Each(0));
   EXPECT_TRUE(std::all_of(
       pair->p_WCs().begin(), pair->p_WCs().end(), [d](const Vector3d& p_WC) {
-        return (p_WC - Vector3d(-0.6, 0, d / 4)).norm() < 2 * d;
+        return (p_WC - Vector3d(-0.6, 0, d / 4)).norm() < 3 * d;
       }));
 
   /* Extend the filament to the right to touch sphere 2. */
@@ -409,7 +409,7 @@ GTEST_TEST(FilamentContactInternalTest, FilamentRigidHydroelasticContact) {
   EXPECT_THAT(pair->contact_edge_indexes_A(), Each(1));
   EXPECT_TRUE(std::all_of(
       pair->p_WCs().begin(), pair->p_WCs().end(), [d](const Vector3d& p_WC) {
-        return (p_WC - Vector3d(0.6, 0, d / 4)).norm() < 2 * d;
+        return (p_WC - Vector3d(0.6, 0, d / 4)).norm() < 3 * d;
       }));
 }
 
