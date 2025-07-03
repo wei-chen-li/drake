@@ -8,25 +8,6 @@ namespace internal {
 
 template <typename T>
 DerUndeformedState<T> DerUndeformedState<T>::ZeroCurvatureAndTwist(
-    bool has_closed_ends, int num_edges, T every_edge_length) {
-  DRAKE_THROW_UNLESS(num_edges > 0);
-  DRAKE_THROW_UNLESS(ExtractDoubleOrThrow(every_edge_length) > 0);
-  const int num_internal_nodes = has_closed_ends ? num_edges : num_edges - 1;
-
-  auto edge_length =
-      Eigen::RowVectorX<T>::Constant(num_edges, every_edge_length);
-  auto voronoi_length =
-      Eigen::RowVectorX<T>::Constant(num_internal_nodes, every_edge_length);
-  auto kappa1 = Eigen::RowVectorX<T>::Zero(num_internal_nodes);
-  auto kappa2 = Eigen::RowVectorX<T>::Zero(num_internal_nodes);
-  auto twist = Eigen::RowVectorX<T>::Zero(num_internal_nodes);
-
-  return DerUndeformedState<T>(has_closed_ends, edge_length, voronoi_length,
-                               kappa1, kappa2, twist);
-}
-
-template <typename T>
-DerUndeformedState<T> DerUndeformedState<T>::ZeroCurvatureAndTwist(
     bool has_closed_ends, std::vector<T> edge_length) {
   const int num_edges = edge_length.size();
   const int num_internal_nodes = has_closed_ends ? num_edges : num_edges - 1;

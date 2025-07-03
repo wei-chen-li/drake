@@ -17,33 +17,7 @@ class DerUndeformedStateTest : public ::testing::Test {};
 using NonsymbolicScalarTypes = ::testing::Types<double, AutoDiffXd>;
 TYPED_TEST_SUITE(DerUndeformedStateTest, NonsymbolicScalarTypes);
 
-TYPED_TEST(DerUndeformedStateTest, ZeroCurvatureAndTwist1) {
-  using T = TypeParam;
-
-  for (const bool has_closed_ends : {false, true}) {
-    const int num_edges = 3;
-    const double edge_length = 0.01;
-    auto rest = DerUndeformedState<T>::ZeroCurvatureAndTwist(
-        has_closed_ends, num_edges, edge_length);
-    EXPECT_EQ(rest.has_closed_ends(), has_closed_ends);
-
-    EXPECT_TRUE(
-        CompareMatrices(rest.get_edge_length(),
-                        Eigen::RowVectorX<T>::Ones(num_edges) * edge_length));
-
-    const int num_internal_nodes = has_closed_ends ? num_edges : num_edges - 1;
-    EXPECT_TRUE(CompareMatrices(
-        rest.get_voronoi_length(),
-        Eigen::RowVectorX<T>::Ones(num_internal_nodes) * edge_length));
-
-    auto zero = Eigen::RowVectorX<T>::Zero(num_internal_nodes);
-    EXPECT_TRUE(CompareMatrices(rest.get_curvature_kappa1(), zero));
-    EXPECT_TRUE(CompareMatrices(rest.get_curvature_kappa2(), zero));
-    EXPECT_TRUE(CompareMatrices(rest.get_twist(), zero));
-  }
-}
-
-TYPED_TEST(DerUndeformedStateTest, ZeroCurvatureAndTwist2) {
+TYPED_TEST(DerUndeformedStateTest, ZeroCurvatureAndTwist) {
   using T = TypeParam;
 
   for (const bool has_closed_ends : {false, true}) {

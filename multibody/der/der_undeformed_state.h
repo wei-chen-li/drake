@@ -23,12 +23,6 @@ class DerUndeformedState {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(DerUndeformedState);
 
-  /* Creates an undeformed state where all edges have the same specified
-   length, with zero curvature and zero twist. */
-  static DerUndeformedState<T> ZeroCurvatureAndTwist(bool has_closed_ends,
-                                                     int num_edges,
-                                                     T every_edge_length);
-
   /* Creates an undeformed state with the specified edge lengths, zero
    curvature, and zero twist. */
   static DerUndeformedState<T> ZeroCurvatureAndTwist(
