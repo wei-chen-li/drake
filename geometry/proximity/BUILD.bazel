@@ -30,8 +30,8 @@ drake_cc_package_library(
         ":detect_zero_simplex",
         ":field_intersection",
         ":filament_contact_internal",
+        ":filament_meshed_geometry",
         ":filament_self_contact_filter",
-        ":filament_soft_geometry",
         ":hydroelastic_internal",
         ":inflate_mesh",
         ":make_box_field",
@@ -374,8 +374,8 @@ drake_cc_library(
         "//geometry/query_results:filament_contact",
     ],
     implementation_deps = [
+        ":filament_meshed_geometry",
         ":filament_self_contact_filter",
-        ":filament_soft_geometry",
         ":hydroelastic_calculator",
         ":proximity_utilities",
         "//common:overloaded",
@@ -389,18 +389,9 @@ drake_cc_library(
 )
 
 drake_cc_library(
-    name = "filament_self_contact_filter",
-    srcs = ["filament_self_contact_filter.cc"],
-    hdrs = ["filament_self_contact_filter.h"],
-    deps = [
-        "//common:essential",
-    ],
-)
-
-drake_cc_library(
-    name = "filament_soft_geometry",
-    srcs = ["filament_soft_geometry.cc"],
-    hdrs = ["filament_soft_geometry.h"],
+    name = "filament_meshed_geometry",
+    srcs = ["filament_meshed_geometry.cc"],
+    hdrs = ["filament_meshed_geometry.h"],
     deps = [
         ":hydroelastic_internal",
         ":meshing_utilities",
@@ -411,6 +402,15 @@ drake_cc_library(
         "//math:frame_transport",
         "//math:geometric_transform",
         "//math:vector3_util",
+    ],
+)
+
+drake_cc_library(
+    name = "filament_self_contact_filter",
+    srcs = ["filament_self_contact_filter.cc"],
+    hdrs = ["filament_self_contact_filter.h"],
+    deps = [
+        "//common:essential",
     ],
 )
 
@@ -1388,9 +1388,9 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
-    name = "filament_soft_geometry_test",
+    name = "filament_meshed_geometry_test",
     deps = [
-        ":filament_soft_geometry",
+        ":filament_meshed_geometry",
     ],
 )
 
