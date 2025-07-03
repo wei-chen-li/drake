@@ -183,4 +183,23 @@ drake_cc_binary(
     ],
 )
 
+drake_cc_binary(
+    name = "twisting_shaft",
+    srcs = ["twisting_shaft.cc"],
+    add_test_rule = 1,
+    test_rule_args = [
+        "-simulation_time=0.1",
+        "-realtime_rate=0.0",
+    ],
+    deps = [
+        "//geometry:drake_visualizer",
+        "//geometry:scene_graph",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "//systems/primitives",
+        "@gflags",
+    ],
+)
+
 add_lint_tests()
