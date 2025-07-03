@@ -995,6 +995,11 @@ void DeformableDriver<T>::AppendDiscreteContactPairs(
           return std::make_tuple(fn, k, d);
         }
       }();
+      /* For stiffness < 0, that is phi0 > 0 and fn > 0. The phi0 reported by
+       hydroelastic contact badly computed, ignore it. */
+      if (stiffness < 0) {
+        continue;
+      }
 
       const double default_dissipation_time_constant = 0.1;
       const T tau = GetCombinedDissipationTimeConstant(
