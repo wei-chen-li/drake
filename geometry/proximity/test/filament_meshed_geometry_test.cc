@@ -1,4 +1,4 @@
-#include "drake/geometry/proximity/filament_soft_geometry.h"
+#include "drake/geometry/proximity/filament_meshed_geometry.h"
 
 #include <optional>
 
@@ -12,7 +12,7 @@ namespace {
 
 using Eigen::VectorXd;
 
-class FilamentSoftGeometryTest : public ::testing::TestWithParam<bool> {
+class FilamentMeshedGeometryTest : public ::testing::TestWithParam<bool> {
  protected:
   void SetUp() override {
     bool closed = GetParam();
@@ -39,20 +39,20 @@ class FilamentSoftGeometryTest : public ::testing::TestWithParam<bool> {
     const double resolution_hint = 0.003;
     const double hydroelastic_margin = 0.005;
 
-    filament_soft_geometry_ = FilamentSoftGeometry(
+    filament_meshed_geometry_ = FilamentMeshedGeometry(
         filament, hydroelastic_pressure, resolution_hint, hydroelastic_margin);
   }
 
   int num_edges_{};
-  std::optional<FilamentSoftGeometry> filament_soft_geometry_;
+  std::optional<FilamentMeshedGeometry> filament_meshed_geometry_;
 };
 
-INSTANTIATE_TEST_SUITE_P(Closed, FilamentSoftGeometryTest,
+INSTANTIATE_TEST_SUITE_P(Closed, FilamentMeshedGeometryTest,
                          ::testing::Values(false, true));
 
-TEST_P(FilamentSoftGeometryTest, MakeSoftGeometryForEdge) {
+TEST_P(FilamentMeshedGeometryTest, MakeSoftGeometryForEdge) {
   for (int i = 0; i < num_edges_; ++i) {
-    EXPECT_NO_THROW(filament_soft_geometry_->MakeSoftGeometryForEdge(i));
+    EXPECT_NO_THROW(filament_meshed_geometry_->MakeSoftGeometryForEdge(i));
   }
 }
 

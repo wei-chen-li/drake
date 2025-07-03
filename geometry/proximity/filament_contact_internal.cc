@@ -13,8 +13,8 @@
 
 #include "drake/common/overloaded.h"
 #include "drake/common/type_safe_index.h"
+#include "drake/geometry/proximity/filament_meshed_geometry.h"
 #include "drake/geometry/proximity/filament_self_contact_filter.h"
-#include "drake/geometry/proximity/filament_soft_geometry.h"
 #include "drake/geometry/proximity/hydroelastic_calculator.h"
 #include "drake/geometry/proximity/hydroelastic_internal.h"
 #include "drake/geometry/proximity/proximity_utilities.h"
@@ -172,7 +172,7 @@ struct FilamentData {
   std::vector<std::unique_ptr<fcl::CollisionObjectd>> objects;
   std::unordered_set<const fcl::CollisionObjectd*> object_pointers;
   std::optional<FilamentSelfContactFilter> self_contact_filter;
-  std::optional<FilamentSoftGeometry> soft_geometry;
+  std::optional<FilamentMeshedGeometry> soft_geometry;
 };
 
 /* Each added filament to Geometries is indexed by a FilamentIndex. */
@@ -220,12 +220,12 @@ struct FilamentFilamentCollisionCallbackData {
   FilamentFilamentCollisionCallbackData(
       const std::vector<GeometryId>* filament_index_to_id_in,
       const FilamentSelfContactFilter* self_contact_filter_in,
-      const FilamentSoftGeometry* filament_soft_geometry_A_in,
-      const FilamentSoftGeometry* filament_soft_geometry_B_in)
+      const FilamentMeshedGeometry* filament_meshed_geometry_A_in,
+      const FilamentMeshedGeometry* filament_meshed_geometry_B_in)
       : filament_index_to_id(filament_index_to_id_in),
         self_contact_filter(self_contact_filter_in),
-        filament_soft_geometry_A(filament_soft_geometry_A_in),
-        filament_soft_geometry_B(filament_soft_geometry_B_in) {
+        filament_meshed_geometry_A(filament_meshed_geometry_A_in),
+        filament_meshed_geometry_B(filament_meshed_geometry_B_in) {
     DRAKE_THROW_UNLESS(filament_index_to_id != nullptr);
     request.num_max_contacts = 1;
     request.enable_contact = true;
@@ -242,8 +242,8 @@ struct FilamentFilamentCollisionCallbackData {
   const FilamentSelfContactFilter* const self_contact_filter;
   /* Filament soft geometry for generating meshes and hydroelastic pressures for
    filament segments. */
-  const FilamentSoftGeometry* const filament_soft_geometry_A;
-  const FilamentSoftGeometry* const filament_soft_geometry_B;
+  const FilamentMeshedGeometry* const filament_meshed_geometry_A;
+  const FilamentMeshedGeometry* const filament_meshed_geometry_B;
 
   /* Write the contact result to this field. */
   struct ContactResult {
@@ -287,8 +287,8 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
     }
   }
 
-  if (callback_data->filament_soft_geometry_A == nullptr ||
-      callback_data->filament_soft_geometry_B == nullptr) {
+  if (callback_data->filament_meshed_geometry_A == nullptr ||
+      callback_data->filament_meshed_geometry_B == nullptr) {
     fcl::CollisionResultd result;
     fcl::collide(object_A, object_B, callback_data->request, result);
     if (!result.isCollision()) return false;
@@ -303,10 +303,10 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
   }
 
   hydroelastic::SoftGeometry soft_geometry_A =
-      callback_data->filament_soft_geometry_A->MakeSoftGeometryForEdge(
+      callback_data->filament_meshed_geometry_A->MakeSoftGeometryForEdge(
           data_A.edge_index());
   hydroelastic::SoftGeometry soft_geometry_B =
-      callback_data->filament_soft_geometry_B->MakeSoftGeometryForEdge(
+      callback_data->filament_meshed_geometry_B->MakeSoftGeometryForEdge(
           data_B.edge_index());
   std::unique_ptr<ContactSurface<T>> contact_surface =
       hydroelastic::CalcCompliantCompliant(
@@ -328,12 +328,12 @@ struct FilamentRigidCollisionCallbackData {
       const std::vector<GeometryId>* filament_index_to_id_in,
       const std::unordered_set<const fcl::CollisionObjectd*>*
           filament_objects_in,
-      const FilamentSoftGeometry* const filament_soft_geometry_in,
+      const FilamentMeshedGeometry* const filament_meshed_geometry_in,
       const hydroelastic::Geometries* hydroelastic_geometries_in)
       : collision_filter(collision_filter_in),
         filament_index_to_id(filament_index_to_id_in),
         filament_objects(filament_objects_in),
-        filament_soft_geometry(filament_soft_geometry_in),
+        filament_meshed_geometry(filament_meshed_geometry_in),
         hydroelastic_geometries(hydroelastic_geometries_in) {
     DRAKE_THROW_UNLESS(collision_filter != nullptr);
     DRAKE_THROW_UNLESS(filament_index_to_id != nullptr);
@@ -357,7 +357,7 @@ struct FilamentRigidCollisionCallbackData {
       filament_objects;
   /* Filament soft geometry for generating meshes and hydroelastic pressures for
    filament segments. */
-  const FilamentSoftGeometry* const filament_soft_geometry;
+  const FilamentMeshedGeometry* const filament_meshed_geometry;
   /* Hydroelastic representations of regid geometries. */
   const hydroelastic::Geometries* const hydroelastic_geometries;
 
@@ -405,7 +405,7 @@ bool FilamentRigidCollisionCallback(fcl::CollisionObjectd* object_A,
 
   const HydroelasticType hydroelastic_type_B =
       hydroelastic_geometries.hydroelastic_type(id_B);
-  if (callback_data->filament_soft_geometry == nullptr ||
+  if (callback_data->filament_meshed_geometry == nullptr ||
       hydroelastic_type_B == HydroelasticType::kUndefined) {
     fcl::CollisionResultd result;
     fcl::collide(object_A, object_B, callback_data->request, result);
@@ -420,7 +420,7 @@ bool FilamentRigidCollisionCallback(fcl::CollisionObjectd* object_A,
   }
 
   hydroelastic::SoftGeometry soft_geometry_A =
-      callback_data->filament_soft_geometry->MakeSoftGeometryForEdge(
+      callback_data->filament_meshed_geometry->MakeSoftGeometryForEdge(
           data_A.edge_index());
   std::unique_ptr<ContactSurface<T>> contact_surface = [&]() {
     math::RigidTransformd X_WB(object_B->getTransform());
@@ -540,9 +540,10 @@ class Geometries::Impl {
     }
 
     if (hydroelastic_params) {
-      filament_data.soft_geometry = FilamentSoftGeometry(
-          filament, hydroelastic_params->hydroelastic_modulus,
-          hydroelastic_params->resolution_hint, hydroelastic_params->margin);
+      filament_data.soft_geometry =
+          FilamentMeshedGeometry(filament, hydroelastic_params->resolution_hint,
+                                 hydroelastic_params->margin,
+                                 hydroelastic_params->hydroelastic_modulus);
     }
   }
 
