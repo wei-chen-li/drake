@@ -148,6 +148,10 @@ class MeshcatVisualizer final : public systems::LeafSystem<T> {
   void SetTransforms(const systems::Context<T>& context,
                      const QueryObject<T>& query_object) const;
 
+  /* Makes calls to Meshcat::SetObject to update the configuration of deformable
+   bodies. */
+  void SetDeformables(const QueryObject<T>& query_object) const;
+
   /* Makes calls to Meshcat::SetProperty to update geometry alphas. During
    initialization, it is necessary to explicitly configure each geometry
    individually due to race conditions between declaring the geometry and
