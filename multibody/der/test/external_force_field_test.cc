@@ -40,13 +40,14 @@ class ExternalForceFieldTest : public ::testing::TestWithParam<bool> {
                         Vector3d(l, l, l * 1.5), Vector3d(0, l, l * 3.0)};
       edge_angles = {0, 0.1, 0.2};
       undeformed_ = DerUndeformedState<double>::ZeroCurvatureAndTwist(
-          has_closed_ends, {l * 1.2, l * 0.8, l * 1.0});
+          has_closed_ends, Eigen::RowVector3d{l * 1.2, l * 0.8, l * 1.0});
     } else {
       node_positions = {Vector3d(0, 0, 0), Vector3d(l, 0, l),
                         Vector3d(l, l, l * 1.5), Vector3d(0, l, l)};
       edge_angles = {0, 0.1, 0.2, 0.1};
       undeformed_ = DerUndeformedState<double>::ZeroCurvatureAndTwist(
-          has_closed_ends, {l * 1.2, l * 0.8, l * 1.0, l * 0.6});
+          has_closed_ends,
+          Eigen::RowVector4d{l * 1.2, l * 0.8, l * 1.0, l * 0.6});
     }
     der_state_system_ = std::make_unique<DerStateSystem<double>>(
         has_closed_ends, node_positions, edge_angles, std::nullopt);

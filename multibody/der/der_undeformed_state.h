@@ -24,9 +24,11 @@ class DerUndeformedState {
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(DerUndeformedState);
 
   /* Creates an undeformed state with the specified edge lengths, zero
-   curvature, and zero twist. */
+   curvature, and zero twist.
+   @pre Each entry in `edge_length` is greater than 0. */
   static DerUndeformedState<T> ZeroCurvatureAndTwist(
-      bool has_closed_ends, std::vector<T> edge_length);
+      bool has_closed_ends,
+      const Eigen::Ref<const Eigen::RowVectorX<T>>& edge_length);
 
   /* Creates an undeformed state from the `state`'s current edge length,
    curvature, and twist. */
@@ -64,6 +66,23 @@ class DerUndeformedState {
   const Eigen::RowVectorX<T>& get_twist() const { return twist_; }
   // @}
 
+  /* Sets the undeformed edge length.
+   @pre `edge_length.size() == num_edges()`.
+   @pre Each entry in `edge_length` is greater than 0. */
+  void set_edge_length(
+      const Eigen::Ref<const Eigen::RowVectorX<T>>& edge_length);
+
+  /* Sets the undeformed curvature components.
+   @pre `kappa1.size() == num_internal_nodes()`.
+   @pre `kappa2.size() == num_internal_nodes()`. */
+  void set_curvature_kappa(
+      const Eigen::Ref<const Eigen::RowVectorX<T>>& kappa1,
+      const Eigen::Ref<const Eigen::RowVectorX<T>>& kappa2);
+
+  /* Sets the undeformed twist.
+   @pre `twist.size() == num_internal_nodes()`. */
+  void set_twist(const Eigen::Ref<const Eigen::RowVectorX<T>>& twist);
+
   template <typename U>
   DerUndeformedState<U> ToScalarType() const;
 
@@ -72,7 +91,6 @@ class DerUndeformedState {
   friend class DerUndeformedState;
 
   DerUndeformedState(bool has_closed_ends, Eigen::RowVectorX<T> edge_length,
-                     Eigen::RowVectorX<T> voronoi_length,
                      Eigen::RowVectorX<T> kappa1, Eigen::RowVectorX<T> kappa2,
                      Eigen::RowVectorX<T> twist);
 

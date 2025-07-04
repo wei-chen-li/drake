@@ -48,13 +48,13 @@ class ElasticEnergyTest : public ::testing::TestWithParam<bool> {
                         Vector3d(l, l, l * 1.5), Vector3d(0, l, l * 3.0)};
       edge_angles = {0, 0.1, 0.2};
       undeformed_ = DerUndeformedState<T>::ZeroCurvatureAndTwist(
-          has_closed_ends, std::vector<T>(3, l));
+          has_closed_ends, Eigen::RowVectorX<T>::Constant(3, l));
     } else {
       node_positions = {Vector3d(0, 0, 0), Vector3d(l, 0, l),
                         Vector3d(l, l, l * 1.5), Vector3d(0, l, l)};
       edge_angles = {0, 0.1, 0.2, 0.1};
       undeformed_ = DerUndeformedState<T>::ZeroCurvatureAndTwist(
-          has_closed_ends, std::vector<T>(4, l));
+          has_closed_ends, Eigen::RowVectorX<T>::Constant(4, l));
     }
     Eigen::Vector3<T> d1_0(0, 1, 0);
     der_state_system_ = std::make_unique<DerStateSystem<T>>(
