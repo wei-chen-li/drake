@@ -86,6 +86,12 @@ class DeformableBody final : public MultibodyElement<T> {
   /** Returns the DerModel for this deformable body. May be nullptr. */
   const der::DerModel<T>* der_model() const { return der_model_.get(); }
 
+  /** Returns the mutable DerModel for this deformable body. */
+  der::DerModel<T>& mutable_der_model() {
+    DRAKE_THROW_UNLESS(der_model_ != nullptr);
+    return *der_model_;
+  }
+
   /** Returns all the external forces acting on this deformable body. */
   const std::vector<const ForceDensityFieldBase<T>*>& external_forces() const {
     return external_forces_;

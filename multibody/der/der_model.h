@@ -305,6 +305,10 @@ class DerModel {
     return der_structural_property_;
   }
 
+  internal::DerUndeformedState<T>& mutable_undeformed_state() {
+    return der_undeformed_state_;
+  }
+
   /** Checks whether the given `state` is created from `this` DerModel. */
   void ValidateDerState(const internal::DerState<T>& state) const;
 
@@ -328,7 +332,7 @@ class DerModel {
 
   const std::unique_ptr<const internal::DerStateSystem<T>> der_state_system_;
   const internal::DerStructuralProperty<T> der_structural_property_;
-  const internal::DerUndeformedState<T> der_undeformed_state_;
+  internal::DerUndeformedState<T> der_undeformed_state_;
   const internal::DampingModel<T> damping_model_;
   internal::DirichletBoundaryCondition<T> boundary_condition_;
   double contact_energy_scaling_{0.0};

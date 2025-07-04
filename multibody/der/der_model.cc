@@ -71,14 +71,14 @@ void DerModel<T>::Builder::SetZeroUndeformedCurvatureAndTwist() {
   is_configuration_finalized_ = true;
   const int num_nodes = node_positions_.size();
   const int num_edges = has_closed_ends_ ? num_nodes : num_nodes - 1;
-  std::vector<T> edge_length(num_edges);
+  Eigen::RowVectorX<T> edge_length(num_edges);
   for (int i = 0; i < num_edges; ++i) {
     const int ip1 = (i + 1) % num_nodes;
     edge_length[i] = (node_positions_[ip1] - node_positions_[i]).norm();
   }
   der_undeformed_state_ =
-      internal::DerUndeformedState<T>::ZeroCurvatureAndTwist(
-          has_closed_ends_, std::move(edge_length));
+      internal::DerUndeformedState<T>::ZeroCurvatureAndTwist(has_closed_ends_,
+                                                             edge_length);
 }
 
 template <typename T>
