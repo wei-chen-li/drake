@@ -141,6 +141,7 @@ systems::EventStatus MeshcatVisualizer<T>::UpdateMeshcat(
     version_ = current_version;
   }
   SetTransforms(context, query_object);
+  SetDeformables(query_object);
   if (params_.enable_alpha_slider) {
     double new_alpha_value = meshcat_->GetSliderValue(alpha_slider_name_);
     if (new_alpha_value != alpha_value_) {
@@ -273,6 +274,49 @@ void MeshcatVisualizer<T>::SetTransforms(
         internal::convert_to_double(query_object.GetPoseInWorld(frame_id));
     meshcat_->SetTransform(path, X_WF,
                            ExtractDoubleOrThrow(context.get_time()));
+  }
+}
+
+template <typename T>
+void MeshcatVisualizer<T>::SetDeformables(
+    const QueryObject<T>& query_object) const {
+  const SceneGraphInspector<T>& inspector = query_object.inspector();
+  for (const GeometryId geom_id : inspector.GetAllDeformableGeometryIds()) {
+    const GeometryProperties& properties =
+        *inspector.GetProperties(geom_id, params_.role);
+    if (properties.HasProperty("meshcat", "accepting")) {
+      if (properties.GetProperty<std::string>("meshcat", "accepting") !=
+          params_.prefix) {
+        continue;
+      }
+    } else if (!params_.include_unspecified_accepting) {
+      continue;
+    }
+
+    // We'll turn scoped names into meshcat paths.
+    const std::string geometry_name =
+        internal::TransformGeometryName(geom_id, inspector);
+    const std::string path =
+        fmt::format("{}/{}", params_.prefix, geometry_name);
+    const Rgba rgba = properties.GetPropertyOrDefault("phong", "diffuse",
+                                                      params_.default_color);
+
+    const Filament* reference_filament =
+        inspector.GetReferenceFilament(geom_id);
+    if (reference_filament == nullptr) continue;
+    const bool closed = reference_filament->closed();
+    const int num_nodes = reference_filament->node_pos().cols();
+    const int num_edges = reference_filament->edge_m1().cols();
+    const VectorX<double> q_WF =
+        ExtractDoubleOrThrow(query_object.GetConfigurationsInWorld(geom_id));
+    DRAKE_DEMAND(q_WF.size() == 3 * num_nodes + 3 * num_edges);
+    const Eigen::Matrix3Xd node_pos =
+        Eigen::Map<const Eigen::Matrix3Xd>(q_WF.data(), 3, num_nodes);
+    const Eigen::Matrix3Xd edge_m1 = Eigen::Map<const Eigen::Matrix3Xd>(
+        q_WF.data() + 3 * num_nodes, 3, num_edges);
+    const Filament filament(closed, node_pos, edge_m1,
+                            reference_filament->cross_section());
+    meshcat_->SetObject(path, filament, rgba);
   }
 }
 
