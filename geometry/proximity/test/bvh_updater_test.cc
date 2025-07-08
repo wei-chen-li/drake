@@ -293,6 +293,56 @@ TYPED_TEST(BvhUpdaterTest, UpdateObb) {
                               expected_right_bv.half_width(), kTol));
 }
 
+TYPED_TEST(BvhUpdaterTest, UpdateObbWithCommonOrientation) {
+  using MeshType = TypeParam;
+
+  const double dist = 3;
+  MeshType mesh = this->MakeMesh(dist);
+  Bvh<Obb, MeshType> bvh(mesh);
+  BvhUpdater<MeshType> updater(&mesh, &bvh);
+
+  /* First, confirm the topology of the BVH (a root with two leaves). */
+  const auto& root = bvh.root_node();
+  ASSERT_FALSE(root.is_leaf());
+  ASSERT_TRUE(root.left().is_leaf());
+  ASSERT_TRUE(root.right().is_leaf());
+
+  const auto& left = root.left();
+  const auto& right = root.right();
+
+  /* Second, update the oriented bounding boxes to use a common orientation. */
+  const math::RotationMatrixd R_HB =
+      math::RotationMatrixd::MakeZRotation(M_PI / 2);
+  updater.Update(R_HB);
+
+  /* Third, compare the updated bounding volumes with the expected boxes. */
+  const Obb expected_root_bv(
+      math::RigidTransformd(R_HB, Vector3d{0, -0.5, 0.5}),
+      Vector3d{0.5, dist + 1, 0.5});
+  const Obb expected_left_bv(
+      math::RigidTransformd(R_HB, Vector3d{-dist - 0.5, -0.5, 0.5}),
+      Vector3d{0.5, 0.5, 0.5});
+  const Obb expected_right_bv(
+      math::RigidTransformd(R_HB, Vector3d{dist + 0.5, -0.5, 0.5}),
+      Vector3d{0.5, 0.5, 0.5});
+
+  constexpr double kTol = 1e-13;
+  ASSERT_TRUE(CompareMatrices(root.bv().pose().GetAsMatrix4(),
+                              expected_root_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(root.bv().half_width(),
+                              expected_root_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(left.bv().pose().GetAsMatrix4(),
+                              expected_left_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(left.bv().half_width(),
+                              expected_left_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(right.bv().pose().GetAsMatrix4(),
+                              expected_right_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(right.bv().half_width(),
+                              expected_right_bv.half_width(), kTol));
+}
+
 }  // namespace
 }  // namespace internal
 }  // namespace geometry

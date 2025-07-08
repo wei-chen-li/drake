@@ -5,9 +5,11 @@
 #include <variant>
 #include <vector>
 
+#include "drake/common/overloaded.h"
 #include "drake/geometry/proximity/aabb.h"
 #include "drake/geometry/proximity/bvh.h"
 #include "drake/geometry/proximity/obb.h"
+#include "drake/math/rigid_transform.h"
 
 namespace drake {
 namespace geometry {
@@ -75,15 +77,38 @@ class BvhUpdater {
 
     /* This implementation doesn't change the bvh topology; it simply passes
      through each box in a bottom-up manner refitting the box to the data. */
-    std::visit(
-        [&](auto bvh) {
-          UpdateRecursive(&bvh->mutable_root_node(), vertices);
-        },
-        bvh_);
+    std::visit(overloaded{[&](Bvh<Aabb, MeshType>* bvh) {
+                            UpdateRecursive(&bvh->mutable_root_node(),
+                                            vertices);
+                          },
+                          [&](Bvh<Obb, MeshType>* bvh) {
+                            UpdateRecursive(&bvh->mutable_root_node());
+                          }},
+               bvh_);
+  }
+
+  /* Updates the referenced BVH with OBB to maintain a good fit on the
+   referenced mesh. The OBB in the updated BVH will have the same orientation as
+   `R_HB`.
+   @param R_HB The orientation of the bounding box in the hierarchy frame H.
+   @pre `this` is constructed with a `Bvh<Obb, MeshType>*`.
+   */
+  void Update(const math::RotationMatrixd& R_HB) {
+    DRAKE_THROW_UNLESS((std::holds_alternative<Bvh<Obb, MeshType>*>(bvh_)));
+
+    /* Get the *double-valued* mesh vertices. */
+    const auto& vertices = GetMeshVertices(mesh_.vertices());
+    if (vertices.size() == 0) return;
+
+    /* This implementation doesn't change the bvh topology; it simply passes
+     through each box in a bottom-up manner refitting the box to the data. */
+    Bvh<Obb, MeshType>& bvh = *std::get<Bvh<Obb, MeshType>*>(bvh_);
+    UpdateRecursive(&bvh.mutable_root_node(), R_HB, vertices);
   }
 
  private:
-  // If the mesh type is already double-valued, simply return the mesh vertices.
+  // If the mesh type is already double-valued, simply return the mesh
+  // vertices.
   static const std::vector<Vector3<double>>& GetMeshVertices(
       const std::vector<Vector3<double>>& vertices) {
     return vertices;
@@ -102,7 +127,7 @@ class BvhUpdater {
 
   // Helper function to perform a bottom-up refit.
   void UpdateRecursive(typename Bvh<Aabb, MeshType>::NodeType* node,
-                       const std::vector<Vector3<double>>& vertices) {
+                       const std::vector<Vector3<double>>& vertices) const {
     /* Intentionally uninitialized. */
     Eigen::Vector3d lower, upper;
     constexpr int kElementVertexCount = MeshType::kVertexPerElement;
@@ -117,8 +142,7 @@ class BvhUpdater {
       for (int e = 0; e < num_elements; ++e) {
         const auto& element = mesh_.element(node->element_index(e));
         for (int i = 0; i < kElementVertexCount; ++i) {
-          const Eigen::Vector3d& p_MV =
-              convert_to_double(vertices[element.vertex(i)]);
+          const Eigen::Vector3d& p_MV = vertices[element.vertex(i)];
           lower = lower.cwiseMin(p_MV);
           upper = upper.cwiseMax(p_MV);
         }
@@ -133,8 +157,7 @@ class BvhUpdater {
     node->bv().set_bounds(lower, upper);
   }
 
-  void UpdateRecursive(typename Bvh<Obb, MeshType>::NodeType* node,
-                       const std::vector<Vector3<double>>& _) {
+  void UpdateRecursive(typename Bvh<Obb, MeshType>::NodeType* node) const {
     constexpr int kElementVertexCount = MeshType::kVertexPerElement;
     if (node->is_leaf()) {
       std::set<int> vertices;
@@ -147,14 +170,58 @@ class BvhUpdater {
       }
       node->bv() = ObbMaker(mesh_, vertices).Compute();
     } else {
-      UpdateRecursive(&node->left(), _);
-      UpdateRecursive(&node->right(), _);
+      UpdateRecursive(&node->left());
+      UpdateRecursive(&node->right());
 
       const ObbCorners obb_corners({&node->left().bv(), &node->right().bv()});
       static const std::set<int> vertices = {0, 1, 2,  3,  4,  5,  6,  7,
                                              8, 9, 10, 11, 12, 13, 14, 15};
       node->bv() = ObbMaker(obb_corners, vertices).Compute();
     }
+  }
+
+  void UpdateRecursive(typename Bvh<Obb, MeshType>::NodeType* node,
+                       const math::RotationMatrixd& R_HB,
+                       const std::vector<Vector3<double>>& vertices) const {
+    /* Lower and upper bound in frame B; intentionally uninitialized. */
+    Eigen::Vector3d lower, upper;
+    constexpr int kElementVertexCount = MeshType::kVertexPerElement;
+    constexpr double kInf = std::numeric_limits<double>::infinity();
+    if (node->is_leaf()) {
+      lower << kInf, kInf, kInf;
+      upper = -lower;
+      const int num_elements = node->num_element_indices();
+      for (int e = 0; e < num_elements; ++e) {
+        const auto& element = mesh_.element(node->element_index(e));
+        for (int i = 0; i < kElementVertexCount; ++i) {
+          const Eigen::Vector3d& p_HV = vertices[element.vertex(i)];
+          const Eigen::Vector3d& p_BV = R_HB.inverse() * p_HV;
+          lower = lower.cwiseMin(p_BV);
+          upper = upper.cwiseMax(p_BV);
+        }
+      }
+    } else {
+      UpdateRecursive(&node->left(), R_HB, vertices);
+      UpdateRecursive(&node->right(), R_HB, vertices);
+
+      const Eigen::Vector3d& p_HoB1o_H = node->left().bv().center();
+      const Eigen::Vector3d p_HoB1o_B = R_HB.inverse() * p_HoB1o_H;
+      const Eigen::Vector3d& p_B1oU_B = node->left().bv().half_width();
+
+      const Eigen::Vector3d& p_HoB2o_H = node->right().bv().center();
+      const Eigen::Vector3d p_HoB2o_B = R_HB.inverse() * p_HoB2o_H;
+      const Eigen::Vector3d& p_B2oU_B = node->right().bv().half_width();
+
+      lower = (p_HoB1o_B - p_B1oU_B).cwiseMin(p_HoB2o_B - p_B2oU_B);
+      upper = (p_HoB1o_B + p_B1oU_B).cwiseMax(p_HoB2o_B + p_B2oU_B);
+    }
+    /* Hierarchy frame's origin Ho to box center Bo expressed in frame B. */
+    const Eigen::Vector3d p_HoBo_B = 0.5 * (lower + upper);
+    /* Hierarchy frame's origin Ho to box center Bo expressed in frame H. */
+    const Eigen::Vector3d p_HoBo_H = R_HB * p_HoBo_B;
+    /* Box center Bo to the box first octant corner U expressed in frame B. */
+    const Eigen::Vector3d p_BoU_B = 0.5 * (upper - lower);
+    node->bv() = Obb(math::RigidTransformd(R_HB, p_HoBo_H), p_BoU_B);
   }
 
   const MeshType& mesh_;
