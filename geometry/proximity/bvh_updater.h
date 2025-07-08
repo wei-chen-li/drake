@@ -1,10 +1,13 @@
 #pragma once
 
 #include <limits>
+#include <set>
+#include <variant>
 #include <vector>
 
 #include "drake/geometry/proximity/aabb.h"
 #include "drake/geometry/proximity/bvh.h"
+#include "drake/geometry/proximity/obb.h"
 
 namespace drake {
 namespace geometry {
@@ -40,13 +43,28 @@ class BvhUpdater {
    @pre bvh_M was constructed on mesh_M.
    @pre mesh_M != nullptr and bvh_M != nullptr. */
   BvhUpdater(const MeshType* mesh_M, Bvh<Aabb, MeshType>* bvh_M)
-      : mesh_(*mesh_M), bvh_(*bvh_M) {
+      : mesh_(*mesh_M), bvh_(bvh_M) {
+    DRAKE_DEMAND(mesh_M != nullptr);
+    DRAKE_DEMAND(bvh_M != nullptr);
+  }
+
+  BvhUpdater(const MeshType* mesh_M, Bvh<Obb, MeshType>* bvh_M)
+      : mesh_(*mesh_M), bvh_(bvh_M) {
     DRAKE_DEMAND(mesh_M != nullptr);
     DRAKE_DEMAND(bvh_M != nullptr);
   }
 
   const MeshType& mesh() const { return mesh_; }
-  const Bvh<Aabb, MeshType>& bvh() const { return bvh_; }
+
+  const Bvh<Aabb, MeshType>& bvh() const {
+    DRAKE_THROW_UNLESS((std::holds_alternative<Bvh<Aabb, MeshType>*>(bvh_)));
+    return *std::get<Bvh<Aabb, MeshType>*>(bvh_);
+  }
+
+  const Bvh<Obb, MeshType>& bvh_obb() const {
+    DRAKE_THROW_UNLESS((std::holds_alternative<Bvh<Obb, MeshType>*>(bvh_)));
+    return *std::get<Bvh<Obb, MeshType>*>(bvh_);
+  }
 
   /* Updates the referenced bvh to maintain a good fit on the referenced mesh.
    */
@@ -57,7 +75,11 @@ class BvhUpdater {
 
     /* This implementation doesn't change the bvh topology; it simply passes
      through each box in a bottom-up manner refitting the box to the data. */
-    UpdateRecursive(&bvh_.mutable_root_node(), vertices);
+    std::visit(
+        [&](auto bvh) {
+          UpdateRecursive(&bvh->mutable_root_node(), vertices);
+        },
+        bvh_);
   }
 
  private:
@@ -111,8 +133,32 @@ class BvhUpdater {
     node->bv().set_bounds(lower, upper);
   }
 
+  void UpdateRecursive(typename Bvh<Obb, MeshType>::NodeType* node,
+                       const std::vector<Vector3<double>>& _) {
+    constexpr int kElementVertexCount = MeshType::kVertexPerElement;
+    if (node->is_leaf()) {
+      std::set<int> vertices;
+      const int num_elements = node->num_element_indices();
+      for (int e = 0; e < num_elements; ++e) {
+        const auto& element = mesh_.element(node->element_index(e));
+        for (int i = 0; i < kElementVertexCount; ++i) {
+          vertices.insert(element.vertex(i));
+        }
+      }
+      node->bv() = ObbMaker(mesh_, vertices).Compute();
+    } else {
+      UpdateRecursive(&node->left(), _);
+      UpdateRecursive(&node->right(), _);
+
+      const ObbCorners obb_corners({&node->left().bv(), &node->right().bv()});
+      static const std::set<int> vertices = {0, 1, 2,  3,  4,  5,  6,  7,
+                                             8, 9, 10, 11, 12, 13, 14, 15};
+      node->bv() = ObbMaker(obb_corners, vertices).Compute();
+    }
+  }
+
   const MeshType& mesh_;
-  Bvh<Aabb, MeshType>& bvh_;
+  std::variant<Bvh<Aabb, MeshType>*, Bvh<Obb, MeshType>*> bvh_;
 };
 
 }  // namespace internal

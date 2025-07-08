@@ -391,6 +391,33 @@ Obb ObbMaker<MeshType>::Compute() const {
   return OptimizeObbVolume(box);
 }
 
+ObbCorners::ObbCorners(std::vector<const Obb*>&& obbs)
+    : obbs_(std::move(obbs)) {
+  for (const Obb* obb : obbs_) {
+    DRAKE_THROW_UNLESS(obb != nullptr);
+  }
+}
+
+Eigen::Vector3d ObbCorners::vertex(int v) const {
+  // TODO(wei-chen): Consider caching the result.
+  DRAKE_THROW_UNLESS(v >= 0);
+  DRAKE_THROW_UNLESS(v < ssize(obbs_) * 8);
+  const int obb_index = v / 8;
+  const int corner_index = v % 8;
+  const Obb& obb = *obbs_.at(obb_index);
+  /* Box center Bo to corner U expressed in the box's frame B. */
+  Eigen::Vector3d p_BoU_B = obb.half_width();
+  if (corner_index & 0b001) p_BoU_B[0] *= -1;
+  if (corner_index & 0b010) p_BoU_B[1] *= -1;
+  if (corner_index & 0b100) p_BoU_B[2] *= -1;
+  /* Box center Bo to corner U expressed in the hierarchy frame H. */
+  const Eigen::Vector3d p_BoU_H = obb.pose().rotation() * p_BoU_B;
+  /* Hierarchy frame center Ho to corner U expressed in the hierarchy frame H.
+   */
+  const Eigen::Vector3d p_HoU_H = obb.center() + p_BoU_H;
+  return p_HoU_H;
+}
+
 template class ObbMaker<TriangleSurfaceMesh<double>>;
 template class ObbMaker<VolumeMesh<double>>;
 
@@ -400,6 +427,8 @@ template class ObbMaker<VolumeMesh<double>>;
 //  the calls to convert_to_double should be removed.
 template class ObbMaker<TriangleSurfaceMesh<drake::AutoDiffXd>>;
 template class ObbMaker<VolumeMesh<drake::AutoDiffXd>>;
+
+template class ObbMaker<ObbCorners>;
 
 }  // namespace internal
 }  // namespace geometry

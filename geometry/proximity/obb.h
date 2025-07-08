@@ -2,6 +2,7 @@
 
 #include <set>
 #include <utility>
+#include <vector>
 
 #include "drake/common/drake_assert.h"
 #include "drake/common/drake_copyable.h"
@@ -234,6 +235,21 @@ class ObbMaker {
   const std::set<int>& vertices_;
 
   friend class ObbMakerTester<MeshType>;
+};
+
+/* %ObbCorners computes the corners of oriented bounding boxes. */
+class ObbCorners {
+ public:
+  /* Specifies the oriented bounding boxes for which to compute corners.
+   @pre All entries in `obbs` are not nullptr. */
+  explicit ObbCorners(std::vector<const Obb*>&& obbs);
+
+  /* Computes the `v`th corner position in the the hierarchy frame.
+   @pre `0 <= v && v <= obbs_.size() * 8`. */
+  Eigen::Vector3d vertex(int v) const;
+
+ private:
+  const std::vector<const Obb*> obbs_;
 };
 
 }  // namespace internal

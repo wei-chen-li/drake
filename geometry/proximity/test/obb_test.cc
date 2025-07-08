@@ -1072,6 +1072,25 @@ GTEST_TEST(ObbTest, TestEqual) {
   EXPECT_TRUE(a.Equal(d));
 }
 
+GTEST_TEST(ObbCornersTest, Vertex) {
+  Obb obb{RigidTransformd(
+              RotationMatrixd::MakeFromOrthonormalColumns(
+                  Vector3d(0, 1, 0), Vector3d(1, 0, 0), Vector3d(0, 0, 1)),
+              Vector3d(10, 10, 10)),
+          Vector3d(1, 2, 3)};
+  ObbCorners corners({&obb});
+
+  const double kTol = 1e-12;
+  EXPECT_TRUE(CompareMatrices(corners.vertex(0), Vector3d(12, 11, 13), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(1), Vector3d(12, 9, 13), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(2), Vector3d(8, 11, 13), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(3), Vector3d(8, 9, 13), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(4), Vector3d(12, 11, 7), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(5), Vector3d(12, 9, 7), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(6), Vector3d(8, 11, 7), kTol));
+  EXPECT_TRUE(CompareMatrices(corners.vertex(7), Vector3d(8, 9, 7), kTol));
+}
+
 }  // namespace
 }  // namespace internal
 }  // namespace geometry

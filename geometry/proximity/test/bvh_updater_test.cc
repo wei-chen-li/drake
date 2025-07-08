@@ -94,7 +94,7 @@ TYPED_TEST_SUITE(BvhUpdaterTest, MeshTypes);
 /* Tests construction logic for the combination of mesh type and scalar type.
  Confirms direct and move constructors (copy constructors have been disabled).
  */
-TYPED_TEST(BvhUpdaterTest, Construction) {
+TYPED_TEST(BvhUpdaterTest, ConstructionAabb) {
   using MeshType = TypeParam;
   const MeshType mesh = this->MakeMesh();
   Bvh<Aabb, MeshType> bvh(mesh);
@@ -107,7 +107,7 @@ TYPED_TEST(BvhUpdaterTest, Construction) {
  mesh created by MakeMesh(), we can easily predict the expected bounding boxes.
  We apply an arbitrary transformation to the vertices and confirm that the
  bounding boxes change as expected. */
-TYPED_TEST(BvhUpdaterTest, Update) {
+TYPED_TEST(BvhUpdaterTest, UpdateAabb) {
   using MeshType = TypeParam;
   using T = typename MeshType::ScalarType;
 
@@ -189,6 +189,108 @@ TYPED_TEST(BvhUpdaterTest, Update) {
   EXPECT_TRUE(CompareMatrices(
       right.bv().half_width(),
       (R * expected_right_bv.half_width().cast<T>()).cwiseAbs(), 2 * kEps));
+}
+
+TYPED_TEST(BvhUpdaterTest, ConstructionObb) {
+  using MeshType = TypeParam;
+  const MeshType mesh = this->MakeMesh();
+  Bvh<Obb, MeshType> bvh(mesh);
+  BvhUpdater<MeshType> updater(&mesh, &bvh);
+  EXPECT_EQ(&updater.mesh(), &mesh);
+  EXPECT_EQ(&updater.bvh_obb(), &bvh);
+}
+
+TYPED_TEST(BvhUpdaterTest, UpdateObb) {
+  using MeshType = TypeParam;
+  using T = typename MeshType::ScalarType;
+
+  const double dist = 3;
+  MeshType mesh = this->MakeMesh(dist);
+  Bvh<Obb, MeshType> bvh(mesh);
+  BvhUpdater<MeshType> updater(&mesh, &bvh);
+
+  /* First, confirm the initial conditions:
+    - Topology of the BVH (a root with two leaves)
+    - Domains of the three bounding volumes */
+
+  /* Quick test of the topology */
+  const auto& root = bvh.root_node();
+  ASSERT_FALSE(root.is_leaf());
+  ASSERT_TRUE(root.left().is_leaf());
+  ASSERT_TRUE(root.right().is_leaf());
+
+  const auto& left = root.left();
+  const auto& right = root.right();
+
+  std::set<int> left_verts, right_verts;
+  if constexpr (std::is_same_v<MeshType, TriangleSurfaceMesh<double>> ||
+                std::is_same_v<MeshType, TriangleSurfaceMesh<AutoDiffXd>>) {
+    left_verts = {3, 4, 5};
+    right_verts = {0, 1, 2};
+  } else {
+    left_verts = {3, 4, 5, 7};
+    right_verts = {0, 1, 2, 6};
+  }
+  std::set<int> root_verts;
+  root_verts.insert(left_verts.begin(), left_verts.end());
+  root_verts.insert(right_verts.begin(), right_verts.end());
+
+  Obb expected_root_bv = ObbMaker(mesh, root_verts).Compute();
+  Obb expected_left_bv = ObbMaker(mesh, left_verts).Compute();
+  Obb expected_right_bv = ObbMaker(mesh, right_verts).Compute();
+
+  /* Test the domains of the bounding boxes. */
+  constexpr double kTol = 1e-13;
+  ASSERT_TRUE(CompareMatrices(root.bv().pose().GetAsMatrix4(),
+                              expected_root_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(root.bv().half_width(),
+                              expected_root_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(left.bv().pose().GetAsMatrix4(),
+                              expected_left_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(left.bv().half_width(),
+                              expected_left_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(right.bv().pose().GetAsMatrix4(),
+                              expected_right_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(right.bv().half_width(),
+                              expected_right_bv.half_width(), kTol));
+
+  /* Second, deform the mesh; we'll simply rotate all vertices by an arbitrary
+   rotation matrix. */
+  RotationMatrix<T> R =
+      RotationMatrix<T>::MakeFromOneVector(Vector3<T>(1, 2, 3), 0);
+  VectorX<T> p_MVs(3 * mesh.num_vertices());
+  for (int i = 0; i < mesh.num_vertices(); ++i) {
+    p_MVs.segment(i * 3, 3) << R * mesh.vertex(i);
+  }
+  mesh.SetAllPositions(p_MVs);
+  updater.Update();
+
+  /* Third, compare the updated bounding volumes with the expected boxes. Notice
+   that the bounding box of the root is refitted from the bounding boxes of its
+   two children, rather than all the vertices of it decendents. */
+  expected_left_bv = ObbMaker(mesh, left_verts).Compute();
+  expected_right_bv = ObbMaker(mesh, right_verts).Compute();
+  expected_root_bv =
+      ObbMaker(ObbCorners({&expected_left_bv, &expected_right_bv}),
+               {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+          .Compute();
+
+  ASSERT_TRUE(CompareMatrices(root.bv().pose().GetAsMatrix4(),
+                              expected_root_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(root.bv().half_width(),
+                              expected_root_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(left.bv().pose().GetAsMatrix4(),
+                              expected_left_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(left.bv().half_width(),
+                              expected_left_bv.half_width(), kTol));
+
+  ASSERT_TRUE(CompareMatrices(right.bv().pose().GetAsMatrix4(),
+                              expected_right_bv.pose().GetAsMatrix4(), kTol));
+  ASSERT_TRUE(CompareMatrices(right.bv().half_width(),
+                              expected_right_bv.half_width(), kTol));
 }
 
 }  // namespace
