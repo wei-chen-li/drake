@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include "drake/common/overloaded.h"
+#include "drake/geometry/proximity/bvh_updater.h"
 #include "drake/geometry/proximity/meshing_utilities.h"
 #include "drake/geometry/proximity/volume_mesh.h"
 #include "drake/math/axis_angle.h"
@@ -241,8 +242,11 @@ FilamentSegmentMeshedGeometry::FilamentSegmentMeshedGeometry(
   DRAKE_THROW_UNLESS(resolution_hint > 0);
   DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
   DRAKE_THROW_UNLESS(!hydroelastic_modulus || hydroelastic_modulus > 0);
+  /* Compute the mesh for a cross section and the connectovity of the
+   tetrahedron mesh. */
   std::tie(p_CVs_, num_cross_sections_, elements_) = MakeFilamentSegmentMesh(
       cross_section, segment_length, resolution_hint, hydroelastic_margin);
+  /* Compute the pressure for the vertices (if hydroelastic is enabled). */
   std::visit(
       [&](auto&& cs) {
         if (hydroelastic_modulus.has_value()) {
@@ -252,6 +256,12 @@ FilamentSegmentMeshedGeometry::FilamentSegmentMeshedGeometry(
         }
       },
       cross_section);
+  /* Computes the reference bounding volume hierarchy for the volume mesh. The
+   BVH will later be updated when volume mesh deforms. */
+  std::unique_ptr<VolumeMesh<double>> mesh = MakeVolumeMesh(
+      Vector3d(0, 0, 0), Vector3d(0, 0, segment_length), Vector3d(0, 0, 1),
+      Vector3d(0, 0, 1), Vector3d(1, 0, 0), Vector3d(1, 0, 0));
+  bvh_ = Bvh<Obb, VolumeMesh<double>>(*mesh);
 }
 
 std::unique_ptr<VolumeMesh<double>>
@@ -288,14 +298,30 @@ hydroelastic::SoftGeometry FilamentSegmentMeshedGeometry::MakeSoftGeometry(
     const Eigen::Ref<const Eigen::Vector3d>& m1_0,
     const Eigen::Ref<const Eigen::Vector3d>& m1_1) const {
   DRAKE_THROW_UNLESS(pressures_.has_value());
+  DRAKE_DEMAND(bvh_.has_value());
+
+  /* Make volume mesh. */
   std::unique_ptr<VolumeMesh<double>> mesh =
       MakeVolumeMesh(node_0, node_1, t_0, t_1, m1_0, m1_1);
+
+  /* Make pressure field. */
   std::vector<double> pressures = *pressures_;
-  // TODO(wei-chen): Try to reduce the need to compute pressure gradient, and
-  // other SoftMesh quantities every time this function is called.
+  // TODO(wei-chen): Consider precomputing pressure gradient.
   auto pressure_field = std::make_unique<VolumeMeshFieldLinear<double, double>>(
       std::move(pressures), mesh.get());
-  hydroelastic::SoftMesh soft_mesh(std::move(mesh), std::move(pressure_field));
+
+  /* Make BVH for volume mesh. We restrict the OBBs to have a common orientation
+   `R_WB` for faster refitting. */
+  auto bvh = std::make_unique<Bvh<Obb, VolumeMesh<double>>>(*bvh_);
+  Eigen::Vector3d t = (node_1 - node_0).normalized();
+  Eigen::Vector3d m1 = (m1_0 + m1_1).normalized();
+  m1 = (m1 - m1.dot(t) * t).normalized();
+  const math::RotationMatrixd R_WB =
+      math::RotationMatrixd::MakeFromOrthonormalColumns(t, m1, t.cross(m1));
+  BvhUpdater<VolumeMesh<double>>(mesh.get(), bvh.get()).Update(R_WB);
+
+  hydroelastic::SoftMesh soft_mesh(std::move(mesh), std::move(pressure_field),
+                                   std::move(bvh));
   return hydroelastic::SoftGeometry(std::move(soft_mesh));
 }
 

@@ -69,6 +69,7 @@ class FilamentSegmentMeshedGeometry {
   int num_cross_sections_{};
   std::vector<VolumeElement> elements_;
   std::optional<std::vector<double>> pressures_;
+  std::optional<Bvh<Obb, VolumeMesh<double>>> bvh_;
 };
 
 class FilamentMeshedGeometry {

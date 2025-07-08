@@ -23,6 +23,12 @@
 namespace drake {
 namespace geometry {
 namespace internal {
+
+// Forward declaration.
+namespace filament {
+class FilamentSegmentMeshedGeometry;
+}
+
 namespace hydroelastic {
 
 // TODO(SeanCurtis-TRI): When we do soft-soft contact, we'll need ∇p̃(e) as well.
@@ -80,7 +86,10 @@ class SoftMesh {
   /* A record of which TetFace each triangle of surface_mesh() came from. The
   iᵗʰ entry in the returned vector corresponds to the iᵗʰ triangle in
   surface_mesh(). */
-  const std::vector<TetFace>& tri_to_tet() const { return *tri_to_tet_; }
+  const std::vector<TetFace>& tri_to_tet() const {
+    DRAKE_DEMAND(tri_to_tet_ != nullptr);
+    return *tri_to_tet_;
+  }
 
   /* The VolumeMeshTopology computed from the mesh provided by mesh(). */
   const VolumeMeshTopology& mesh_topology() const {
@@ -89,6 +98,19 @@ class SoftMesh {
   }
 
  private:
+  /* Allow the class FilamentSegmentMeshedGeometry to access the private
+   constructor. */
+  friend class filament::FilamentSegmentMeshedGeometry;
+
+  /* (Advanced) Fast construction of a SoftMesh from `mesh`, `pressure`, and
+   `bvh`. No conversion to surface mesh or computation of mesh topology will be
+   performed.
+   @warning Access to `surface_mesh()`, `surface_mesh_bvh()`, `tri_to_tet()`,
+     `mesh_topology()` will throw an error if this constructor is used. */
+  SoftMesh(std::unique_ptr<VolumeMesh<double>> mesh,
+           std::unique_ptr<VolumeMeshFieldLinear<double, double>> pressure,
+           std::unique_ptr<Bvh<Obb, VolumeMesh<double>>> bvh);
+
   // TODO(SeanCurtis-TRI): Determine if there is a need for these to all be
   // unique_ptr and remove the indirection if not necessary.
   std::unique_ptr<VolumeMesh<double>> mesh_;

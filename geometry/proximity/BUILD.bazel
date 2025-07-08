@@ -395,6 +395,7 @@ drake_cc_library(
     srcs = ["filament_meshed_geometry.cc"],
     hdrs = ["filament_meshed_geometry.h"],
     deps = [
+        ":bvh_updater",
         ":hydroelastic_internal",
         ":meshing_utilities",
         ":volume_mesh",

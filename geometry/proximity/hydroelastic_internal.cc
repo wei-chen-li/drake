@@ -124,6 +124,16 @@ SoftMesh& SoftMesh::operator=(const SoftMesh& s) {
   return *this;
 }
 
+SoftMesh::SoftMesh(
+    std::unique_ptr<VolumeMesh<double>> mesh,
+    std::unique_ptr<VolumeMeshFieldLinear<double, double>> pressure,
+    std::unique_ptr<Bvh<Obb, VolumeMesh<double>>> bvh)
+    : mesh_(std::move(mesh)),
+      pressure_(std::move(pressure)),
+      bvh_(std::move(bvh)) {
+  DRAKE_ASSERT(mesh_.get() == &pressure_->mesh());
+}
+
 Geometries::~Geometries() = default;
 
 HydroelasticType Geometries::hydroelastic_type(GeometryId id) const {
