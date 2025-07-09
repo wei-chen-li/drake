@@ -276,7 +276,7 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
     std::swap(id_A, id_B);
   }
 
-  if (data_A.filament_index() == data_B.filament_index()) {
+  if (id_A == id_B) {
     DRAKE_DEMAND(callback_data->self_contact_filter != nullptr);
     if (!callback_data->self_contact_filter->ShouldCollide(
             data_A.edge_index(), data_B.edge_index())) {
@@ -287,11 +287,19 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
     }
   }
 
-  if (callback_data->filament_meshed_geometry_A == nullptr ||
-      callback_data->filament_meshed_geometry_B == nullptr) {
-    fcl::CollisionResultd result;
-    fcl::collide(object_A, object_B, callback_data->request, result);
-    if (!result.isCollision()) return false;
+  const bool use_patch_contact =
+      callback_data->filament_meshed_geometry_A != nullptr &&
+      callback_data->filament_meshed_geometry_B != nullptr;
+
+  /* If use patch contact, we only need the binary isCollision() result. */
+  if (use_patch_contact) callback_data->request.enable_contact = false;
+  fcl::CollisionResultd result;
+  fcl::collide(object_A, object_B, callback_data->request, result);
+  if (use_patch_contact) callback_data->request.enable_contact = true;
+  if (!result.isCollision()) return false;
+
+  /* Fill in point contact result. */
+  if (!use_patch_contact) {
     const fcl::Contactd& contact = result.getContact(0);
     auto& contact_result = callback_data->contact_result;
     contact_result.p_WCs.emplace_back(contact.pos);
@@ -302,6 +310,7 @@ bool FilamentFilamentCollisionCallback(fcl::CollisionObjectd* object_A,
     return false;
   }
 
+  /* Compute patch contact. */
   hydroelastic::SoftGeometry soft_geometry_A =
       callback_data->filament_meshed_geometry_A->MakeSoftGeometryForEdge(
           data_A.edge_index());
@@ -348,7 +357,7 @@ struct FilamentRigidCollisionCallbackData {
   /* Request passed to fcl::collide(). */
   fcl::CollisionRequestd request;
   /* Collision filter to determine if a filament can collide with a rigid
-   * geometry. */
+   geometry. */
   const CollisionFilter* const collision_filter;
   /* Mapping from FilamentIndex to GeometryId. */
   const std::vector<GeometryId>* const filament_index_to_id;
@@ -403,13 +412,20 @@ bool FilamentRigidCollisionCallback(fcl::CollisionObjectd* object_A,
     return false;
   }
 
-  const HydroelasticType hydroelastic_type_B =
-      hydroelastic_geometries.hydroelastic_type(id_B);
-  if (callback_data->filament_meshed_geometry == nullptr ||
-      hydroelastic_type_B == HydroelasticType::kUndefined) {
-    fcl::CollisionResultd result;
-    fcl::collide(object_A, object_B, callback_data->request, result);
-    if (!result.isCollision()) return false;
+  const bool use_patch_contact =
+      callback_data->filament_meshed_geometry != nullptr &&
+      hydroelastic_geometries.hydroelastic_type(id_B) !=
+          HydroelasticType::kUndefined;
+
+  /* If use patch contact, we only need the binary isCollision() result. */
+  if (use_patch_contact) callback_data->request.enable_contact = false;
+  fcl::CollisionResultd result;
+  fcl::collide(object_A, object_B, callback_data->request, result);
+  if (use_patch_contact) callback_data->request.enable_contact = true;
+  if (!result.isCollision()) return false;
+
+  /* Fill in point contact result. */
+  if (!use_patch_contact) {
     const fcl::Contactd& contact = result.getContact(0);
     auto& contact_result = callback_data->id_B_to_contact_result[id_B];
     contact_result.p_WCs.emplace_back(contact.pos);
@@ -419,12 +435,14 @@ bool FilamentRigidCollisionCallback(fcl::CollisionObjectd* object_A,
     return false;
   }
 
+  /* Compute patch contact. */
   hydroelastic::SoftGeometry soft_geometry_A =
       callback_data->filament_meshed_geometry->MakeSoftGeometryForEdge(
           data_A.edge_index());
   std::unique_ptr<ContactSurface<T>> contact_surface = [&]() {
     math::RigidTransformd X_WB(object_B->getTransform());
-    if (hydroelastic_type_B == HydroelasticType::kSoft) {
+    if (hydroelastic_geometries.hydroelastic_type(id_B) ==
+        HydroelasticType::kSoft) {
       const hydroelastic::SoftGeometry& soft_geometry_B =
           hydroelastic_geometries.soft_geometry(id_B);
       return hydroelastic::CalcCompliantCompliant(
