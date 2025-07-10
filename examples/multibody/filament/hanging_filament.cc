@@ -11,16 +11,15 @@
 
 DEFINE_double(simulation_time, 5.0, "Desired duration of the simulation [s].");
 DEFINE_double(realtime_rate, 1.0, "Desired real time rate.");
-DEFINE_double(time_step, 1e-3,
+DEFINE_double(time_step, 5e-3,
               "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 4e4, "Young's modulus of the filaments [Pa].");
-DEFINE_double(G, 2e4, "Shear modulus of the filaments [Pa].");
-DEFINE_double(rho, 5, "Mass density of the filaments [kg/m³].");
+DEFINE_double(E, 4e6, "Young's modulus of the filaments [Pa].");
+DEFINE_double(G, 2e6, "Shear modulus of the filaments [Pa].");
+DEFINE_double(rho, 500, "Mass density of the filaments [kg/m³].");
 DEFINE_double(diameter, 0.015, "Diameter of the filaments [m].");
-DEFINE_double(cylinder_diameter, 0.05, "Diameter of the cylinder [m].");
 DEFINE_int32(num_edges, 101,
              "Number of edges the filaments are spatially discretized.");
-DEFINE_double(hydroelastic_modulus, 1e4, "Hydroelastic modulus [Pa].");
+DEFINE_double(hydroelastic_modulus, 5e4, "Hydroelastic modulus [Pa].");
 DEFINE_string(contact_approximation, "lagged",
               "Type of convex contact approximation. See "
               "multibody::DiscreteContactApproximation for details. Options "
@@ -82,9 +81,8 @@ DeformableBodyId RegisterFilament(DeformableModel<double>* deformable_model,
   const CoulombFriction<double> surface_friction(0.8, 0.8);
   AddContactMaterial({}, {}, surface_friction, &proximity_props);
   if (FLAGS_hydroelastic_modulus < 1e10) {
-    AddCompliantHydroelasticProperties(FLAGS_diameter * 0.4,
-                                       FLAGS_hydroelastic_modulus * 0.05,
-                                       &proximity_props);
+    AddCompliantHydroelasticProperties(
+        FLAGS_diameter * 0.5, FLAGS_hydroelastic_modulus, &proximity_props);
   }
   geometry_instance->set_proximity_properties(proximity_props);
 
@@ -123,7 +121,7 @@ int do_main() {
   DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
   RegisterFilament(&deformable_model, Vector3d(0, -0.5, 0), Vector3d(0, 0.5, 0),
                    true);
-  const double z = (FLAGS_diameter / 2) + FLAGS_cylinder_diameter;
+  const double z = FLAGS_diameter * 1.5;
   RegisterFilament(&deformable_model, Vector3d(-0.5, 0, z),
                    Vector3d(0.5, 0, z));
   plant.Finalize();

@@ -4,23 +4,26 @@
 #include <gflags/gflags.h>
 
 #include "drake/common/find_resource.h"
+#include "drake/common/text_logging.h"
 #include "drake/examples/multibody/filament/filament_common.h"
 #include "drake/geometry/drake_visualizer.h"
 #include "drake/geometry/proximity_properties.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
 #include "drake/multibody/tree/force_density_field.h"
+#include "drake/multibody/tree/prismatic_joint.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(simulation_time, 0.02, "Desired duration of the simulation [s].");
-DEFINE_double(time_step, 1e-5,
-              "Discrete time step for the system [s]. Must be positive.");
-DEFINE_double(E, 2e8, "Young's modulus of the filament [Pa].");
-DEFINE_double(G, 1e8, "Shear modulus of the filament [Pa].");
+DEFINE_double(time_step, 1e-5, "Discrete time step for the system [s].");
+DEFINE_double(E, 2.4e8, "Young's modulus of the filament [Pa].");
+DEFINE_double(G, 1.0e8, "Shear modulus of the filament [Pa].");
 DEFINE_double(rho, 1e3, "Mass density of the filament [kg/m³].");
-DEFINE_double(mu, 0.01, "Friction coefficient of the filament [unitless].");
-DEFINE_double(force, 3e9, "Pulling force on the filament.");
+DEFINE_double(diameter, 0.003, "Diameter of the filament [m].");
+DEFINE_double(mu, 0.0, "Friction coefficient of the filament [unitless].");
+DEFINE_double(P_gain, 1e6, "Proportional gain for position controller.");
+DEFINE_double(pull_speed, 80, "Pulling speed at the two ends [m/s].");
+DEFINE_double(pull_distance, 0.52, "Pulling distance [m].");
 DEFINE_string(
     knot_configuration, "n4",
     "The knot configuration. Options are: 'n1', 'n2', 'n3', and 'n4'.");
@@ -34,6 +37,7 @@ namespace examples {
 namespace filament {
 namespace {
 
+using drake::geometry::Box;
 using drake::geometry::Filament;
 using drake::geometry::SceneGraph;
 using drake::geometry::Sphere;
@@ -42,13 +46,18 @@ using drake::multibody::CoulombFriction;
 using drake::multibody::DeformableBodyId;
 using drake::multibody::DeformableModel;
 using drake::multibody::ForceDensityField;
+using drake::multibody::JointActuator;
+using drake::multibody::JointActuatorIndex;
 using drake::multibody::MultibodyPlant;
 using drake::multibody::MultibodyPlantConfig;
+using drake::multibody::PdControllerGains;
+using drake::multibody::PrismaticJoint;
 using drake::multibody::RigidBody;
 using drake::multibody::SpatialInertia;
 using drake::multibody::der::DerModel;
 using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
+using drake::systems::LeafSystem;
 using drake::systems::Simulator;
 using Eigen::Vector3d;
 using Eigen::Vector4d;
@@ -56,50 +65,45 @@ using Eigen::VectorXd;
 using math::RigidTransformd;
 using math::RotationMatrixd;
 
-class ConstantPullingForce final : public ForceDensityField<double> {
+template <typename T>
+class DeriredStateSource : public LeafSystem<T> {
  public:
-  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(ConstantPullingForce);
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DeriredStateSource);
 
-  ConstantPullingForce(DeformableBodyId id, double force)
-      : id_(id), force_(force) {}
+  DeriredStateSource(const T& speed, int num_actuators)
+      : speed_(speed), num_actuators_(num_actuators) {
+    this->DeclareVectorOutputPort(systems::kUseDefaultName, num_actuators * 2,
+                                  &DeriredStateSource<T>::CalcOutput);
+  }
 
  private:
-  void DoDeclareCacheEntries(MultibodyPlant<double>* plant) override {
-    deformable_model_ = &plant->deformable_model();
+  void CalcOutput(const Context<T>& context,
+                  systems::BasicVector<T>* output) const {
+    Eigen::VectorBlock<VectorX<T>> source = output->get_mutable_value();
+    const double t = context.get_time();
+    drake::log()->info("time {:.5f}", t);
+    source.head(num_actuators_).array() = speed_ * t;
+    source.tail(num_actuators_).array() = speed_;
   }
 
-  Vector3d DoEvaluateAt(const Context<double>& context,
-                        const Vector3d& p_WQ) const override {
-    DRAKE_DEMAND(deformable_model_ != nullptr);
-    const Eigen::Matrix3Xd node_positions =
-        deformable_model_->GetPositions(context, id_);
-    const Vector3d start = node_positions.col(0);
-    const Vector3d end = node_positions.template rightCols<1>();
-    const Vector3d v = (end - start).normalized();
-    const double kEpsilon = 1e-3;
-    if ((p_WQ - start).norm() <= kEpsilon) {
-      return -v * force_;
-    } else if ((p_WQ - end).norm() <= kEpsilon) {
-      return v * force_;
-    } else {
-      return Vector3d::Zero();
-    }
-  };
-
-  std::unique_ptr<ForceDensityFieldBase<double>> DoClone() const override {
-    return std::make_unique<ConstantPullingForce>(*this);
-  }
-
-  DeformableBodyId id_{};
-  double force_{};
-  const DeformableModel<double>* deformable_model_{};
+  T speed_;
+  int num_actuators_;
 };
 
-DeformableBodyId RegisterFilament(DeformableModel<double>* deformable_model) {
-  Filament filament = LoadFilament(FLAGS_knot_configuration);
+int do_main() {
+  systems::DiagramBuilder<double> builder;
 
+  MultibodyPlantConfig plant_config;
+  plant_config.time_step = FLAGS_time_step;
+  plant_config.discrete_contact_approximation = FLAGS_contact_approximation;
+
+  auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
+  DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
+
+  /* Add filament. */
+  Filament filament = LoadFilament(FLAGS_knot_configuration, FLAGS_diameter);
   auto geometry_instance = std::make_unique<geometry::GeometryInstance>(
-      RigidTransformd::Identity(), filament, "filament_with_knot");
+      RigidTransformd::Identity(), filament, "filament");
 
   /* Add a minimal illustration property for visualization. */
   geometry::IllustrationProperties illus_props;
@@ -120,28 +124,58 @@ DeformableBodyId RegisterFilament(DeformableModel<double>* deformable_model) {
   config.set_mass_damping_coefficient(1.0);
 
   const double unused_resolution_hint = 9999;
-  DeformableBodyId body_id = deformable_model->RegisterDeformableBody(
+  DeformableBodyId body_id = deformable_model.RegisterDeformableBody(
       std::move(geometry_instance), config, unused_resolution_hint);
-  deformable_model->GetMutableBody(body_id).set_default_pose(
-      math::RigidTransformd(Vector3d(0, 0, 0.15)));
 
-  return body_id;
-}
+  const VectorXd node_positions =
+      deformable_model.GetReferencePositions(body_id);
+  const Vector3d end_pos1 = node_positions.template head<3>();
+  const Vector3d end_pos2 = node_positions.template tail<3>();
 
-int do_main() {
-  systems::DiagramBuilder<double> builder;
+  /* Add link 1. */
+  const RigidBody<double>& link1 =
+      plant.AddRigidBody("link1", SpatialInertia<double>::MakeUnitary());
+  const int kZaxis = 2;
+  const RigidTransformd X_WL1(
+      RotationMatrixd::MakeFromOneVector(end_pos1 - end_pos2, kZaxis),
+      end_pos1);
+  const PrismaticJoint<double>& joint1 =
+      plant.AddJoint<PrismaticJoint>("joint1", plant.world_body(), X_WL1, link1,
+                                     RigidTransformd(), Vector3d(0, 0, 1));
+  JointActuatorIndex joint1_index =
+      plant.AddJointActuator("actuator1", joint1).index();
+  plant.get_mutable_joint_actuator(joint1_index)
+      .set_controller_gains(PdControllerGains{FLAGS_P_gain, 0.0});
+  plant.RegisterVisualGeometry(
+      link1, RigidTransformd(),
+      Box(FLAGS_diameter * 5, FLAGS_diameter * 5, FLAGS_diameter), "link1",
+      Vector4d(1, 0, 0, 1));
 
-  MultibodyPlantConfig plant_config;
-  plant_config.time_step = FLAGS_time_step;
-  plant_config.discrete_contact_approximation = FLAGS_contact_approximation;
+  /* Add link 2. */
+  const RigidBody<double>& link2 =
+      plant.AddRigidBody("link2", SpatialInertia<double>::MakeUnitary());
+  const RigidTransformd X_WL2(
+      RotationMatrixd::MakeFromOneVector(end_pos2 - end_pos1, kZaxis),
+      end_pos2);
+  const PrismaticJoint<double>& joint2 =
+      plant.AddJoint<PrismaticJoint>("joint2", plant.world_body(), X_WL2, link2,
+                                     RigidTransformd(), Vector3d(0, 0, 1));
+  JointActuatorIndex joint2_index =
+      plant.AddJointActuator("actuator2", joint2).index();
+  plant.get_mutable_joint_actuator(joint2_index)
+      .set_controller_gains(PdControllerGains{FLAGS_P_gain, 0.0});
+  plant.RegisterVisualGeometry(
+      link2, RigidTransformd(),
+      Box(FLAGS_diameter * 5, FLAGS_diameter * 5, FLAGS_diameter * 0.5),
+      "link2", Vector4d(1, 0, 0, 1));
 
-  auto [plant, scene_graph] = AddMultibodyPlant(plant_config, &builder);
+  /* Attach the filament to the links. */
+  deformable_model.AddFixedConstraint(body_id, link1, X_WL1.inverse(),
+                                      Sphere(1e-6), RigidTransformd());
+  deformable_model.AddFixedConstraint(body_id, link2, X_WL2.inverse(),
+                                      Sphere(1e-6), RigidTransformd());
+
   plant.mutable_gravity_field().set_gravity_vector(Vector3d::Zero());
-
-  DeformableModel<double>& deformable_model = plant.mutable_deformable_model();
-  DeformableBodyId id = RegisterFilament(&deformable_model);
-  deformable_model.AddExternalForce(
-      std::make_unique<ConstantPullingForce>(id, FLAGS_force));
   plant.Finalize();
 
   /* Add a visualizer that emits LCM messages for visualization. */
@@ -149,12 +183,19 @@ int do_main() {
   params.publish_period = FLAGS_time_step;
   geometry::DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph,
                                                   nullptr, params);
+
+  /* Make the actuators track a ramp position. */
+  DeriredStateSource<double>* source =
+      builder.AddSystem<DeriredStateSource<double>>(FLAGS_pull_speed / 2, 2);
+  builder.Connect(
+      source->get_output_port(),
+      plant.get_desired_state_input_port(multibody::ModelInstanceIndex(1)));
   auto diagram = builder.Build();
 
   Simulator<double> simulator(*diagram);
   simulator.Initialize();
 
-  simulator.AdvanceTo(FLAGS_simulation_time);
+  simulator.AdvanceTo(FLAGS_pull_distance / FLAGS_pull_speed);
   return 0;
 }
 
