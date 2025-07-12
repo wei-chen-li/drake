@@ -1,3 +1,4 @@
+load("//tools/jupyter:jupyter_py.bzl", "drake_jupyter_py_binary")
 load("//tools/lint:lint.bzl", "add_lint_tests")
 load(
     "//tools/skylark:drake_cc.bzl",
@@ -96,6 +97,18 @@ drake_cc_binary(
         "//systems/analysis:simulator",
         "//systems/framework:diagram",
         "@gflags",
+    ],
+)
+
+drake_jupyter_py_binary(
+    name = "entangling_filament_gripper",
+    add_test_rule = 1,
+    data = [
+        "@drake_models//:franka_description",
+    ],
+    test_timeout = "moderate",
+    deps = [
+        "//bindings/pydrake",
     ],
 )
 
