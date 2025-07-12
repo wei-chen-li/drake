@@ -1,3 +1,4 @@
+load("//tools/jupyter:jupyter_py.bzl", "drake_jupyter_py_binary")
 load("//tools/lint:lint.bzl", "add_lint_tests")
 load(
     "//tools/skylark:drake_cc.bzl",
@@ -99,6 +100,17 @@ drake_cc_binary(
     ],
 )
 
+drake_jupyter_py_binary(
+    name = "entangling_filament_gripper",
+    add_test_rule = 1,
+    data = [
+        "@drake_models//:franka_description",
+    ],
+    deps = [
+        "//bindings/pydrake",
+    ],
+)
+
 drake_cc_binary(
     name = "filament_hydroelastic_contact",
     srcs = ["filament_hydroelastic_contact.cc"],
@@ -150,9 +162,6 @@ drake_cc_binary(
     name = "knot",
     srcs = ["knot.cc"],
     add_test_rule = 1,
-    test_rule_args = [
-        "-simulation_time=0.001",
-    ],
     deps = [
         ":filament_common",
         "//geometry:drake_visualizer",
