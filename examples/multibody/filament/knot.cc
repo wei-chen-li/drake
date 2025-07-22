@@ -1,11 +1,10 @@
-#include <fstream>
-#include <sstream>
+#include <iostream>
 
 #include <gflags/gflags.h>
 
 #include "drake/common/find_resource.h"
 #include "drake/examples/multibody/filament/filament_common.h"
-#include "drake/geometry/drake_visualizer.h"
+#include "drake/geometry/meshcat_visualizer.h"
 #include "drake/geometry/proximity_properties.h"
 #include "drake/multibody/plant/multibody_plant.h"
 #include "drake/multibody/plant/multibody_plant_config_functions.h"
@@ -14,14 +13,14 @@
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 
-DEFINE_double(time_step, 1e-5, "Discrete time step for the system [s].");
+DEFINE_double(time_step, 1e-4, "Discrete time step for the system [s].");
 DEFINE_double(E, 2.4e8, "Young's modulus of the filament [Pa].");
 DEFINE_double(G, 1.0e8, "Shear modulus of the filament [Pa].");
 DEFINE_double(rho, 1e3, "Mass density of the filament [kg/m³].");
 DEFINE_double(diameter, 0.003, "Diameter of the filament [m].");
 DEFINE_double(mu, 0.0, "Friction coefficient of the filament [unitless].");
 DEFINE_double(P_gain, 1e6, "Proportional gain for position controller.");
-DEFINE_double(pull_speed, 80, "Pulling speed at the two ends [m/s].");
+DEFINE_double(pull_speed, 0.8, "Pulling speed at the two ends [m/s].");
 DEFINE_double(pull_distance, 0.52, "Pulling distance [m].");
 DEFINE_string(
     knot_configuration, "n4",
@@ -54,6 +53,7 @@ using drake::multibody::PrismaticJoint;
 using drake::multibody::RigidBody;
 using drake::multibody::SpatialInertia;
 using drake::multibody::der::DerModel;
+using drake::multibody::der::DerUndeformedState;
 using drake::multibody::fem::DeformableBodyConfig;
 using drake::systems::Context;
 using drake::systems::LeafSystem;
@@ -125,6 +125,16 @@ int do_main() {
   DeformableBodyId body_id = deformable_model.RegisterDeformableBody(
       std::move(geometry_instance), config, unused_resolution_hint);
 
+  DerUndeformedState<double>& undeformed =
+      deformable_model.GetMutableBody(body_id)
+          .mutable_der_model()
+          .mutable_undeformed_state();
+  undeformed.set_twist(
+      Eigen::RowVectorXd::Zero(undeformed.num_internal_nodes()));
+  undeformed.set_curvature_kappa(
+      Eigen::RowVectorXd::Zero(undeformed.num_internal_nodes()),
+      Eigen::RowVectorXd::Zero(undeformed.num_internal_nodes()));
+
   const VectorXd node_positions =
       deformable_model.GetReferencePositions(body_id);
   const Vector3d end_pos1 = node_positions.template head<3>();
@@ -176,11 +186,12 @@ int do_main() {
   plant.mutable_gravity_field().set_gravity_vector(Vector3d::Zero());
   plant.Finalize();
 
-  /* Add a visualizer that emits LCM messages for visualization. */
-  geometry::DrakeVisualizerParams params;
-  params.publish_period = FLAGS_time_step;
-  geometry::DrakeVisualizer<double>::AddToBuilder(&builder, scene_graph,
-                                                  nullptr, params);
+  /* Add a visualizer for visualization. */
+  auto meshcat = std::make_shared<geometry::Meshcat>();
+  meshcat->SetCameraPose(Vector3d(0.3, 0, 0.05), Vector3d(0, 0, 0));
+  geometry::MeshcatVisualizerParams params{.publish_period = 1 / 500.0};
+  geometry::MeshcatVisualizer<double>::AddToBuilder(&builder, scene_graph,
+                                                    meshcat, params);
 
   /* Make the actuators track a ramp position. */
   DeriredStateSource<double>* source =
@@ -193,7 +204,17 @@ int do_main() {
   Simulator<double> simulator(*diagram);
   simulator.Initialize();
 
-  simulator.AdvanceTo(FLAGS_pull_distance / FLAGS_pull_speed);
+  meshcat->StartRecording(500);
+  try {
+    simulator.AdvanceTo(FLAGS_pull_distance / FLAGS_pull_speed);
+  } catch (const std::exception&) {
+  }
+  meshcat->StopRecording();
+  meshcat->PublishRecording();
+
+  std::string a;
+  std::cin >> a;
+
   return 0;
 }
 

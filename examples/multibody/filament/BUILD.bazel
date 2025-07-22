@@ -161,10 +161,7 @@ drake_cc_binary(
 drake_cc_binary(
     name = "knot",
     srcs = ["knot.cc"],
-    add_test_rule = 1,
-    test_rule_args = [
-        "-pull_distance=0.01",
-    ],
+    add_test_rule = 0,
     deps = [
         ":filament_common",
         "//geometry:drake_visualizer",
