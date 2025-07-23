@@ -17,6 +17,7 @@ drake_cc_package_library(
         ":block_3x1_sparse_matrix",
         ":block_3x3_sparse_matrix",
         ":block_sparse_cholesky_solver",
+        ":block_sparse_ldlt_solver",
         ":block_sparse_lower_triangular_or_symmetric_matrix",
         ":block_sparse_matrix",
         ":block_sparse_supernodal_solver",
@@ -79,6 +80,20 @@ drake_cc_library(
     name = "block_sparse_cholesky_solver",
     srcs = ["block_sparse_cholesky_solver.cc"],
     hdrs = ["block_sparse_cholesky_solver.h"],
+    deps = [
+        ":block_sparse_lower_triangular_or_symmetric_matrix",
+        ":minimum_degree_ordering",
+        "//common:copyable_unique_ptr",
+        "//common:essential",
+        "//common:reset_after_move",
+        "//multibody/contact_solvers/sap:partial_permutation",
+    ],
+)
+
+drake_cc_library(
+    name = "block_sparse_ldlt_solver",
+    srcs = ["block_sparse_ldlt_solver.cc"],
+    hdrs = ["block_sparse_ldlt_solver.h"],
     deps = [
         ":block_sparse_lower_triangular_or_symmetric_matrix",
         ":minimum_degree_ordering",
@@ -332,6 +347,14 @@ drake_cc_googletest(
     name = "block_sparse_cholesky_solver_test",
     deps = [
         ":block_sparse_cholesky_solver",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
+    name = "block_sparse_ldlt_solver_test",
+    deps = [
+        ":block_sparse_ldlt_solver",
         "//common/test_utilities:eigen_matrix_compare",
     ],
 )
