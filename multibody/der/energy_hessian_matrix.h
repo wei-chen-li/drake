@@ -84,10 +84,11 @@ class EnergyHessianMatrix {
   /* Given a system of linear equations that can be written in block form as:
        Ax + By  =  a     (1)
        Bᵀx + Dy =  0     (2)
-   The indices in `participating_dofs` form the matrix A. One can solve the
-   system using Schur complement, where (A - BD⁻¹Bᵀ)x = a. After a solution for
-   x is obtained, y can be recovered from y = -D⁻¹Bᵀx. Returns a structure that
-   contains the D complement (i.e., A - BD⁻¹Bᵀ) and a method to recover y.
+   The indices in `participating_dofs` arranged in increasing order forms the
+   matrix A. One can solve the system using Schur complement, where
+   (A - BD⁻¹Bᵀ)x = a. After a solution for x is obtained, y can be recovered
+   from y = -D⁻¹Bᵀx. Returns a structure that contains the D complement
+   (i.e., A - BD⁻¹Bᵀ) and a method to recover y.
 
    @pre Every dof index in `participating_dofs` is greater than or equal to zero
         and less than `rows()`.
@@ -112,6 +113,10 @@ class EnergyHessianMatrix {
   EnergyHessianMatrix(
       int num_dofs,
       contact_solvers::internal::Block4x4SparseSymmetricMatrix<T>&& data);
+
+  /* Returns true if the `data_.rows() == num_dofs_`;
+   returns false if `data_.rows() == num_dofs_ + 1`.  */
+  bool is_storage_size_exact() const { return num_dofs_ == data_.rows(); }
 
   int num_dofs_{};
   contact_solvers::internal::Block4x4SparseSymmetricMatrix<T> data_;

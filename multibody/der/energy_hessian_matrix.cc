@@ -132,7 +132,7 @@ void EnergyHessianMatrix<T>::AddScaledMatrix(
   if (scale == 0.0) return;
 
   for (int i = 0; i < data_.block_rows(); ++i) {
-    if (data_.rows() == rows() || i < data_.block_rows() - 1) {
+    if (is_storage_size_exact() || i < data_.block_rows() - 1) {
       auto vec = rhs.diagonal().template segment<4>(4 * i) * scale;
       data_.AddToBlock(i, i, vec.asDiagonal().toDenseMatrix());
     } else {
@@ -151,7 +151,7 @@ void EnergyHessianMatrix<T>::AddScaledMatrix(const EnergyHessianMatrix& rhs,
   if (scale == 0.0) return;
 
   for (int j = 0; j < rhs.data_.block_cols(); ++j) {
-    for (int i : rhs.data_.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+    for (int i : rhs.data_.block_row_indices(j)) {
       data_.AddToBlock(i, j, rhs.data_.block(i, j) * scale);
     }
   }
@@ -160,7 +160,7 @@ void EnergyHessianMatrix<T>::AddScaledMatrix(const EnergyHessianMatrix& rhs,
 template <typename T>
 void EnergyHessianMatrix<T>::ApplyBoundaryCondition(DerNodeIndex node_index) {
   for (int j = 0; j < data_.block_cols(); ++j) {
-    for (int i : data_.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+    for (int i : data_.block_row_indices(j)) {
       if (!(i == node_index || j == node_index)) continue;
       Eigen::Matrix4<T> block = data_.block(i, j);
       if (i == node_index) block.template topRows<3>().setZero();
@@ -174,7 +174,7 @@ void EnergyHessianMatrix<T>::ApplyBoundaryCondition(DerNodeIndex node_index) {
 template <typename T>
 void EnergyHessianMatrix<T>::ApplyBoundaryCondition(DerEdgeIndex edge_index) {
   for (int j = 0; j < data_.block_cols(); ++j) {
-    for (int i : data_.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+    for (int i : data_.block_row_indices(j)) {
       if (!(i == edge_index || j == edge_index)) continue;
       Eigen::Matrix4<T> block = data_.block(i, j);
       if (i == edge_index) block.template bottomRows<1>().setZero();
@@ -193,8 +193,7 @@ Eigen::SparseMatrix<T> EnergyHessianMatrix<T>::ComputeLowerTriangle() const {
     for (int v = 0; v < 4; ++v) {
       const int j = block_j * 4 + v;
       if (j < cols()) {
-        reserve_sizes[j] =
-            data_.sparsity_pattern().neighbors()[block_j].size() * 4;
+        reserve_sizes[j] = data_.block_row_indices(block_j).size() * 4;
       }
     }
   }
@@ -205,7 +204,7 @@ Eigen::SparseMatrix<T> EnergyHessianMatrix<T>::ComputeLowerTriangle() const {
     for (int v = 0; v < 4; ++v) {
       const int j = 4 * block_j + v;
       if (j >= cols()) continue;
-      for (int block_i : data_.sparsity_pattern().neighbors()[block_j]) {
+      for (int block_i : data_.block_row_indices(block_j)) {
         // block_i ≥ block_j
         const Matrix4<T>& block = data_.block(block_i, block_j);
         for (int u = 0; u < 4; ++u) {
@@ -267,8 +266,7 @@ EnergyHessianMatrix<T>::ComputeSchurComplement(
   std::vector<Eigen::Triplet<T>> D_triplets;
 
   for (int block_j = 0; block_j < data_.block_cols(); ++block_j) {
-    for (int block_i :
-         data_.sparsity_pattern().neighbors()[block_j]) {  // block_i ≥ block_j
+    for (int block_i : data_.block_row_indices(block_j)) {
       const Matrix4<T>& block = data_.block(block_i, block_j);
       FillInTriplets<T>(block_i, block_j, block, permutation,
                         num_participating_dofs, &A_triplets, &Bt_triplets,
@@ -297,7 +295,7 @@ Eigen::MatrixX<T> EnergyHessianMatrix<T>::MakeDenseMatrix() const {
   Eigen::MatrixX<T> result = Eigen::MatrixX<T>::Zero(size, size);
 
   for (int j = 0; j < data_.block_cols(); ++j) {
-    for (int i : data_.sparsity_pattern().neighbors()[j]) {  // i ≥ j
+    for (int i : data_.block_row_indices(j)) {
       const Matrix4<T>& block = data_.block(i, j);
       result.template block<4, 4>(4 * i, 4 * j) = block;
       if (i == j) continue;
@@ -323,8 +321,8 @@ Eigen::Ref<Eigen::VectorX<T>> EnergyHessianMatrixVectorProduct<T>::AddToVector(
   const auto& matdata = mat_->data_;
 
   for (int j = 0; j < matdata.block_cols(); ++j) {
-    for (int i : matdata.sparsity_pattern().neighbors()[j]) {  // i ≥ j
-      if (matdata.rows() == matdata.rows() || i < matdata.block_rows() - 1) {
+    for (int i : matdata.block_row_indices(j)) {
+      if (mat_->is_storage_size_exact() || i < matdata.block_rows() - 1) {
         if (i == j) {
           lhs->template segment<4>(4 * i) +=
               matdata.block(i, j) * vec_->template segment<4>(4 * j) * scale_;
