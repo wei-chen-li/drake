@@ -58,9 +58,12 @@ EnergyHessianMatrix<T> EnergyHessianMatrix<T>::Allocate(int num_dofs) {
 
   contact_solvers::internal::BlockSparsityPattern block_sparsity_pattern(
       std::move(block_sizes), std::move(neighbors));
-  return EnergyHessianMatrix<T>(
-      num_dofs, contact_solvers::internal::Block4x4SparseSymmetricMatrix<T>(
-                    std::move(block_sparsity_pattern)));
+  contact_solvers::internal::Block4x4SparseSymmetricMatrix<T> data(
+      std::move(block_sparsity_pattern));
+
+  EnergyHessianMatrix<T> matrix(num_dofs, std::move(data));
+  matrix.SetZero();
+  return matrix;
 }
 
 template <typename T>
@@ -87,6 +90,13 @@ Eigen::VectorX<T> EnergyHessianMatrix<T>::Diagonal() const {
 template <typename T>
 void EnergyHessianMatrix<T>::SetZero() {
   data_.SetZero();
+  /* If size is off by one, set the last diagonal entry to 1.0. */
+  if (!is_data_size_exact()) {
+    Eigen::Matrix4<T> block = Eigen::Matrix4<T>::Zero();
+    block(3, 3) = 1.0;
+    data_.SetBlock(data_.block_rows() - 1, data_.block_cols() - 1,
+                   std::move(block));
+  }
 }
 
 template <typename T>
@@ -132,7 +142,7 @@ void EnergyHessianMatrix<T>::AddScaledMatrix(
   if (scale == 0.0) return;
 
   for (int i = 0; i < data_.block_rows(); ++i) {
-    if (is_storage_size_exact() || i < data_.block_rows() - 1) {
+    if (is_data_size_exact() || i < data_.block_rows() - 1) {
       auto vec = rhs.diagonal().template segment<4>(4 * i) * scale;
       data_.AddToBlock(i, i, vec.asDiagonal().toDenseMatrix());
     } else {
@@ -183,39 +193,6 @@ void EnergyHessianMatrix<T>::ApplyBoundaryCondition(DerEdgeIndex edge_index) {
       data_.SetBlock(i, j, block);
     }
   }
-}
-
-template <typename T>
-Eigen::SparseMatrix<T> EnergyHessianMatrix<T>::ComputeLowerTriangle() const {
-  std::vector<int> reserve_sizes(cols());
-  reserve_sizes.reserve(cols());
-  for (int block_j = 0; block_j < data_.block_cols(); ++block_j) {
-    for (int v = 0; v < 4; ++v) {
-      const int j = block_j * 4 + v;
-      if (j < cols()) {
-        reserve_sizes[j] = data_.block_row_indices(block_j).size() * 4;
-      }
-    }
-  }
-
-  Eigen::SparseMatrix<T> result(rows(), cols());
-  result.reserve(reserve_sizes);
-  for (int block_j = 0; block_j < data_.block_cols(); ++block_j) {
-    for (int v = 0; v < 4; ++v) {
-      const int j = 4 * block_j + v;
-      if (j >= cols()) continue;
-      for (int block_i : data_.block_row_indices(block_j)) {
-        // block_i ≥ block_j
-        const Matrix4<T>& block = data_.block(block_i, block_j);
-        for (int u = 0; u < 4; ++u) {
-          const int i = 4 * block_i + u;
-          if (i >= rows()) continue;
-          result.insert(i, j) = block(u, v);
-        }
-      }
-    }
-  }
-  return result;
 }
 
 template <typename T>
@@ -312,6 +289,54 @@ EnergyHessianMatrix<T>::EnergyHessianMatrix(
     : num_dofs_(num_dofs), data_(std::move(data)) {
   DRAKE_THROW_UNLESS(num_dofs >= 7);
   DRAKE_THROW_UNLESS(num_dofs % 4 == 0 || num_dofs % 4 == 3);
+  DRAKE_THROW_UNLESS(data_.rows() == num_dofs || data_.rows() == num_dofs + 1);
+}
+
+template <typename T>
+bool EnergyHessianMatrix<T>::is_data_size_exact() const {
+  DRAKE_DEMAND(data_.rows() == num_dofs_ || data_.rows() == num_dofs_ + 1);
+  return data_.rows() == num_dofs_;
+}
+
+template <typename T>
+EnergyHessianMatrixLinearSolver<T>::EnergyHessianMatrixLinearSolver(
+    int num_dofs)
+    : num_dofs_(num_dofs) {
+  DRAKE_THROW_UNLESS(num_dofs >= 7);
+  DRAKE_THROW_UNLESS(num_dofs % 4 == 0 || num_dofs % 4 == 3);
+  /* Inform the LDLᵀ solver the sparsity pattern. */
+  ldlt_solver_.SetMatrix(EnergyHessianMatrix<T>::Allocate(num_dofs).data_);
+}
+
+template <typename T>
+bool EnergyHessianMatrixLinearSolver<T>::Solve(
+    const EnergyHessianMatrix<T>& A, const Eigen::Ref<const VectorX<T>> b,
+    EigenPtr<VectorX<T>> x) {
+  DRAKE_THROW_UNLESS(A.rows() == num_dofs_);
+  DRAKE_THROW_UNLESS(b.size() == num_dofs_);
+  DRAKE_THROW_UNLESS(x->size() == num_dofs_);
+  ldlt_solver_.UpdateMatrix(A.data_);
+  bool success = ldlt_solver_.Factor();
+  if (!success) return false;
+  if (A.is_data_size_exact()) {
+    *x = ldlt_solver_.Solve(b);
+  } else {
+    VectorX<T> b_ext = VectorX<T>::Zero(A.data_.rows());
+    b_ext.head(num_dofs_) = b;
+    *x = ldlt_solver_.Solve(b_ext).head(num_dofs_);
+  }
+  return true;
+}
+
+template <typename T>
+EnergyHessianMatrix<T>
+EnergyHessianMatrixLinearSolver<T>::RegularizeToPositiveDefinite(
+    const EnergyHessianMatrix<T>& A) {
+  DRAKE_THROW_UNLESS(A.rows() == num_dofs_);
+  ldlt_solver_.UpdateMatrix(A.data_);
+  // TODO(wei-chen): Set this clamping value based on the scaling of A.
+  ldlt_solver_.FactorForcePositiveDefinite(1e-10);
+  return EnergyHessianMatrix<T>(num_dofs_, ldlt_solver_.A());
 }
 
 template <typename T>
@@ -322,7 +347,7 @@ Eigen::Ref<Eigen::VectorX<T>> EnergyHessianMatrixVectorProduct<T>::AddToVector(
 
   for (int j = 0; j < matdata.block_cols(); ++j) {
     for (int i : matdata.block_row_indices(j)) {
-      if (mat_->is_storage_size_exact() || i < matdata.block_rows() - 1) {
+      if (mat_->is_data_size_exact() || i < matdata.block_rows() - 1) {
         if (i == j) {
           lhs->template segment<4>(4 * i) +=
               matdata.block(i, j) * vec_->template segment<4>(4 * j) * scale_;
@@ -363,6 +388,9 @@ EnergyHessianMatrix<double>::ComputeSchurComplement<double>(
 
 DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::EnergyHessianMatrix);
+
+template class ::drake::multibody::der::internal::
+    EnergyHessianMatrixLinearSolver<double>;
 
 DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::drake::multibody::der::internal::EnergyHessianMatrixVectorProduct);

@@ -6,6 +6,7 @@
 #include "drake/common/copyable_unique_ptr.h"
 #include "drake/multibody/der/der_model.h"
 #include "drake/multibody/der/discrete_time_integrator.h"
+#include "drake/multibody/der/energy_hessian_matrix.h"
 #include "drake/multibody/der/schur_complement.h"
 
 namespace drake {
@@ -131,7 +132,7 @@ class DerSolver {
     std::unique_ptr<typename DerModel<T>::Scratch,
                     typename DerModel<T>::ScratchDeleter>
         der_model_scratch;
-    Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>, Eigen::Lower> linear_solver;
+    std::unique_ptr<EnergyHessianMatrixLinearSolver<double>> linear_solver;
     Eigen::VectorX<T> b;
     Eigen::VectorX<T> dz;
   } scratch_;

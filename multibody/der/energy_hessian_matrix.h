@@ -3,6 +3,7 @@
 #include <unordered_set>
 
 #include "drake/common/default_scalars.h"
+#include "drake/multibody/contact_solvers/block_sparse_ldlt_solver.h"
 #include "drake/multibody/contact_solvers/block_sparse_lower_triangular_or_symmetric_matrix.h"
 #include "drake/multibody/der/der_indexes.h"
 #include "drake/multibody/der/schur_complement.h"
@@ -13,6 +14,8 @@ namespace der {
 namespace internal {
 
 /* Forward declaration. */
+template <typename T>
+class EnergyHessianMatrixLinearSolver;
 template <typename T>
 class EnergyHessianMatrixVectorProduct;
 
@@ -77,10 +80,6 @@ class EnergyHessianMatrix {
    be set to one.*/
   void ApplyBoundaryCondition(DerEdgeIndex edge_index);
 
-  /* Returns a sparse matrix whose lower triangle equals the lower triangle
-   * represented by this matrix. */
-  Eigen::SparseMatrix<T> ComputeLowerTriangle() const;
-
   /* Given a system of linear equations that can be written in block form as:
        Ax + By  =  a     (1)
        Bᵀx + Dy =  0     (2)
@@ -106,7 +105,8 @@ class EnergyHessianMatrix {
   /* Friend class to facilitate testing. */
   friend class EnergyHessianMatrixTester;
 
-  /* Allow delegate class to access private member. */
+  /* Allow helper class to access private member. */
+  friend class EnergyHessianMatrixLinearSolver<T>;
   friend class EnergyHessianMatrixVectorProduct<T>;
 
   /* Private constructor. */
@@ -116,13 +116,49 @@ class EnergyHessianMatrix {
 
   /* Returns true if the `data_.rows() == num_dofs_`;
    returns false if `data_.rows() == num_dofs_ + 1`.  */
-  bool is_storage_size_exact() const { return num_dofs_ == data_.rows(); }
+  bool is_data_size_exact() const;
 
   int num_dofs_{};
   contact_solvers::internal::Block4x4SparseSymmetricMatrix<T> data_;
 };
 
-/* Class returned by EnergyHessianMatrix<T> * Eigen::VectorX<T>. */
+/*
+ @p EnergyHessianMatrixLinearSolver solves linear systems with a
+ EnergyHessianMatrix as the system matrix.
+
+ @tparam_double_only
+ */
+template <typename T>
+class EnergyHessianMatrixLinearSolver {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(EnergyHessianMatrixLinearSolver);
+
+  /* Constructs a EnergyHessianMatrixLinearSolver which can be used to solve
+  linear systems with `num_dofs`.
+  @pre `num_dofs >= 7`.
+  @pre `num_dofs % 4 == 0 || num_dofs % 4 == 3`. */
+  explicit EnergyHessianMatrixLinearSolver(int num_dofs);
+
+  /* Solves A x = b. Returns false if factorization of A fails.
+   @pre `A.rows() == num_dofs_`.
+   @pre `b.size() == num_dofs_`.
+   @pre `x->size() == num_dofs_`. */
+  [[nodiscard]] bool Solve(const EnergyHessianMatrix<T>& A,
+                           const Eigen::Ref<const VectorX<T>> b,
+                           EigenPtr<VectorX<T>> x);
+
+  /* Regularizes the matrix A to a positive definite matrix and return the
+   result.
+   @pre `A.rows() == num_dofs_`. */
+  EnergyHessianMatrix<T> RegularizeToPositiveDefinite(
+      const EnergyHessianMatrix<T>& A);
+
+ private:
+  int num_dofs_;
+  contact_solvers::internal::BlockSparseLdltSolver<Matrix4<T>> ldlt_solver_;
+};
+
+/* Class returned by EnergyHessianMatrix<T> times Eigen::VectorX<T>. */
 template <typename T>
 class EnergyHessianMatrixVectorProduct {
  public:

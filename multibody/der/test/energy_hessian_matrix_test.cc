@@ -132,6 +132,9 @@ TEST_P(EnergyHessianMatrixTest, Allocate) {
 
   EnergyHessianMatrix<double> hessian =
       EnergyHessianMatrix<double>::Allocate(num_dofs);
+  const contact_solvers::internal::Block4x4SparseSymmetricMatrix<double>& data =
+      EnergyHessianMatrixTester::get_data(hessian);
+
   for (int i = 0; i < ssize(pattern); ++i) {
     std::set<int>& row_pattern = pattern[i];
 
@@ -139,10 +142,25 @@ TEST_P(EnergyHessianMatrixTest, Allocate) {
      triangle indices). */
     row_pattern.erase(row_pattern.begin(), row_pattern.lower_bound(i));
 
-    EXPECT_THAT(EnergyHessianMatrixTester::get_data(hessian)
-                    .sparsity_pattern()
-                    .neighbors()[i],
+    EXPECT_THAT(data.sparsity_pattern().neighbors()[i],
                 ::testing::UnorderedElementsAreArray(row_pattern));
+  }
+
+  /* Check that the matrix is initialized to zero. And if the data size is
+   larger than the hessian size, the last diagonal entry is set to 1.0. */
+  for (int test = 0; test < 1; ++test) {
+    if (data.rows() == hessian.rows()) {
+      EXPECT_TRUE(data.MakeDenseMatrix().isZero());
+    } else {
+      EXPECT_EQ(data.rows(), num_dofs + 1);
+      EXPECT_TRUE(data.MakeDenseMatrix().leftCols(num_dofs).isZero());
+      EXPECT_TRUE(data.MakeDenseMatrix().topRows(num_dofs).isZero());
+      EXPECT_EQ(data.MakeDenseMatrix()(num_dofs, num_dofs), 1.0);
+    }
+
+    /* Setting the EnergyHessianMatrix to zero should retain the extra
+     diagonal 1.0 entry. */
+    hessian.SetZero();
   }
 }
 
@@ -196,14 +214,6 @@ TEST_P(EnergyHessianMatrixTest, AddScaledEnergyHessianMatrix) {
     lhs.AddScaledMatrix(rhs, scale);
   }
   EXPECT_TRUE(CompareMatrices(lhs.MakeDenseMatrix(), expected, 1e-12));
-}
-
-TEST_P(EnergyHessianMatrixTest, ComputeLowerTriangle) {
-  const EnergyHessianMatrix<double> hessian = MakeRandomMatrix();
-  const Eigen::SparseMatrix<double> sparse = hessian.ComputeLowerTriangle();
-  EXPECT_TRUE(CompareMatrices(
-      MatrixXd(sparse.toDense().triangularView<Eigen::Lower>()),
-      MatrixXd(hessian.MakeDenseMatrix().triangularView<Eigen::Lower>())));
 }
 
 TEST_P(EnergyHessianMatrixTest, ComputeSchurComplement) {

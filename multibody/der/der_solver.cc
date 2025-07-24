@@ -22,13 +22,13 @@ DerSolver<T>::DerSolver(const DerModel<T>* model,
   scratch_.prev_state = model_->CreateDerState();
   /* Allocate the scratch for the DerModel. */
   scratch_.der_model_scratch = model_->MakeScratch();
-  /* Tell SimplicialLDLT the sparsity pattern. */
-  const EnergyHessianMatrix<T>& A = model_->ComputeTangentMatrix(
-      *state_, integrator_->GetWeights(), scratch_.der_model_scratch.get());
-  scratch_.linear_solver.analyzePattern(A.ComputeLowerTriangle());
-  /* Set b and dz to size that matches the tangent matrix. */
-  scratch_.b = Eigen::VectorX<T>::Zero(A.rows());
-  scratch_.dz = Eigen::VectorX<T>::Zero(A.cols());
+  /* Initialize the linear solver. */
+  const int num_dofs = model_->num_dofs();
+  scratch_.linear_solver =
+      std::make_unique<EnergyHessianMatrixLinearSolver<double>>(num_dofs);
+  /* Set b and dz to have size num_dofs. */
+  scratch_.b = Eigen::VectorX<T>::Zero(num_dofs);
+  scratch_.dz = Eigen::VectorX<T>::Zero(num_dofs);
 }
 
 template <typename T>
@@ -64,8 +64,8 @@ int DerSolver<T>::AdvanceOneTimeStep(
         throw std::runtime_error(fmt::format(
             "DerSolver::AdvanceOneTimeStep() failed to converge even with a "
             "shrinked time-step of {}. Consider using a smaller nominal "
-            "time-step size or reduce the stiffness of the material.",
-            dt_));
+            "time-step size than the current value {}.",
+            dt_, dt_max_));
       }
     }
   }
@@ -83,8 +83,8 @@ int DerSolver<T>::AdvanceDt(const DerState<T>& prev_state, double dt,
   DerState<T>& state = *state_;
   typename DerModel<T>::Scratch* der_model_scratch =
       scratch_.der_model_scratch.get();
-  Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>, Eigen::Lower>& linear_solver =
-      scratch_.linear_solver;
+  EnergyHessianMatrixLinearSolver<double>& linear_solver =
+      *scratch_.linear_solver;
   Eigen::VectorX<T>& b = scratch_.b;
   Eigen::VectorX<T>& dz = scratch_.dz;
   DRAKE_DEMAND(der_model_scratch != nullptr);
@@ -106,11 +106,8 @@ int DerSolver<T>::AdvanceDt(const DerState<T>& prev_state, double dt,
          !solver_converged(residual_norm, initial_residual_norm)) {
     const EnergyHessianMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
         state, integrator_->GetWeights(), der_model_scratch);
-    /* If the contact energy is not enabled, the sparsity pattern of the tangent
-     matrix does not change and thus we call UpdateMatrix(). */
-    linear_solver.factorize(tangent_matrix.ComputeLowerTriangle());
-    if (linear_solver.info() != Eigen::Success) return -1;
-    dz = linear_solver.solve(-b);
+    bool success = linear_solver.Solve(tangent_matrix, -b, &dz);
+    if (!success) return -1;
     integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
     b = model_->ComputeResidual(state, external_force_field, der_model_scratch);
     residual_norm = unit_adjusted_norm(b);
