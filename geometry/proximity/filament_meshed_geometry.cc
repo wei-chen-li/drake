@@ -16,6 +16,7 @@ namespace internal {
 namespace filament {
 
 using Eigen::Vector3d;
+using Eigen::Vector3i;
 
 namespace {
 
@@ -29,7 +30,9 @@ std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
   DRAKE_THROW_UNLESS(cross_section.diameter > 0);
   const double d = cross_section.diameter + 2 * params.margin;
 
-  const int num_thetas = M_PI * d / params.circumferential_resolution_hint;
+  const int num_thetas = std::max(
+      3, static_cast<int>(
+             std::round(M_PI * d / params.circumferential_resolution_hint)));
 
   const int num_verts_per_cross_section = 1 + num_thetas;
   Eigen::Matrix3Xd p_CVs(3, num_verts_per_cross_section);
@@ -61,38 +64,88 @@ std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
   const double w = cross_section.width + 2 * params.margin;
   const double h = cross_section.height + 2 * params.margin;
   if (w / h < 2.0 / 3.0) {
-    // A thin-tall rectangle.
-    Eigen::Matrix3Xd p_CVs(3, 8);
+    /* A thin-tall rectangle. */
     const double ma = h - w;
-    // clang-format off
-    p_CVs <<     0,    0,  w/2, w/2, w/2, -w/2, -w/2, -w/2,
-             -ma/2, ma/2, -h/2,   0, h/2,  h/2,    0, -h/2,
-                 0,    0,    0,   0,   0,    0,    0,    0;
-    // clang-format on
-    Eigen::Matrix3Xi triangles(3, 8);
-    // clang-format off
-    triangles << 0, 0, 1, 1, 1, 0, 0, 0,
-                 2, 3, 3, 4, 5, 1, 6, 7,
-                 3, 1, 4, 5, 6, 6, 7, 2;
-    // clang-format on
+    const int num_w_divs = std::max(
+        1, static_cast<int>(
+               std::round(w / params.circumferential_resolution_hint)));
+    const int num_h_divs = std::max(
+        2, static_cast<int>(
+               std::round(h / params.circumferential_resolution_hint)));
+    const int num_ma_divs = num_h_divs - 1;
+
+    Eigen::Matrix3Xd p_CVs(3,
+                           (num_ma_divs + 1) + (num_w_divs + num_h_divs) * 2);
+    int j = -1;
+    for (int k = 0; k < num_ma_divs + 1; ++k)
+      p_CVs.col(++j) = Vector3d(0, -ma / 2 + ma * k / num_ma_divs, 0);
+    for (int k = 0; k < num_h_divs; ++k)
+      p_CVs.col(++j) = Vector3d(w / 2, -h / 2 + h * k / num_h_divs, 0);
+    for (int k = 0; k < num_w_divs; ++k)
+      p_CVs.col(++j) = Vector3d(w / 2 - w * k / num_w_divs, h / 2, 0);
+    for (int k = 0; k < num_h_divs; ++k)
+      p_CVs.col(++j) = Vector3d(-w / 2, h / 2 - h * k / num_h_divs, 0);
+    for (int k = 0; k < num_w_divs; ++k)
+      p_CVs.col(++j) = Vector3d(-w / 2 + w * k / num_w_divs, -h / 2, 0);
+
+    const int num_triangles = (num_w_divs + num_ma_divs + num_h_divs) * 2;
+    Eigen::Matrix3Xi triangles(3, num_triangles);
+    j = -1;
+    for (int k = 0; k < num_h_divs; ++k) {
+      triangles.col(++j) = Vector3i(k, k + num_h_divs, k + num_h_divs + 1);
+      if (k == num_h_divs - 1) continue;
+      triangles.col(++j) = Vector3i(k, k + num_h_divs + 1, k + 1);
+    }
+    int offset = num_ma_divs + num_h_divs + 1;
+    for (int k = 0; k < num_w_divs; ++k) {
+      triangles.col(++j) = Vector3i(num_ma_divs, offset + k, offset + k + 1);
+    }
+    offset = num_ma_divs + num_h_divs + num_w_divs + 1;
+    for (int k = num_h_divs - 1; k >= 0; --k) {
+      triangles.col(++j) =
+          Vector3i(k, offset + num_ma_divs - k, offset + num_ma_divs - k + 1);
+      if (k == 0) continue;
+      triangles.col(++j) = Vector3i(k, offset + num_ma_divs - k + 1, k - 1);
+    }
+    offset = num_ma_divs + num_h_divs + num_w_divs + num_h_divs + 1;
+    for (int k = 0; k < num_w_divs; ++k) {
+      if (k < num_w_divs - 1)
+        triangles.col(++j) = Vector3i(0, offset + k, offset + k + 1);
+      else
+        triangles.col(++j) = Vector3i(0, offset + k, num_h_divs);
+    }
+
     return {std::move(p_CVs), std::move(triangles)};
   } else if (w / h <= 3.0 / 2.0) {
-    // A rectangle close to a square.
-    Eigen::Matrix3Xd p_CVs(3, 5);
-    // clang-format off
-    p_CVs << 0,  w/2, w/2, -w/2, -w/2,
-             0, -h/2, h/2,  h/2, -h/2,
-             0,    0,   0,    0,    0;
-    // clang-format on
-    Eigen::Matrix3Xi triangles(3, 4);
-    // clang-format off
-    triangles << 0, 0, 0, 0,
-                 1, 2, 3, 4,
-                 2, 3, 4, 1;
-    // clang-format on
+    /* A rectangle close to a square. */
+    const int num_w_divs = std::max(
+        1, static_cast<int>(
+               std::round(w / params.circumferential_resolution_hint)));
+    const int num_h_divs = std::max(
+        1, static_cast<int>(
+               std::round(h / params.circumferential_resolution_hint)));
+    Eigen::Matrix3Xd p_CVs(3, 1 + (num_w_divs + num_h_divs) * 2);
+    p_CVs.col(0).setZero();
+    int j = 0;
+    for (int k = 0; k < num_h_divs; ++k)
+      p_CVs.col(++j) = Vector3d(w / 2, -h / 2 + h * k / num_h_divs, 0);
+    for (int k = 0; k < num_w_divs; ++k)
+      p_CVs.col(++j) = Vector3d(w / 2 - w * k / num_w_divs, h / 2, 0);
+    for (int k = 0; k < num_h_divs; ++k)
+      p_CVs.col(++j) = Vector3d(-w / 2, h / 2 - h * k / num_h_divs, 0);
+    for (int k = 0; k < num_w_divs; ++k)
+      p_CVs.col(++j) = Vector3d(-w / 2 + w * k / num_w_divs, -h / 2, 0);
+
+    const int num_triangles = (num_w_divs + num_h_divs) * 2;
+    Eigen::Matrix3Xi triangles(3, num_triangles);
+    for (int i = 0; i < num_triangles; ++i) {
+      const int ip1 = (i + 1) % num_triangles;
+      triangles.col(i) = Vector3i(0, 1 + i, 1 + ip1);
+    }
+
     return {std::move(p_CVs), std::move(triangles)};
   } else {
-    // A fat-short rectangle.
+    /* A fat-short rectangle. */
     Filament::RectangularCrossSection cs = cross_section;
     std::swap(cs.width, cs.height);
     auto [p_CVs, triangles] = MakeCrossSectionMesh(cs, params);
@@ -122,16 +175,17 @@ MakeFilamentSegmentMesh(
       cross_section);
   const int num_verts_per_cross_section = p_CVs.cols();
 
-  int num_cross_sections =
-      std::round(segment_length / params.longitudinal_resolution_hint) + 1;
-  num_cross_sections = std::max(num_cross_sections, 2);
+  int num_cross_sections = std::max(
+      2, static_cast<int>(
+             std::round(segment_length / params.longitudinal_resolution_hint)) +
+             1);
 
   std::vector<VolumeElement> elements;
   for (int k = 1; k < num_cross_sections; ++k) {
     const int offset0 = num_verts_per_cross_section * (k - 1);
     const int offset1 = num_verts_per_cross_section * k;
     for (int j = 0; j < triangles.cols(); ++j) {
-      const Vector3<int> tri = triangles.col(j);
+      const Vector3i tri = triangles.col(j);
       Append(SplitTriangularPrismToTetrahedra(
                  offset0 + tri[0], offset0 + tri[1], offset0 + tri[2],
                  offset1 + tri[0], offset1 + tri[1], offset1 + tri[2]),
@@ -141,7 +195,8 @@ MakeFilamentSegmentMesh(
   return {std::move(p_CVs), num_cross_sections, std::move(elements)};
 }
 
-/* Makes the hydroelastic pressures for the mesh vertices. */
+/* Makes the hydroelastic pressures for the mesh vertices of a filament with
+ circular cross section. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::CircularCrossSection& cross_section,
     const FilamentHydroelasticParameters& params, const Eigen::Matrix3Xd& p_CVs,
@@ -154,7 +209,10 @@ std::vector<double> MakeFilamentSegmentPressureField(
   const double pressure_min = -params.hydroelastic_modulus /
                               (cross_section.diameter / 2) * params.margin;
   for (int k = 0; k < num_cross_sections; ++k) {
+    /* The first vertex for each cross section is on the center and has maximum
+     pressure. */
     pressures.push_back(pressure_max);
+    /* All other vertices are on the perimeter and has minimum pressure. */
     for (int i = 1; i < p_CVs.cols(); ++i) {
       pressures.push_back(pressure_min);
     }
@@ -162,7 +220,8 @@ std::vector<double> MakeFilamentSegmentPressureField(
   return pressures;
 }
 
-/* Makes the hydroelastic pressures for the mesh vertices. */
+/* Makes the hydroelastic pressures for the mesh vertices of a filament with
+ rectangular cross section. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::RectangularCrossSection& cross_section,
     const FilamentHydroelasticParameters& params, const Eigen::Matrix3Xd& p_CVs,
@@ -175,9 +234,23 @@ std::vector<double> MakeFilamentSegmentPressureField(
   const double pressure_min =
       -params.hydroelastic_modulus /
       (std::min(cross_section.width, cross_section.height) / 2) * params.margin;
+  /* A flag to indicate if the medial axis is vertical or horizontal. */
+  const bool vertical_ma = (p_CVs.col(0)[0] == 0.0);
+  DRAKE_DEMAND((vertical_ma && p_CVs.col(0)[0] == 0.0) ||
+               (!vertical_ma && p_CVs.col(0)[1] == 0.0));
   for (int k = 0; k < num_cross_sections; ++k) {
+    /* The first few vertices for each cross section on the medial axis has
+     maximum pressure. Remaining vertices are on the perimeter and have minimum
+     pressure. */
+    bool on_ma = true;
     for (int i = 0; i < p_CVs.cols(); ++i) {
-      if (i <= 1 && (p_CVs.col(i)[0] == 0 || p_CVs.col(i)[1] == 0))
+      if (on_ma) {
+        if (!((vertical_ma && p_CVs.col(i)[0] == 0.0) ||
+              (!vertical_ma && p_CVs.col(i)[1] == 0.0))) {
+          on_ma = false;
+        }
+      }
+      if (on_ma)
         pressures.push_back(pressure_max);
       else
         pressures.push_back(pressure_min);
@@ -302,7 +375,7 @@ FilamentSegmentMeshedGeometry::FilamentSegmentMeshedGeometry(
   DRAKE_THROW_UNLESS(params.circumferential_resolution_hint > 0);
   DRAKE_THROW_UNLESS(params.longitudinal_resolution_hint > 0);
   DRAKE_THROW_UNLESS(params.margin >= 0);
-  /* Compute the mesh for a cross section and the connectovity of the
+  /* Compute the mesh for a cross section and the connectivity of the
    tetrahedron mesh. */
   std::tie(p_CVs_, num_cross_sections_, elements_) =
       MakeFilamentSegmentMesh(cross_section, segment_length, params);
