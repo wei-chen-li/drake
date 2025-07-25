@@ -10,13 +10,13 @@ namespace internal {
 
 template <typename T>
 DerSolver<T>::DerSolver(const DerModel<T>* model,
-                        const DiscreteTimeIntegrator<T>& integrator)
+                        const DiscreteTimeIntegrator<T>* integrator)
     : model_(model),
-      integrator_(integrator.Clone()),
-      dt_max_(integrator.dt()),
-      dt_min_(dt_max_ * 0.001),
-      dt_(dt_max_) {
+      integrator_(integrator),
+      variable_dt_integrator_(integrator->Clone()),
+      dt_(integrator->dt()) {
   DRAKE_THROW_UNLESS(model != nullptr);
+  DRAKE_THROW_UNLESS(integrator != nullptr);
   state_ = model_->CreateDerState();
   /* Allocate a DerState. */
   scratch_.prev_state = model_->CreateDerState();
@@ -41,7 +41,7 @@ int DerSolver<T>::AdvanceOneTimeStep(
   prev_state.CopyFrom(prev_state_in);
 
   double t = 0.0;
-  const double t_target = dt_max_;
+  const double t_target = integrator_->dt();
   int num_total_iters = 0;
 
   while (t < t_target - 8 * std::numeric_limits<double>::epsilon()) {
@@ -54,13 +54,13 @@ int DerSolver<T>::AdvanceOneTimeStep(
       num_total_iters += newton_iters;
       prev_state.CopyFrom(*state_);
       if (newton_iters < 4) {
-        dt_ = std::min(dt_ * 1.5, dt_max_);
+        dt_ = std::min(dt_ * 1.5, dt_max());
       } else if (newton_iters > 10) {
-        dt_ = std::max(dt_ * 0.7, dt_min_);
+        dt_ = std::max(dt_ * 0.7, dt_min());
       }
     } else {
       dt_ *= 0.5;
-      if (dt_ < dt_min_) {
+      if (dt_ < dt_min()) {
         throw std::runtime_error(
             "DerSolver::AdvanceOneTimeStep() failed to converge. Consider "
             "using a smaller timestep or reduce the stiffness of the "
@@ -88,9 +88,9 @@ int DerSolver<T>::AdvanceDt(const DerState<T>& prev_state, double dt,
   Eigen::VectorX<T>& dz = scratch_.dz;
   DRAKE_DEMAND(der_model_scratch != nullptr);
 
-  integrator_->set_dt(dt);
-  const Eigen::VectorX<T>& z = integrator_->GetUnknowns(prev_state);
-  integrator_->AdvanceDt(prev_state, z, &state);
+  variable_dt_integrator_->set_dt(dt);
+  const Eigen::VectorX<T>& z = variable_dt_integrator_->GetUnknowns(prev_state);
+  variable_dt_integrator_->AdvanceDt(prev_state, z, &state);
   model_->ApplyBoundaryCondition(&state);
   b = model_->ComputeResidual(state, external_force_field, der_model_scratch);
   T residual_norm = unit_adjusted_norm(b);
@@ -104,10 +104,10 @@ int DerSolver<T>::AdvanceDt(const DerState<T>& prev_state, double dt,
   while (iter < max_newton_iters_ &&
          !solver_converged(residual_norm, initial_residual_norm)) {
     const EnergyHessianMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
-        state, integrator_->GetWeights(), der_model_scratch);
+        state, variable_dt_integrator_->GetWeights(), der_model_scratch);
     bool success = linear_solver.Solve(tangent_matrix, -b, &dz);
     if (!success) return -1;
-    integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
+    variable_dt_integrator_->AdjustStateFromChangeInUnknowns(dz, &state);
     b = model_->ComputeResidual(state, external_force_field, der_model_scratch);
     residual_norm = unit_adjusted_norm(b);
     ++iter;
@@ -132,7 +132,6 @@ void DerSolver<T>::ComputeTangentMatrixSchurComplement(
       *scratch_.linear_solver;
   DRAKE_DEMAND(der_model_scratch != nullptr);
 
-  integrator_->set_dt(dt_max_);
   const EnergyHessianMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
       state, integrator_->GetWeights(), der_model_scratch);
 
@@ -177,8 +176,9 @@ bool DerSolver<T>::solver_converged(const T& residual_norm,
 
 template <typename T>
 std::unique_ptr<DerSolver<T>> DerSolver<T>::Clone() const {
-  integrator_->set_dt(dt_max_);
-  auto clone = std::make_unique<DerSolver<T>>(this->model_, *integrator_);
+  auto clone = std::make_unique<DerSolver<T>>(this->model_, this->integrator_);
+  /* Copy the owned integrator. */
+  clone->variable_dt_integrator_ = this->variable_dt_integrator_;
   /* Copy the owned DerState. */
   clone->state_->CopyFrom(*this->state_);
   /* Copy the owned SchurComplement. */

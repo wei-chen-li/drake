@@ -213,7 +213,7 @@ void DeformableDriver<T>::DeclareCacheEntries(
           dof_permutation_cache_entry.cache_index());
 
       DerSolver<T> model_der_solver(&der_model,
-                                    deformable_model_->der_integrator());
+                                    &deformable_model_->der_integrator());
       /* Cache entry for free motion DER state and data. */
       const auto& der_solver_cache_entry = manager->DeclareCacheEntry(
           fmt::format("DER solver and data for body with index {}", i),
