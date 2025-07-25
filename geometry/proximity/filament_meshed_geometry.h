@@ -16,6 +16,23 @@ namespace geometry {
 namespace internal {
 namespace filament {
 
+/* A struct holding hydroelsatic parameters of a filament.  */
+struct FilamentHydroelasticParameters {
+  double hydroelastic_modulus{};
+  double circumferential_resolution_hint{};
+  double longitudinal_resolution_hint{};
+  double margin{};
+
+  /* Below lists the properties parsed, all under the "hydroelastic" group name:
+   "compliance_type",
+   "hydroelastic_modulus",
+   ("circumferential_resolution_hint" and "longitudinal_resolution_hint") xor
+   "resolution_hint",
+   "margin". */
+  static std::optional<FilamentHydroelasticParameters> Parse(
+      const ProximityProperties& props);
+};
+
 class FilamentSegmentMeshedGeometry {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(FilamentSegmentMeshedGeometry)
@@ -24,24 +41,16 @@ class FilamentSegmentMeshedGeometry {
 
   /* Constructs a FilamentSegmentMeshedGeometry that can be used to generate
    volume mesh and pressure field for a filament segment.
-   @param cross_section        Cross-section of the filament.
-   @param segment_length       Nominal segment length of the filament. The mesh
-                               is generated from this length and the later
-                               deformed based on the actual segment length.
-   @param resolution_hint      Resolution hint for generating the mesh.
-   @param hydroelastic_margin  Radial-wise expansion for negative pressure.
-   @prram hydroelastic_modulus (Optional) Pressure on the centerline of the
-                               segment.
-   @pre `segment_length > 0`.
-   @pre `resolution_hint > 0`.
-   @pre `hydroelastic_margin >= 0`.
-   @pre `!hydroelastic_modulus || *hydroelastic_modulus > 0`. */
+   @param cross_section   Cross-section of the filament.
+   @param segment_length  Nominal segment length of the filament. The mesh is
+                          generated from this length and the later deformed
+                          based on the actual segment length.
+   @param params          Hydroelastic parameters for the filament.
+   @pre `segment_length > 0`. */
   FilamentSegmentMeshedGeometry(
       const std::variant<Filament::CircularCrossSection,
                          Filament::RectangularCrossSection>& cross_section,
-      double segment_length, double resolution_hint,
-      double hydroelastic_margin = 0,
-      std::optional<double> hydroelastic_modulus = std::nullopt);
+      double segment_length, const FilamentHydroelasticParameters& params);
 
   /* Makes volume mesh of a filament segment based on the two end node
    positions, tangent vectors, and m₁ directors. */
@@ -78,19 +87,15 @@ class FilamentMeshedGeometry {
 
   /* Constructs a FilamentMeshedGeometry that can be used to generate volume
    mesh and pressure field for any filament segment.
-   @param filament             The reference filament with cross-section and
-                               average edge length information.
-   @param resolution_hint      Resolution hint for generating the mesh.
-   @param hydroelastic_margin  Radial-wise expansion for negative pressure.
-   @prram hydroelastic_modulus (Optional) Pressure on the centerline of the
-                               segment.
-   @pre `resolution_hint > 0`.
-   @pre `hydroelastic_margin >= 0`.
-   @pre `!hydroelastic_modulus || *hydroelastic_modulus > 0`. */
-  FilamentMeshedGeometry(
-      const Filament& filament, double resolution_hint,
-      double hydroelastic_margin = 0,
-      std::optional<double> hydroelastic_modulus = std::nullopt);
+   @param filament  The reference filament with cross-section and average edge
+                    length information.
+   @param params    Hydroelastic parameters for the filament.
+   @pre `params.hydroelastic_modulus > 0`.
+   @pre `params.circumferential_resolution_hint > 0`.
+   @pre `params.longitudinal_resolution_hint > 0`.
+   @pre `params.margin >= 0`. */
+  FilamentMeshedGeometry(const Filament& filament,
+                         const FilamentHydroelasticParameters& params);
 
   /* Updates the node positions and edge m1 directors of the filament geometry.
    @param q_WG  The vector holding the node positions and the edge m1

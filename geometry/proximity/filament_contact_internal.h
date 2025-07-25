@@ -36,16 +36,18 @@ class Geometries {
    @param id        The unique identifier for the geometry.
    @param filament  The filament with information on number of nodes and edges,
                     and cross-section.
-   @param props     The proximity properties. See table below.
+   @param props     The proximity properties for the filament. See table below.
    @pre There is no previous geometry associated with `id`.
 
-   |  Group name  |    Property Name     |  Property Type   | Property Description                    |
-   | :----------: | :------------------: | :--------------: | :-------------------------------------- |
-   | hydroelastic | compliance_type      | HydroelasticType | Must be HydroelasticType::kCompliant.   |
-   | hydroelastic | hydroelastic_modulus | double           | Hydroelastic modulus.                   |
-   | hydroelastic | resolution_hint      | double           | Resolution hint.                        |
-   | hydroelastic | margin               | double           | Hydroelastic margin (default 0).        |
-   | collision    | self_contact         | bool             | Is self contact enabled (default true). |
+   |  Group name  |          Property Name          |  Property Type   | Property Description                                            |
+   | :----------: | :-----------------------------: | :--------------: | :-------------------------------------------------------------: |
+   | hydroelastic | compliance_type                 | HydroelasticType | Must be HydroelasticType::kCompliant (default kCompliant).      |
+   | hydroelastic | hydroelastic_modulus            | double           | Hydroelastic modulus.                                           |
+   | hydroelastic | circumferential_resolution_hint | double           | Resolution hint in the circumferential direction.               |
+   | hydroelastic | longitudinal_resolution_hint    | double           | Resolution hint in the longitudinal direction.                  |
+   | hydroelastic | resolution_hint                 | double           | Both Resolution hints (used if the above two aren't specified). |
+   | hydroelastic | margin                          | double           | Hydroelastic margin (default 0).                                |
+   | collision    | self_contact                    | bool             | Is self contact enabled (default true).                         |
    */
   // clang-format on
   void AddFilamentGeometry(GeometryId id, const Filament& filament,

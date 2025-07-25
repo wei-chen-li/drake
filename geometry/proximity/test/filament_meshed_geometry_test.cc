@@ -35,12 +35,13 @@ class FilamentMeshedGeometryTest : public ::testing::TestWithParam<bool> {
                       Filament::CircularCrossSection{.diameter = 0.01});
     num_edges_ = filament.edge_m1().cols();
 
-    const double hydroelastic_pressure = 1e5;
-    const double resolution_hint = 0.003;
-    const double hydroelastic_margin = 0.005;
+    FilamentHydroelasticParameters params;
+    params.hydroelastic_modulus = 1e5;
+    params.circumferential_resolution_hint = 0.003;
+    params.longitudinal_resolution_hint = 0.003;
+    params.margin = 0.005;
 
-    filament_meshed_geometry_ = FilamentMeshedGeometry(
-        filament, hydroelastic_pressure, resolution_hint, hydroelastic_margin);
+    filament_meshed_geometry_ = FilamentMeshedGeometry(filament, params);
   }
 
   int num_edges_{};

@@ -24,15 +24,12 @@ namespace {
           p_CVs      The vertices of a cross-section in the cross-section frame.
           triangles  The connectivity of the vertices into triangles. */
 std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
-    const Filament::CircularCrossSection& cross_section, double resolution_hint,
-    double hydroelastic_margin) {
+    const Filament::CircularCrossSection& cross_section,
+    const FilamentHydroelasticParameters& params) {
   DRAKE_THROW_UNLESS(cross_section.diameter > 0);
-  DRAKE_THROW_UNLESS(resolution_hint > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  const double d = cross_section.diameter + 2 * hydroelastic_margin;
+  const double d = cross_section.diameter + 2 * params.margin;
 
-  int num_thetas = M_PI * d / resolution_hint;
-  num_thetas = std::max(num_thetas, 8);
+  const int num_thetas = M_PI * d / params.circumferential_resolution_hint;
 
   const int num_verts_per_cross_section = 1 + num_thetas;
   Eigen::Matrix3Xd p_CVs(3, num_verts_per_cross_section);
@@ -59,12 +56,10 @@ std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
           triangles  The connectivity of the vertices into triangles. */
 std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
     const Filament::RectangularCrossSection& cross_section,
-    double resolution_hint, double hydroelastic_margin) {
+    const FilamentHydroelasticParameters& params) {
   DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
-  DRAKE_THROW_UNLESS(resolution_hint > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  const double w = cross_section.width + 2 * hydroelastic_margin;
-  const double h = cross_section.height + 2 * hydroelastic_margin;
+  const double w = cross_section.width + 2 * params.margin;
+  const double h = cross_section.height + 2 * params.margin;
   if (w / h < 2.0 / 3.0) {
     // A thin-tall rectangle.
     Eigen::Matrix3Xd p_CVs(3, 8);
@@ -100,8 +95,7 @@ std::tuple<Eigen::Matrix3Xd, Eigen::Matrix3Xi> MakeCrossSectionMesh(
     // A fat-short rectangle.
     Filament::RectangularCrossSection cs = cross_section;
     std::swap(cs.width, cs.height);
-    auto [p_CVs, triangles] =
-        MakeCrossSectionMesh(cs, resolution_hint, hydroelastic_margin);
+    auto [p_CVs, triangles] = MakeCrossSectionMesh(cs, params);
     p_CVs.row(0).swap(p_CVs.row(1));
     triangles.row(1).swap(triangles.row(2));
     return {std::move(p_CVs), std::move(triangles)};
@@ -120,15 +114,16 @@ std::tuple<Eigen::Matrix3Xd, int, std::vector<VolumeElement>>
 MakeFilamentSegmentMesh(
     const std::variant<Filament::CircularCrossSection,
                        Filament::RectangularCrossSection>& cross_section,
-    double segment_length, double resolution_hint, double hydroelastic_margin) {
+    double segment_length, const FilamentHydroelasticParameters& params) {
   const auto [p_CVs, triangles] = std::visit(
       [&](auto&& cs) {
-        return MakeCrossSectionMesh(cs, resolution_hint, hydroelastic_margin);
+        return MakeCrossSectionMesh(cs, params);
       },
       cross_section);
   const int num_verts_per_cross_section = p_CVs.cols();
 
-  int num_cross_sections = std::round(segment_length / resolution_hint) + 1;
+  int num_cross_sections =
+      std::round(segment_length / params.longitudinal_resolution_hint) + 1;
   num_cross_sections = std::max(num_cross_sections, 2);
 
   std::vector<VolumeElement> elements;
@@ -149,18 +144,15 @@ MakeFilamentSegmentMesh(
 /* Makes the hydroelastic pressures for the mesh vertices. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::CircularCrossSection& cross_section,
-    double hydroelastic_margin, double hydroelastic_modulus,
-    const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
+    const FilamentHydroelasticParameters& params, const Eigen::Matrix3Xd& p_CVs,
+    int num_cross_sections) {
   DRAKE_THROW_UNLESS(cross_section.diameter > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  DRAKE_THROW_UNLESS(hydroelastic_modulus > 0);
   DRAKE_THROW_UNLESS(num_cross_sections > 0);
   std::vector<double> pressures;
   pressures.reserve(p_CVs.cols() * num_cross_sections);
-  const double pressure_max = hydroelastic_modulus;
-  const double pressure_min = -hydroelastic_modulus /
-                              (cross_section.diameter / 2) *
-                              hydroelastic_margin;
+  const double pressure_max = params.hydroelastic_modulus;
+  const double pressure_min = -params.hydroelastic_modulus /
+                              (cross_section.diameter / 2) * params.margin;
   for (int k = 0; k < num_cross_sections; ++k) {
     pressures.push_back(pressure_max);
     for (int i = 1; i < p_CVs.cols(); ++i) {
@@ -173,19 +165,16 @@ std::vector<double> MakeFilamentSegmentPressureField(
 /* Makes the hydroelastic pressures for the mesh vertices. */
 std::vector<double> MakeFilamentSegmentPressureField(
     const Filament::RectangularCrossSection& cross_section,
-    double hydroelastic_margin, double hydroelastic_modulus,
-    const Eigen::Matrix3Xd& p_CVs, int num_cross_sections) {
+    const FilamentHydroelasticParameters& params, const Eigen::Matrix3Xd& p_CVs,
+    int num_cross_sections) {
   DRAKE_THROW_UNLESS(cross_section.width > 0 && cross_section.height > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  DRAKE_THROW_UNLESS(hydroelastic_modulus > 0);
   DRAKE_THROW_UNLESS(num_cross_sections > 0);
   std::vector<double> pressures;
   pressures.reserve(p_CVs.cols() * num_cross_sections);
-  const double pressure_max = hydroelastic_modulus;
+  const double pressure_max = params.hydroelastic_modulus;
   const double pressure_min =
-      -hydroelastic_modulus /
-      (std::min(cross_section.width, cross_section.height) / 2) *
-      hydroelastic_margin;
+      -params.hydroelastic_modulus /
+      (std::min(cross_section.width, cross_section.height) / 2) * params.margin;
   for (int k = 0; k < num_cross_sections; ++k) {
     for (int i = 0; i < p_CVs.cols(); ++i) {
       if (i <= 1 && (p_CVs.col(i)[0] == 0 || p_CVs.col(i)[1] == 0))
@@ -232,34 +221,105 @@ void Append(const Eigen::Matrix3X<T>& new_vertices,
 
 }  // namespace
 
+std::optional<FilamentHydroelasticParameters>
+FilamentHydroelasticParameters::Parse(const ProximityProperties& props) {
+  if (!props.HasGroup(kHydroGroup)) return std::nullopt;
+
+  const HydroelasticType compliance_type = props.GetPropertyOrDefault(
+      kHydroGroup, kComplianceType, HydroelasticType::kCompliant);
+  if (compliance_type != HydroelasticType::kCompliant) {
+    throw std::invalid_argument(
+        fmt::format("Filament only supports HydroelasticType::kCompliant for "
+                    "the ('{}','{}') property",
+                    kHydroGroup, kComplianceType));
+  }
+
+  FilamentHydroelasticParameters params;
+  constexpr const char* kCircRezHint = "circumferential_resolution_hint";
+  constexpr const char* kLongRezHint = "longitudinal_resolution_hint";
+
+  std::string full_property_name =
+      fmt::format("('{}', '{}')", kHydroGroup, kElastic);
+  if (!props.HasProperty(kHydroGroup, kElastic)) {
+    throw std::invalid_argument(
+        fmt::format("Cannot create compliant filament; missing the {} property",
+                    full_property_name));
+  }
+  params.hydroelastic_modulus =
+      props.GetProperty<double>(kHydroGroup, kElastic);
+  if (params.hydroelastic_modulus <= 0) {
+    throw std::invalid_argument(
+        fmt::format("The {} property must be positive", full_property_name));
+  }
+
+  full_property_name = fmt::format("('{}', '{}')", kHydroGroup, kCircRezHint);
+  if (!props.HasProperty(kHydroGroup, kCircRezHint) &&
+      !props.HasProperty(kHydroGroup, kRezHint)) {
+    throw std::invalid_argument(
+        fmt::format("Cannot create compliant filament; missing the {} property",
+                    full_property_name));
+  }
+  params.circumferential_resolution_hint =
+      props.HasProperty(kHydroGroup, kCircRezHint)
+          ? props.GetProperty<double>(kHydroGroup, kCircRezHint)
+          : props.GetProperty<double>(kHydroGroup, kRezHint);
+  if (params.circumferential_resolution_hint <= 0) {
+    throw std::invalid_argument(
+        fmt::format("The {} property must be positive", full_property_name));
+  }
+
+  full_property_name = fmt::format("('{}', '{}')", kHydroGroup, kLongRezHint);
+  if (!props.HasProperty(kHydroGroup, kLongRezHint) &&
+      !props.HasProperty(kHydroGroup, kRezHint)) {
+    throw std::invalid_argument(
+        fmt::format("Cannot create compliant filament; missing the {} property",
+                    full_property_name));
+  }
+  params.longitudinal_resolution_hint =
+      props.HasProperty(kHydroGroup, kLongRezHint)
+          ? props.GetProperty<double>(kHydroGroup, kLongRezHint)
+          : props.GetProperty<double>(kHydroGroup, kRezHint);
+  if (params.longitudinal_resolution_hint <= 0) {
+    throw std::invalid_argument(
+        fmt::format("The {} property must be positive", full_property_name));
+  }
+
+  full_property_name = fmt::format("('{}', '{}')", kHydroGroup, kMargin);
+  params.margin = props.GetPropertyOrDefault(kHydroGroup, kMargin, 0.0);
+  if (params.margin < 0) {
+    throw std::invalid_argument(fmt::format(
+        "The {} property must be non-negative", full_property_name));
+  }
+  return params;
+}
+
 FilamentSegmentMeshedGeometry::FilamentSegmentMeshedGeometry(
     const std::variant<Filament::CircularCrossSection,
                        Filament::RectangularCrossSection>& cross_section,
-    double segment_length, double resolution_hint, double hydroelastic_margin,
-    std::optional<double> hydroelastic_modulus) {
+    double segment_length, const FilamentHydroelasticParameters& params) {
   DRAKE_THROW_UNLESS(segment_length > 0);
-  DRAKE_THROW_UNLESS(resolution_hint > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  DRAKE_THROW_UNLESS(!hydroelastic_modulus || hydroelastic_modulus > 0);
+  DRAKE_THROW_UNLESS(params.hydroelastic_modulus > 0);
+  DRAKE_THROW_UNLESS(params.circumferential_resolution_hint > 0);
+  DRAKE_THROW_UNLESS(params.longitudinal_resolution_hint > 0);
+  DRAKE_THROW_UNLESS(params.margin >= 0);
   /* Compute the mesh for a cross section and the connectovity of the
    tetrahedron mesh. */
-  std::tie(p_CVs_, num_cross_sections_, elements_) = MakeFilamentSegmentMesh(
-      cross_section, segment_length, resolution_hint, hydroelastic_margin);
-  /* Compute the pressure for the vertices (if hydroelastic is enabled). */
+  std::tie(p_CVs_, num_cross_sections_, elements_) =
+      MakeFilamentSegmentMesh(cross_section, segment_length, params);
+  /* Compute the pressure for the vertices. */
   std::visit(
       [&](auto&& cs) {
-        if (hydroelastic_modulus.has_value()) {
-          pressures_ = MakeFilamentSegmentPressureField(
-              cs, hydroelastic_margin, *hydroelastic_modulus, p_CVs_,
-              num_cross_sections_);
-        }
+        pressures_ = MakeFilamentSegmentPressureField(cs, params, p_CVs_,
+                                                      num_cross_sections_);
       },
       cross_section);
   /* Computes the reference bounding volume hierarchy for the volume mesh. The
    BVH will later be updated when volume mesh deforms. */
   std::unique_ptr<VolumeMesh<double>> mesh = MakeVolumeMesh(
-      Vector3d(0, 0, 0), Vector3d(0, 0, segment_length), Vector3d(0, 0, 1),
-      Vector3d(0, 0, 1), Vector3d(1, 0, 0), Vector3d(1, 0, 0));
+      /* node_0 = */ Vector3d(0, 0, 0),
+      /* node_1 = */ Vector3d(0, 0, segment_length),
+      /* t_0 = */ Vector3d(0, 0, 1), /* t_1 = */ Vector3d(0, 0, 1),
+      /* m1_0 = */ Vector3d(1, 0, 0), /* m1_1 = */ Vector3d(1, 0, 0));
   bvh_ = Bvh<Obb, VolumeMesh<double>>(*mesh);
 }
 
@@ -325,25 +385,20 @@ hydroelastic::SoftGeometry FilamentSegmentMeshedGeometry::MakeSoftGeometry(
 }
 
 FilamentMeshedGeometry::FilamentMeshedGeometry(
-    const Filament& filament, double resolution_hint,
-    double hydroelastic_margin, std::optional<double> hydroelastic_modulus)
+    const Filament& filament, const FilamentHydroelasticParameters& params)
     : closed_(filament.closed()),
       num_nodes_(filament.node_pos().cols()),
       num_edges_(filament.edge_m1().cols()),
       node_pos_(filament.node_pos()),
       edge_m1_(filament.edge_m1()) {
-  DRAKE_THROW_UNLESS(resolution_hint > 0);
-  DRAKE_THROW_UNLESS(hydroelastic_margin >= 0);
-  DRAKE_THROW_UNLESS(!hydroelastic_modulus || *hydroelastic_modulus > 0);
   double length = 0;
   for (int i = 0; i < num_edges_; ++i) {
     const int ip1 = (i + 1) % num_nodes_;
     length +=
         (filament.node_pos().col(ip1) - filament.node_pos().col(i)).norm();
   }
-  segment_ = FilamentSegmentMeshedGeometry(
-      filament.cross_section(), length / num_edges_, resolution_hint,
-      hydroelastic_margin, hydroelastic_modulus);
+  segment_ = FilamentSegmentMeshedGeometry(filament.cross_section(),
+                                           length / num_edges_, params);
 }
 
 void FilamentMeshedGeometry::UpdateConfigurationVector(

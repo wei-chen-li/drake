@@ -93,62 +93,6 @@ void FclCollide(const fcl::DynamicAABBTreeCollisionManager<T>& tree1,
                 cdata, callback);
 }
 
-/* A struct holding hydroelastic parameters.  */
-struct HydroelasticParams {
-  double hydroelastic_modulus;
-  double margin;
-  double resolution_hint;
-};
-/* Returns the hydroelastic parameters extracted if `props` has kHydroGroup. */
-std::optional<HydroelasticParams> ParseHydroelasticParams(
-    const ProximityProperties& props) {
-  if (!props.HasGroup(kHydroGroup)) return std::nullopt;
-
-  const HydroelasticType compliance_type = props.GetPropertyOrDefault(
-      kHydroGroup, kComplianceType, HydroelasticType::kCompliant);
-  if (compliance_type != HydroelasticType::kCompliant) {
-    throw std::invalid_argument(fmt::format(
-        "Filament only supports kCompliant for the ('{}','{}') property",
-        kHydroGroup, kComplianceType));
-  }
-
-  HydroelasticParams params;
-
-  std::string full_property_name =
-      fmt::format("('{}', '{}')", kHydroGroup, kElastic);
-  if (!props.HasProperty(kHydroGroup, kElastic)) {
-    throw std::invalid_argument(
-        fmt::format("Cannot create compliant filament; missing the {} property",
-                    full_property_name));
-  }
-  params.hydroelastic_modulus =
-      props.GetProperty<double>(kHydroGroup, kElastic);
-  if (params.hydroelastic_modulus <= 0) {
-    throw std::invalid_argument(
-        fmt::format("The {} property must be positive", full_property_name));
-  }
-
-  full_property_name = fmt::format("('{}', '{}')", kHydroGroup, kRezHint);
-  if (!props.HasProperty(kHydroGroup, kRezHint)) {
-    throw std::invalid_argument(
-        fmt::format("Cannot create compliant filament; missing the {} property",
-                    full_property_name));
-  }
-  params.resolution_hint = props.GetProperty<double>(kHydroGroup, kRezHint);
-  if (params.resolution_hint <= 0) {
-    throw std::invalid_argument(
-        fmt::format("The {} property must be positive", full_property_name));
-  }
-
-  full_property_name = fmt::format("('{}', '{}')", kHydroGroup, kMargin);
-  params.margin = props.GetPropertyOrDefault(kHydroGroup, kMargin, 0.0);
-  if (params.margin < 0) {
-    throw std::invalid_argument(fmt::format(
-        "The {} property must be non-negative", full_property_name));
-  }
-  return params;
-}
-
 /* Each filament is represented by a FilamentData struct, which contains the
  collision objects and the AABB tree. Because Drake compiles FCL using hidden
  symbol visibility, keep this struct inside anonymous namespace to avoid
@@ -480,8 +424,8 @@ class Geometries::Impl {
     const int num_nodes = node_pos.cols();
     const int num_edges = edge_m1.cols();
 
-    std::optional<HydroelasticParams> hydroelastic_params =
-        ParseHydroelasticParams(props);
+    std::optional<FilamentHydroelasticParameters> hydroelastic_params =
+        FilamentHydroelasticParameters::Parse(props);
 
     FilamentData& filament_data =
         id_to_filament_data_
@@ -559,9 +503,7 @@ class Geometries::Impl {
 
     if (hydroelastic_params) {
       filament_data.soft_geometry =
-          FilamentMeshedGeometry(filament, hydroelastic_params->resolution_hint,
-                                 hydroelastic_params->margin,
-                                 hydroelastic_params->hydroelastic_modulus);
+          FilamentMeshedGeometry(filament, *hydroelastic_params);
     }
   }
 
