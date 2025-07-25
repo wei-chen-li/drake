@@ -61,11 +61,10 @@ int DerSolver<T>::AdvanceOneTimeStep(
     } else {
       dt_ *= 0.5;
       if (dt_ < dt_min_) {
-        throw std::runtime_error(fmt::format(
-            "DerSolver::AdvanceOneTimeStep() failed to converge even with a "
-            "shrinked time-step of {}. Consider using a smaller nominal "
-            "time-step size than the current value {}.",
-            dt_, dt_max_));
+        throw std::runtime_error(
+            "DerSolver::AdvanceOneTimeStep() failed to converge. Consider "
+            "using a smaller timestep or reduce the stiffness of the "
+            "material/contacts.");
       }
     }
   }
@@ -129,14 +128,25 @@ void DerSolver<T>::ComputeTangentMatrixSchurComplement(
   DerState<T>& state = *state_;
   typename DerModel<T>::Scratch* der_model_scratch =
       scratch_.der_model_scratch.get();
+  EnergyHessianMatrixLinearSolver<double>& linear_solver =
+      *scratch_.linear_solver;
   DRAKE_DEMAND(der_model_scratch != nullptr);
 
   integrator_->set_dt(dt_max_);
   const EnergyHessianMatrix<T>& tangent_matrix = model_->ComputeTangentMatrix(
       state, integrator_->GetWeights(), der_model_scratch);
 
-  tangent_matrix_schur_complement_ =
-      tangent_matrix.ComputeSchurComplement(participating_dofs);
+  try {
+    EnergyHessianMatrix<T> tangent_matrix_regularized =
+        linear_solver.RegularizeToPositiveDefinite(tangent_matrix);
+    tangent_matrix_schur_complement_ =
+        tangent_matrix.ComputeSchurComplement(participating_dofs);
+  } catch (const std::exception&) {
+    throw std::runtime_error(
+        "DerSolver::ComputeTangentMatrixSchurComplement() failed to compute a "
+        "positive definite tangent matrix. Consider using a smaller timestep "
+        "or reduce the stiffness of the material/contacts.");
+  }
 }
 
 template <typename T>

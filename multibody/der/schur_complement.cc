@@ -27,10 +27,13 @@ SchurComplement<T>::SchurComplement(
     // D_complement is empty, same as default.
   } else {
     /* The D matrix is mostly banded, so natural ordering is good enough. */
-    const Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>, Eigen::Lower,
-                                Eigen::NaturalOrdering<int>>
+    const Eigen::SimplicialLLT<Eigen::SparseMatrix<T>, Eigen::Lower,
+                               Eigen::NaturalOrdering<int>>
         D_factorization(D);
-    DRAKE_DEMAND(D_factorization.info() == Eigen::Success);
+    if (D_factorization.info() != Eigen::Success) {
+      throw std::runtime_error(
+          "Matrix factorization failed because it is not positive definite");
+    }
     /* A column major rhs is required for the SimplicialLLT solve, so we take
      `B_transpose` instead of `B.transpose()`. */
     neg_Dinv_B_transpose_ = D_factorization.solve(-B_transpose);
