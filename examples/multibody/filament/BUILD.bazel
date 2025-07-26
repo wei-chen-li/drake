@@ -101,6 +101,14 @@ drake_cc_binary(
 )
 
 drake_jupyter_py_binary(
+    name = "conveyor_belt",
+    add_test_rule = 0,
+    deps = [
+        "//bindings/pydrake",
+    ],
+)
+
+drake_jupyter_py_binary(
     name = "entangling_filament_gripper",
     add_test_rule = 0,
     data = [
