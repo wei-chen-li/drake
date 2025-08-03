@@ -89,13 +89,16 @@ surface meshes that are regarded as infinitely stiff.
 The figure below shows examples of a compliant hydroelastic box
 and a rigid hydroelastic box.
 <!-- N.B. This image is also used by hydroelastic_contact_basics.ipynb. -->
-@image html "multibody/hydroelastics/images/HydroelasticTutorialCompliantRigidOutsideInside800x669.jpg"
+@image html
+"multibody/hydroelastics/images/HydroelasticTutorialCompliantRigidOutsideInside800x669.jpg"
 
-The figure below shows a contact surface between a compliant-hydroelastic cylinder
-and a compliant-hydroelastic sphere. The contact surface is internal to both
-solids and is defined as the surface where the two pressure fields are equal.
+The figure below shows a contact surface between a compliant-hydroelastic
+cylinder and a compliant-hydroelastic sphere. The contact surface is internal to
+both solids and is defined as the surface where the two pressure fields are
+equal.
 <!-- N.B. This image is also used by hydroelastic_contact_basics.ipynb. -->
-@image html "multibody/hydroelastics/images/HydroelasticTutorialContactSurfaceCompliantCompliant.png"
+@image html
+"multibody/hydroelastics/images/HydroelasticTutorialContactSurfaceCompliantCompliant.png"
 
 Pictured below, a rigid-hydroelastic cylindrical spatula handle is grasped
 by two hydroelastic-compliant ellipsoidal bubble grippers.
@@ -104,7 +107,8 @@ geometry and either gripper is on the <b>surface</b> of the
 rigid-hydroelastic geometry.
 
 <!-- N.B. This image is also used by hydroelastic_contact_basics.ipynb. -->
-@image html "multibody/hydroelastics/images/HydroelasticTutorialContactSurfaceRigidCompliantBubble.png"
+@image html
+"multibody/hydroelastics/images/HydroelasticTutorialContactSurfaceRigidCompliantBubble.png"
 
 @subsection hug_enabling Enabling Hydroelastic contact in your simulation
 
@@ -156,11 +160,13 @@ contact forces. As the implementation evolves, more and more contact will be
 captured with hydroelastic contact and the circumstances in which the
 point-contact fallback is applied will decrease.
 
-@subsection creating_hydro_reps Creating hydroelastic representations of collision geometries
+@subsection creating_hydro_reps Creating hydroelastic representations of
+collision geometries
 
 There are three ways to configure hydroelastic representations for collision
 geometries:
-- by using drake::geometry::DefaultProximityProperties (see @ref hug_quick_hydro)
+- by using drake::geometry::DefaultProximityProperties (see @ref
+hug_quick_hydro)
 - by annotating model files (see @ref hug_file_specs)
 - programmatically (see @ref hug_code_properties)
 
@@ -298,13 +304,15 @@ each of the properties and then discuss how they can be specified.
       - Fixing the hydroelastic modulus and decreasing the slab thickness.
       - Increasing the hydroelastic modulus and decreasing the slab thickness.
 
-@subsection hug_geometry_properties Assigning hydroelastic properties to geometries
+@subsection hug_geometry_properties Assigning hydroelastic properties to
+geometries
 
 Properties can be assigned to geometries inside a URDF or SDFormat file using
 some custom Drake XML tags. Alternatively, the properties can be assigned
 programmatically.
 
-@subsubsection hug_file_specs Assigning hydroelastic properties in file specifications
+@subsubsection hug_file_specs Assigning hydroelastic properties in file
+specifications
 
 Drake has introduced a number of custom tags to provide a uniform language to
 specify hydroelastic properties in both URDF and SDFormat. The tag names are
@@ -346,8 +354,8 @@ and the following equivalent URDF example:
         <drake:proximity_properties>
           <drake:compliant_hydroelastic/>
           <drake:mesh_resolution_hint value="0.1"/>
-          <drake:hydroelastic_modulus value="5e7/>
-          <drake:hunt_crossley_dissipation value="1.25/>
+          <drake:hydroelastic_modulus value="5e7"/>
+          <drake:hunt_crossley_dissipation value="1.25"/>
         </drake:proximity_properties>
       </collision>
     …
@@ -553,7 +561,8 @@ indicate what can and cannot be done with hydroelastic contact.
   documentation for that in the [MultibodyPlant documentation.]
   (https://drake.mit.edu/doxygen_cxx/classdrake_1_1multibody_1_1_multibody_plant.html#:~:text=%E2%81%B4%20We%20allow%20to,will%20be%20ignored.)
 
-@section hydro_appendix_examples_and_tutorials Appendix B: Examples and Tutorials
+@section hydro_appendix_examples_and_tutorials Appendix B: Examples and
+Tutorials
 - Example
   [Contact between a ball, dinner plate, and floor in C++]
   (https://github.com/RobotLocomotion/drake/tree/master/examples/hydroelastic/ball_plate)
@@ -587,7 +596,8 @@ indicate what can and cannot be done with hydroelastic contact.
   The below-right picture zooms into the hydroelastic contact surface showing
   pressure distribution.
   <!-- N.B. This image is also used by hydroelastic_contact_basics.ipynb. -->
-  @image html "multibody/hydroelastics/images/HydroelasticTutorialImage600x388.jpg"
+  @image html
+"multibody/hydroelastics/images/HydroelasticTutorialImage600x388.jpg"
 
 
 @section hydro_references Sources referenced within this documentation
@@ -605,6 +615,7 @@ indicate what can and cannot be done with hydroelastic contact.
 
 - @anchor Sherman2022 [Sherman 2022] Sherman, M. (2022, June). Rethinking
   Contact Simulation for Robot Manipulation. Blog post in Medium.
-  https://medium.com/toyotaresearch/rethinking-contact-simulation-for-robot-manipulation-434a56b5ec88 .
+  https://medium.com/toyotaresearch/rethinking-contact-simulation-for-robot-manipulation-434a56b5ec88
+.
 
  */

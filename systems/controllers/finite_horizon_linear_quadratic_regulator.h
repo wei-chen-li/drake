@@ -21,7 +21,7 @@ struct FiniteHorizonLinearQuadraticRegulatorOptions {
   FiniteHorizonLinearQuadraticRegulatorOptions() = default;
 
   /**
-  A num_states x num_states positive semi-definite matrix which specified the
+  A num_states x num_states positive semi-definite matrix which specifies the
   cost at the final time. If unset, then Qf will be set to the zero matrix.
   */
   std::optional<Eigen::MatrixXd> Qf;
@@ -144,7 +144,7 @@ context.
 
 If @p system is a discrete-time system, then solves the Riccati difference
 equation to compute the optimal controller and optimal cost-to-go for the
-doscrete-time finite-horizon linear quadratic regulator:
+discrete-time finite-horizon linear quadratic regulator:
 
 @f[\min_u (x[N]-x_d[N])'Q_f(x[N]-x_d[N]) + \sum_{n=0}^{N-1}
   (x[n]-x_d[n])'Q(x[n]-x_d[n])+ \sum_{n=0}^{N-1}
